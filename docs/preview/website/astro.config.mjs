@@ -1,9 +1,10 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
-// Scaffold only — no publisher configured yet. Content moves in
-// separately; the deploy workflow lives at
-// .github/workflows/website-deploy.yml.
+// Deployed to GitHub Pages by .github/workflows/website-deploy.yml, which
+// passes --site and --base from actions/configure-pages so this file
+// needs neither; a local build wants
+// `astro build --site https://<owner>.github.io --base /<repo>`.
 export default defineConfig({
   integrations: [
     starlight({

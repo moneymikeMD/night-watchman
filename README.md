@@ -29,16 +29,18 @@ honest version, caveats included, lives in [docs/evidence.md](docs/evidence.md).
 From a local checkout (this repo cloned or checked out anywhere on disk):
 
 ```
+claude plugin marketplace add moneymikeMD/night-watchman
+claude plugin install night-watchman@night-watchman
+```
+
+From a local checkout instead (development, or an air-gapped host):
+
+```
 claude plugin marketplace add /path/to/night-watchman
 claude plugin install night-watchman@night-watchman
 ```
 
-From the GitHub marketplace (once published there):
-
-```
-claude plugin marketplace add moneymikeMD/night-watchman
-claude plugin install night-watchman@night-watchman
-```
+Documentation: https://moneymikemd.github.io/night-watchman/
 
 Both forms install the dependency-free core only. To declare which
 providers your repo uses, copy the template and commit it:
