@@ -1,0 +1,23 @@
+{
+  "dispatch-herdr-start-the-60s-reached-working-wait-fails-when-several-agents-are-started-back-to-back-agent-left-idle-with-no-brief": "b7eb04164d6846179e270af37d4c3928dcc6d59e39ee5fee2b91d82e4aa5c5f7",
+<<<<<<< HEAD
+  "guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2": "6cc63d5ccf995295708df80960d2fef09b8c99515421804404808481c25202bd",
+=======
+  "dispatch-start-fails-agent-not-ready-on-claude-s-folder-trust-dialog-in-a-fresh-herdr-worktree": "f06080122f9aaa8be8b7b7e1464dada3ec954cf8c87806b72d7a6896b378283b",
+>>>>>>> main
+  "guard-fs-writes-sh-at-user-scope-blocks-git-stash-in-every-repo-s-main-worktree-not-just-this-plugin-s": "df312269f5aea31fbf7df4d6c6b567b7bb87729804d43a3d960c64a8d3f90d1a",
+  "guard-fs-writes-sh-false-positives-on-redirect-looking-text-inside-quoted-strings": "8b0ddcfdf8388ea1f0f12078097e287bd2919cd3a3b0fd5a8ff456a33238d821",
+  "guard-fs-writes-sh-quoted-ssh-scp-rsync-mosh-payload-mis-split-on-unescaped": "b6f2a4baa8793f0dfc400aac8377454d1f37bdb4ca033653d8fb0d4d621a4a6a",
+  "guard-fs-writes-sh-trailing-words-after-a-re-execution-context-in-the-same-segment-bypass-local-rules": "0fd88bf026f481a065d41c34f73d3d07a845a3fbb33a39c272aef3bc01d6066b",
+  "herdr-ticket-start-selftest-sh-replays-hand-authored-worktree-create-and-worktree-list-responses-not-recorded-ones": "8ff52e9cb4a331105b4bd76f72e7592d59c37ffec2172685a78abb77c83d6b32",
+  "issues-py-lint-accepts-a-comma-separated-single-line-touches-field-in-jira-mode-scope-then-reports-every-changed-file-undeclared": "d796cc9f24587baa70dd294e1c1101fa803a88647186868cf1bc2c3c3d9424b4",
+  "issues-py-lint-source-jira-reports-a-cross-project-blocked-by-e-g-nwm-68-blocked-by-lab-227-as-does-not-exist": "82062c3de3652985a4782401208f5c94251e12db37d7298abc9f557342ccb2e0",
+  "issues-py-next-treats-awaiting-deployment-tickets-as-startable-in-jira-mode": "9e4a7eaf9138f4e67b09f6c825592564103636e7eda9f144023cc41b5301343e",
+  "land-branch-sh-lint-cmd-is-word-split-not-shell-evaluated": "04e4c4ea1eb976ab99928f5fcfc8511e30757d9f06154e3cb5cfc5a7cc2bfdeb",
+  "nwm-workflow-previous-status-validator-on-completed-refuses-the-normal-in-progress-to-completed-path-it-counts-only-statuses-before-the-current-one": "03897e810fca84114138c788efba5aa6bb85b8a4baed1df5a3726bce01a45989",
+  "release-sh-calls-the-tracker-fetch-verb-with-a-since-tag-but-tracker-fetch-takes-an-issue-key-changelog-always-degrades-to-the-placeholder-line": "591c97a7ae4a1189d297e8d1285b7c8767455f9f164834b6feef82fa53fc17c6",
+  "script-analytics-py-selftest-fixtures-are-hand-typed-not-captured-transcripts": "13358d881ca0eb5e43255ebc4205feb1c2879df6cf51c05a8c8b816b75d2131d",
+  "script-analytics-py-status-durations-exits-0-and-reports-0-new-when-the-tracker-wrapper-itself-fails": "7115ba27c40dd4eec117a226b6af328ddeaa28e3a8969225ce06702f41f7abbf",
+  "script-events-hook-sh-resolves-the-extractor-by-path-only-so-a-foreign-repo-s-scripts-script-analytics-py-would-be-invoked": "0e1f56456e2a0c7cac4a697a5e928a69adff4c27f9fe61d8cb246635d450f61b",
+  "subagentstop-hook-wiring-for-script-events-hook-sh-not-yet-observed-live": "acd36502e190012d4ac671b9478822675022a34008ccadb4a3a959c9f00e0fef"
+}

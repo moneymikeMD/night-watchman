@@ -1,0 +1,15 @@
+# ./jira-agile-api.sh --yes write POST /sprint/6 '{"state":"closed"}'
+# Captured live against a real Jira Cloud site, a throwaway scratch
+# project, a fresh sprint still in state "future". Recorded because an
+# earlier draft of the header text guessed the wrong error message ("not
+# compatible") for this transition — the real Jira response reuses the
+# SAME message as the missing-start-date case, because future->closed and
+# future->active both fail on the same missing-dates validation, checked
+# before the state-transition validation ever runs.
+HTTP 400
+{
+  "errorMessages": [],
+  "errors": {
+    "startDate": "You must specify a start date for the sprint."
+  }
+}

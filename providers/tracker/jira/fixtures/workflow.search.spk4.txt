@@ -1,0 +1,143 @@
+# ./jira-api.sh raw GET "/workflow/search?workflowName=Software%20Simplified%20Workflow%20for%20Project%20SPK4&expand=transitions,statuses"
+# Captured live 2026-09-14 against example.atlassian.net, scratch project SPK4,
+# after the stage set was applied: 9 statuses, 10 transitions (the "already
+# complete" case for statuses/transitions; rule completeness comes from the bulk-get).
+# No credential-shaped field present.
+{
+  "self": "https://example.atlassian.net/rest/api/3/workflow/search?expand=transitions,statuses&maxResults=50&startAt=0",
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 1,
+  "isLast": true,
+  "values": [
+    {
+      "id": {
+        "name": "Software Simplified Workflow for Project SPK4",
+        "entityId": "9196fe68-64c6-43f6-8ad6-0138e3850564"
+      },
+      "description": "",
+      "transitions": [
+        {
+          "id": "1",
+          "name": "Create",
+          "description": "",
+          "from": [],
+          "to": "10009",
+          "type": "initial"
+        },
+        {
+          "id": "11",
+          "name": "To Do",
+          "description": "",
+          "from": [],
+          "to": "10009",
+          "type": "global"
+        },
+        {
+          "id": "21",
+          "name": "In Progress",
+          "description": "",
+          "from": [],
+          "to": "3",
+          "type": "global"
+        },
+        {
+          "id": "31",
+          "name": "Done",
+          "description": "",
+          "from": [],
+          "to": "10010",
+          "type": "global"
+        },
+        {
+          "id": "41",
+          "name": "Triage",
+          "description": "",
+          "from": [],
+          "to": "10011",
+          "type": "global"
+        },
+        {
+          "id": "51",
+          "name": "Open",
+          "description": "",
+          "from": [],
+          "to": "1",
+          "type": "global"
+        },
+        {
+          "id": "61",
+          "name": "Awaiting Deployment",
+          "description": "",
+          "from": [],
+          "to": "10012",
+          "type": "global"
+        },
+        {
+          "id": "71",
+          "name": "Deferred",
+          "description": "",
+          "from": [],
+          "to": "10013",
+          "type": "global"
+        },
+        {
+          "id": "81",
+          "name": "Completed",
+          "description": "",
+          "from": [],
+          "to": "10014",
+          "type": "global"
+        },
+        {
+          "id": "91",
+          "name": "Cancelled",
+          "description": "",
+          "from": [],
+          "to": "10015",
+          "type": "global"
+        }
+      ],
+      "statuses": [
+        {
+          "id": "1",
+          "name": "Open"
+        },
+        {
+          "id": "10009",
+          "name": "To Do"
+        },
+        {
+          "id": "10010",
+          "name": "Done"
+        },
+        {
+          "id": "10011",
+          "name": "Triage"
+        },
+        {
+          "id": "10012",
+          "name": "Awaiting Deployment"
+        },
+        {
+          "id": "10013",
+          "name": "Deferred"
+        },
+        {
+          "id": "10014",
+          "name": "Completed"
+        },
+        {
+          "id": "10015",
+          "name": "Cancelled"
+        },
+        {
+          "id": "3",
+          "name": "In Progress"
+        }
+      ],
+      "created": "2026-09-11T13:33:30.499-0400",
+      "updated": "2026-09-14T14:18:02.092-0400"
+    }
+  ]
+}

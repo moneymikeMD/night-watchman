@@ -1,0 +1,13 @@
+# space-fields-wrongtype.txt — GET /rest/api/3/field variant for the
+# type-mismatch refusal test: a field named "touches" already exists but
+# under schema.custom "com.atlassian.jira.plugin.system.customfieldtypes:
+# textfield" (single-line text), not the "...:textarea" this script would
+# create it as. ensure_fields must die naming the mismatch rather than
+# silently reusing it.
+#
+# PROVENANCE: authored, not captured live — see
+# space-project-classic.txt's header.
+HTTP 200
+[
+  {"id": "customfield_19999", "name": "touches", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textfield"}}
+]

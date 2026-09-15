@@ -1,0 +1,132 @@
+---
+title: Tickets and Docs Protocol
+description: The docs/ routing table and the ticket workflow — status-is-a-directory-move, the frontmatter contract, and the UNVERIFIED discipline.
+sidebar:
+  order: 1
+---
+
+Moved verbatim from the
+[`tickets-protocol`](https://github.com/moneymikeMD/night-watchman/blob/main/skills/tickets-protocol/SKILL.md)
+skill.
+
+Working subset of the conventions this plugin's `to-issues` skill sets up.
+Authoritative sources for the tickets themselves: whatever `to-issues` created
+(`issues/README.md` by default) and, if adopted, a real tracker.
+
+## Routing new knowledge
+
+| What | Where |
+| --- | --- |
+| A rule to follow | `CLAUDE.md` |
+| A fact about the project | matching `docs/` topic file, updated **in place** |
+| A "why" | dated append to `docs/decisions.md` — never rewrite; supersede with a new entry referencing the old. Template: `templates/decisions.md` |
+| A guess | `docs/open-questions.md`, marked `UNVERIFIED` — never a topic file |
+| A problem found, not fixed | `${CLAUDE_PLUGIN_ROOT}/scripts/known-issue.sh add` to create an entry under `docs/known-issues/` with severity (HIGH/MEDIUM/LOW/COSMETIC) by blast radius, not effort. **Never hand-edit the generated index** — it must never drift from the entries it indexes. Template: `templates/known-issues.md` |
+| A script doc claim, checked against reality | dated row in `docs/scripts-claims.md`, updated in place on re-check. Template: `templates/scripts-claims.md` |
+
+Resolved known-issues use `${CLAUDE_PLUGIN_ROOT}/scripts/known-issue.sh resolve <slug>`
+and are rewritten in place with what was verified, never deleted — the
+history is the useful part. A confident-sounding guess in `docs/` is worse
+than no entry; future sessions read these files as ground truth.
+`${CLAUDE_PLUGIN_ROOT}/scripts/known-issue.sh lint` verifies entries and the
+index stay in sync.
+
+## Ticket flow
+
+```
+open ──> in-progress ──> awaiting-deployment ──> completed
+  │
+  └────────────────────────────────────────────> cancelled
+```
+
+**File mode (the default): the directory is the status.** Moving a ticket is
+`git mv issues/<from-stage>/<id>.md issues/<to-stage>/<id>.md` plus the
+frontmatter `updated:` bump, committed together (see "Transition commits"
+below). There is no separate `status:` field to fall out of sync with the
+location — see `to-issues/SKILL.md`.
+
+**Tracker mode (opt-in): a transition call replaces the directory move.** If
+this project has adopted a real issue tracker via `issues.py --source jira`
+(or an equivalent adapter for another tracker), "moving a ticket" means
+calling that tracker's transition API instead of `git mv` — the ticket's
+description stays the contract either way (see "Ticket body and progress"
+below), and `lint`/`board`/`waves`/`next` run identically against either
+source. `awaiting-deployment` is real in either mode, not ceremony — nothing
+deploys itself just because code merged, so "committed" and "running" stay
+different states until something verifies the deploy.
+
+## Frontmatter contract
+
+Full reference: `to-issues/references/frontmatter.md`. Summary:
+
+- `verify` — required to reach `completed/`. "Deployed" is not evidence; a
+  collector with a bad credential starts cleanly and reports healthy.
+- `outcome` — required in `cancelled/`. A cancelled ticket with no outcome
+  causes the same idea to be re-proposed and re-litigated later.
+- `executor` — `agent` | `human` | `mixed` (with `human_steps`).
+- `touches` — paths the ticket owns; two startable tickets sharing one is an
+  error. `appends` — shared append-mostly files; collisions warn only.
+- `blocked_by` — a ticket with blockers is not startable.
+- A ticket resting on a false premise is **cancelled, not deleted** — the
+  false premise is the useful part.
+
+## Epics
+
+The grouping unit above tickets. Applied literally: "a new delivered
+capability or themed improvement effort with a quantifiable artifact as its
+output".
+
+- **Title** is a verb phrase, no prefix (`Migrate issue management to a
+  tracker`, not `Parent: ...` or `Cost exploration: ...`).
+- **Description** opens with an `Artifact:` line naming the countable output,
+  then one paragraph of scope. A proposed epic with no countable artifact is
+  rejected at filing time; it is a theme, not an epic.
+- **Status is derived from children**: all Done/Cancelled → Done; any child
+  In Progress or Done → In Progress; otherwise To Do. Recompute when a child
+  moves.
+- **Every ticket names its epic or its reason for being an orphan.** Orphans
+  are fine (a single fix, a rotation); a catch-all "maintenance" epic is not,
+  because it has no artifact and never closes.
+- Cancelled tickets stay linked to their epic; the false premise is part of
+  the epic's history.
+
+## Transition commits
+
+Move a ticket **in the same commit as the work that moved it — or alone**.
+Never batched with unrelated work: stage paths deliberately, since a broad
+`git add -A` sweeps a stale ticket into an unrelated commit and forges a false
+connection in the history. A lone transition still gets its own message
+(`chore(issues): PROJ-006 -> completed`).
+
+## Ticket body and progress
+
+A ticket's description — the Problem/Solution/Decisions/Out of scope sections
+— is static once filed and changes only when the acceptance criteria change
+(`verify`, `human_steps`, `blocked_by`, `touches`, or Solution itself).
+Everything else — progress notes, spike findings, review rounds, learnings,
+what remains — goes somewhere else: a dated comment if the tracker supports
+one, or a dated append to the project's decisions log if it does not. A
+`## Progress` section appended to the ticket body itself is the wrong place
+either way. Why: the description is what a fresh agent reads to learn what
+"done" means; a body that grows with a progress log per session buries that
+contract — an author once let a ticket's own body grow past 11 KB across
+three separate "Progress" sections before it closed, and the acceptance
+contract a fresh reader needed got buried under session narration. Durable
+learnings still go to `docs/` (or a memory tool, if one is installed), not to
+the ticket body.
+
+## Tooling
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint  issues/   # file mode
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py board issues/
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py waves issues/
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py next  issues/
+
+# tracker mode, once adopted:
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint  --source jira --jira-project PROJ
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py board --source jira --jira-project PROJ
+```
+
+A ticket that fails lint will fail in an agent's hands too, just later and
+more expensively. Run `lint` before any ticket change, in either mode.

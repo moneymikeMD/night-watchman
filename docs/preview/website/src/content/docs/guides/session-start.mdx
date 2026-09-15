@@ -1,0 +1,40 @@
+---
+title: Session Start Traps
+description: The traps that bite most often during awaiting-deployment verification, and when to split to a fresh session.
+sidebar:
+  order: 2
+---
+
+Moved verbatim from the
+[`session-start`](https://github.com/moneymikeMD/night-watchman/blob/main/skills/session-start/SKILL.md)
+skill. See [Your First Session Start](/getting-started/first-session-start/)
+for the full step-by-step routine these are drawn from.
+
+## Verification traps
+
+Traps, in order of how often they actually bite:
+
+- A deploy step a ticket's `verify` assumes has not happened yet may have
+  happened implicitly as a side effect of unrelated work. Verify against
+  the live system, not the ticket's assumption of what has not changed.
+- "The process is running" or "the container is Up" is not "verify met". A
+  collector with a bad credential starts cleanly and reports healthy while
+  doing nothing. Insist on the ticket's stated observation, not a proxy for
+  it.
+- Sign-in flows, test emails, and console clicks stay human. Report them as
+  owed; never mark a ticket completed on the strength of an HTTP 200.
+
+## Split to a fresh session before the main thread runs too long
+
+Cache-read cost grows with accumulated context, so a long-running main
+thread's average per-turn cost creeps up the longer it runs. Two measured
+data points from one project's early operation: a 181-turn session cost
+roughly $49 and was judged acceptable; a later session that ran ~476 turns
+with no split cost roughly double that on cost and nearly triple the turn
+count. Split at a wave/ticket-batch boundary once the main thread's turn
+count is comfortably past the smaller of those two examples — pick a
+concrete number for your own project once you have a couple of measured
+sessions to compare, and revisit it as more data comes in. An
+owner-approved unattended run is not the same decision as whether to split
+at the turn threshold — the two are independent, and the threshold applies
+regardless of whether the run itself was pre-approved.

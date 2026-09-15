@@ -1,0 +1,59 @@
+{
+  "_comment": [
+    "Transition rules jira-workflow-apply.sh --rules ensures are present.",
+    "Additive only: a rule already on the transition (same ruleKey + parameters) is left alone,",
+    "a missing one is appended, nothing is ever removed.",
+    "Transitions are matched by NAME; the stage transitions are GLOBAL, so a rule fires from any status.",
+    "Parameter values may name a field or status instead of a site id:",
+    "  {field:<name>}  -> the custom field id, resolved via GET /field",
+    "  {status:<name>} -> the status id, resolved via GET /statuses/search",
+    "Field, status and transition names are matched exactly (case-sensitive); a mistyped placeholder dies.",
+    "Parameter shapes recorded live: fixtures/workflows.bulkget.spk4-rules-after.txt."
+  ],
+  "transitions": [
+    {
+      "name": "In Progress",
+      "validators": [
+        {
+          "ruleKey": "system:validate-field-value",
+          "parameters": {
+            "ruleType": "fieldRequired",
+            "fieldsRequired": "{field:verify}",
+            "ignoreContext": "true",
+            "errorMessage": "verify is required before work starts"
+          }
+        },
+        {
+          "ruleKey": "system:validate-field-value",
+          "parameters": {
+            "ruleType": "fieldRequired",
+            "fieldsRequired": "{field:touches}",
+            "ignoreContext": "true",
+            "errorMessage": "touches is required before work starts"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Completed",
+      "validators": [
+        {
+          "ruleKey": "system:validate-field-value",
+          "parameters": {
+            "ruleType": "fieldRequired",
+            "fieldsRequired": "{field:verify}",
+            "ignoreContext": "true",
+            "errorMessage": "verify is required before completing"
+          }
+        },
+        {
+          "ruleKey": "system:previous-status-validator",
+          "parameters": {
+            "previousStatusIds": "{status:In Progress}",
+            "mostRecentStatusOnly": "false"
+          }
+        }
+      ]
+    }
+  ]
+}

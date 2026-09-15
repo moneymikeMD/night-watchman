@@ -1,0 +1,19 @@
+# projects_createUpdate success, against a throwaway project
+# Recorded: 2026-09-10/11, real calls against a live Atlassian Cloud site
+# (copied from the production client's recorded fixtures).
+# De-identified: site host -> example.atlassian.net; account ids, and the
+# one project key/name, replaced with same-shape placeholders. Field
+# names, types and all other values are as the API returned them.
+---
+{
+  "data": {
+    "projects_createUpdate": {
+      "success": true,
+      "errors": [],
+      "update": {
+        "id": "ari:cloud:townsquare:6e91b541-5dc7-4d6d-b95e-e1bd6229d921:project-update/9ef262dd-6fa8-46c6-bf3b-636c24ceccd4",
+        "creationDate": "2026-09-11T03:28:24.281191Z"
+      }
+    }
+  }
+}

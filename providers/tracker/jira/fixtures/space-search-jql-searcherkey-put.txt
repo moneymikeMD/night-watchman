@@ -1,0 +1,8 @@
+# ./jira-api.sh --yes write PUT /field/customfield_10077 '{"searcherKey":"com.atlassian.jira.plugin.system.customfieldtypes:textsearcher"}'
+# Captured live 2026-09-14 against example.atlassian.net, project NWM
+# (PROJ-111's own spike): the repair PUT ensure_field_searchable() issues
+# after a confirmed-unsearchable probe. Recorded transcript shows a 2xx
+# (the wrapper's own write guard never reached its error path) and an
+# empty response body — no status line was captured, so none is asserted
+# here beyond success; the NEXT probe (space-search-jql-searchable.txt)
+# is the real proof the repair worked.

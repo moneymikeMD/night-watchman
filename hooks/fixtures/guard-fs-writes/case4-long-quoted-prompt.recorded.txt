@@ -1,0 +1,1 @@
+some-tool agent-prompt x "Work ticket issues/open/EXAMPLE-1.md. Run 'memory-tool recall --query some-tool' first. record real 'some-tool worktree list --cwd \$PWD' output; perl -e 'alarm 600; exec @ARGV' -- if needed. never git stash/reset; rephrase any blocked call." >/dev/null && echo done

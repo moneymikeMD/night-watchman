@@ -1,0 +1,12 @@
+# GET /wiki/rest/api/user/current
+# Recorded: 2026-09-10/11, real calls against a live Atlassian Cloud site
+# (copied from the production client's recorded fixtures).
+# De-identified: site host -> example.atlassian.net; account ids, and the
+# one project key/name, replaced with same-shape placeholders. Field
+# names, types and all other values are as the API returned them.
+---
+{
+  "accountId": "112233:00000000-0000-0000-0000-000000000000",
+  "displayName": "Fixture Account",
+  "email": "fixture@example.com"
+}

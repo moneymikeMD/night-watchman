@@ -1,0 +1,83 @@
+---
+title: Quick Start
+description: Declare your providers, run the doctor check, and file your first ticket in file mode.
+sidebar:
+  order: 2
+---
+
+Moved from the ["Install" section](https://github.com/moneymikeMD/night-watchman/blob/main/README.md#install) of the project README and the [`to-issues`](https://github.com/moneymikeMD/night-watchman/blob/main/skills/to-issues/SKILL.md) skill.
+
+## Declare your providers
+
+To declare which providers your repo uses, copy the template and commit it:
+
+```
+mkdir -p .night-watchman
+cp templates/night-watchman.config.toml .night-watchman/config.toml
+providers/lib/provider.sh doctor
+```
+
+Every value in that template is already the built-in default, so this step
+changes no behaviour on day one. It is worth doing anyway: it puts the
+answer to "what does this repo talk to?" in the repo's history, where a
+change to it shows up in a diff.
+
+On a fresh tree today `doctor` reports `not-installed` for all four kinds.
+That is expected, not a fault: the contract has landed, and the
+implementations are still being ported into `providers/` (see the table in
+[`providers/README.md`](/guides/providers/)). `IMPL` and `ORIGIN` are
+still the real answers — what the kind resolves to, and which rule
+decided — and both are worth reading before the implementations arrive.
+
+## Your first ticket, in file mode
+
+Look for `issues/README.md` (or `tickets/`, `specs/`) in the repo. If one
+exists, **conform to it** — read its frontmatter schema and stage names and use
+those, even where they differ from the defaults below. A second competing
+convention in the same repo is worse than an imperfect first one.
+
+If nothing exists, create the structure below and write the README that codifies
+it, so the next session inherits it instead of inventing another.
+
+```
+issues/
+├── README.md
+├── open/                  agreed and specified, nobody has started
+├── in-progress/           being worked now
+├── awaiting-deployment/   committed, but not live
+├── completed/             live and verified
+└── cancelled/             decided against; outcome explains why
+```
+
+**The directory is the status.** No `status:` field — a field and a location
+will eventually disagree, and then neither can be trusted.
+
+`awaiting-deployment` earns its place in any repo where shipping is a separate
+manual act (a dashboard deploy, an app store review, a DBA running a migration).
+If deployment is automatic on merge, drop that stage rather than keep a bucket
+nothing ever sits in.
+
+Write each ticket using `assets/ticket-template.md` (full field reference:
+`references/frontmatter.md`), then validate before you finish:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint issues/
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py waves issues/
+```
+
+`lint` catches the errors that make a ticket unworkable — a missing `verify`, a
+`blocked_by` pointing at nothing, a cancelled ticket with no `outcome`, two
+parallel tickets touching the same path.
+
+`waves` prints the parallel execution plan: which tickets can be worked
+simultaneously, and the worktree commands to do it. If wave 1 has one ticket in
+it, the tickets are over-coupled — look for a dependency that is assumed rather
+than real.
+
+Fix what lint reports. A ticket that fails lint will fail in an agent's hands
+too, just later and more expensively.
+
+See the [tickets protocol guide](/guides/tickets-protocol/) for the full
+frontmatter contract and ticket flow, and the
+[first session-start guide](/getting-started/first-session-start/) for what
+happens once you have tickets to work.

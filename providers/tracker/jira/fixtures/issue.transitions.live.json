@@ -1,0 +1,221 @@
+{
+  "expand": "transitions",
+  "transitions": [
+    {
+      "id": "11",
+      "name": "To Do",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10009",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+        "name": "To Do",
+        "id": "10009",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "21",
+      "name": "In Progress",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/3",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/images/icons/statuses/inprogress.png",
+        "name": "In Progress",
+        "id": "3",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+          "id": 4,
+          "key": "indeterminate",
+          "colorName": "yellow",
+          "name": "In Progress"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "31",
+      "name": "Done",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10010",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+        "name": "Done",
+        "id": "10010",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "green",
+          "name": "Done"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "51",
+      "name": "Open",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/1",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/images/icons/statuses/open.png",
+        "name": "Open",
+        "id": "1",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "41",
+      "name": "Triage",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10011",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/",
+        "name": "Triage",
+        "id": "10011",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "61",
+      "name": "Awaiting Deployment",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10012",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/",
+        "name": "Awaiting Deployment",
+        "id": "10012",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+          "id": 4,
+          "key": "indeterminate",
+          "colorName": "yellow",
+          "name": "In Progress"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "71",
+      "name": "Deferred",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10013",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/",
+        "name": "Deferred",
+        "id": "10013",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+          "id": 2,
+          "key": "new",
+          "colorName": "blue-gray",
+          "name": "To Do"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "81",
+      "name": "Completed",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10014",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/",
+        "name": "Completed",
+        "id": "10014",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "green",
+          "name": "Done"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    },
+    {
+      "id": "91",
+      "name": "Cancelled",
+      "to": {
+        "self": "https://example.atlassian.net/rest/api/3/status/10015",
+        "description": "",
+        "iconUrl": "https://example.atlassian.net/",
+        "name": "Cancelled",
+        "id": "10015",
+        "statusCategory": {
+          "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+          "id": 3,
+          "key": "done",
+          "colorName": "green",
+          "name": "Done"
+        }
+      },
+      "hasScreen": false,
+      "isGlobal": true,
+      "isInitial": false,
+      "isAvailable": true,
+      "isConditional": false,
+      "isLooped": false
+    }
+  ]
+}

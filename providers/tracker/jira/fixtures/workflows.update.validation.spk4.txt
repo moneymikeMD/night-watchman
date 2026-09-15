@@ -1,0 +1,58 @@
+# ./jira-api.sh --yes write POST /workflows/update/validation '<envelope>'
+# Captured live 2026-09-11 against example.atlassian.net, project SPK4 (a
+# throwaway scratch project, owner-authorized for this exact purpose).
+# Non-mutating; the sibling /workflows/update — the one call that actually
+# mutates state — was NEVER issued against SPK4, NWM, or any project in
+# this session.
+#
+# ROOT CAUSE OF THE EARLIER GENERIC 400 (see git history / prior fixture
+# revision): this endpoint does NOT take the bare WorkflowUpdateRequest —
+# it takes a WorkflowUpdateValidateRequest ENVELOPE:
+#   {"payload": <the exact body /workflows/update would take>,
+#    "validationOptions": {"levels": ["ERROR","WARNING"]}}
+# Sending the bare body (no envelope) 400s with a useless
+# "Invalid request payload. Refer to the REST API documentation and try
+# again." — wrapping it in the envelope turns that into a real,
+# field-level response.
+#
+# ITERATION (one change at a time, live, against SPK4):
+#   (a) bare round-trip of the redacted bulk-get read (existing
+#       statuses/transitions only, actions/validators/links/properties
+#       already dropped per the wrapper's own redaction — see
+#       workflows.bulkget.spk4.txt's header), wrapped in the envelope,
+#       with an EMPTY top-level `statuses` array ->
+#       HTTP 400 {"errorMessages": ["payload.statuses : must not be
+#       empty"], "errors": {}} — the envelope itself is accepted; this
+#       specific content (empty statuses) is rejected.
+#   (a2) every EXISTING status (To Do/In Progress/Done) re-declared in
+#       `statuses` as {statusReference, name, statusCategory, scope} (NO
+#       `id` field) -> HTTP 200, 3 ERRORs, one per status, e.g.:
+#       {"type":"STATUS","message":"Status name \"To Do\" already in use.
+#       Try a different name.","code":"NON_UNIQUE_STATUS_NAME",
+#       "level":"ERROR","elementReference":{"statusReference":"10009"}}
+#   (b) same, PLUS the six target statuses declared the same (`id`-less)
+#       way -> HTTP 200, 9 ERRORs (3 existing + 6 new), all
+#       NON_UNIQUE_STATUS_NAME — confirms this is a general rule about
+#       the ABSENCE of `id`, not specific to the three template statuses.
+#   (b2) every status declaration (existing AND new) given BOTH `id` AND
+#       `statusReference` set to the SAME real global status id -> HTTP
+#       200, 0 ERRORs, 6 WARNINGs (one per new status, all
+#       NO_INBOUND_TRANSITIONS_TO_STATUS — expected: the six new
+#       transitions had not been added to the workflow's own
+#       `transitions` list yet at this point).
+#   (c) the six target transitions added -> HTTP 200, `{"errors": []}` —
+#       zero errors, zero warnings.
+#   (min) THIS FIXTURE: a further-trimmed body — workflow-level `statuses`
+#       as bare {statusReference} (no layout/properties/deprecated);
+#       transitions without `description`; the workflow object without
+#       `name`/`scope`; status DEFINITIONS without `scope`/`description`
+#       (kept: id, statusReference, name, statusCategory) -> STILL HTTP
+#       200, `{"errors": []}`. This is the shortest body found to
+#       validate, and the shape build_update_body now renders.
+#
+# No redaction applied to this response (no credential-shaped field
+# present). Nothing else trimmed.
+HTTP 200
+{
+  "errors": []
+}

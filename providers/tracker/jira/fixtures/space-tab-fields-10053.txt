@@ -1,0 +1,26 @@
+# space-tab-fields-10053.txt — GET
+# /rest/api/3/screens/10050/tabs/10053/fields response (Bug's own
+# screen/tab). RECORDED LIVE, ZZSPIKE run 2 (read-only, 2026-09-12). None
+# of the six target custom fields are present.
+HTTP 200
+[
+  {"id": "summary", "name": "Summary"},
+  {"id": "description", "name": "Description"},
+  {"id": "issuetype", "name": "Issue Type"},
+  {"id": "assignee", "name": "Assignee"},
+  {"id": "parent", "name": "Parent"},
+  {"id": "customfield_10020", "name": "Sprint"},
+  {"id": "priority", "name": "Priority"},
+  {"id": "components", "name": "Components"},
+  {"id": "labels", "name": "Labels"},
+  {"id": "issuelinks", "name": "Linked Issues"},
+  {"id": "duedate", "name": "Due date"},
+  {"id": "fixVersions", "name": "Fix versions"},
+  {"id": "attachment", "name": "Attachment"},
+  {"id": "customfield_10001", "name": "Team"},
+  {"id": "customfield_10015", "name": "Start date"},
+  {"id": "security", "name": "Security Level"},
+  {"id": "versions", "name": "Affects versions"},
+  {"id": "environment", "name": "Environment"},
+  {"id": "reporter", "name": "Reporter"}
+]

@@ -1,0 +1,8 @@
+# GET /wiki/api/v2/pages/<id>/children for a page with no children
+# Recorded: 2026-09-10/11, real calls against a live Atlassian Cloud site
+# (copied from the production client's recorded fixtures).
+# De-identified: site host -> example.atlassian.net; account ids, and the
+# one project key/name, replaced with same-shape placeholders. Field
+# names, types and all other values are as the API returned them.
+---
+{"results":[],"_links":{"base":"https://example.atlassian.net/wiki"}}

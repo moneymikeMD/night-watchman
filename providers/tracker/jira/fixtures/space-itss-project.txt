@@ -1,0 +1,32 @@
+# space-itss-project.txt — GET /rest/api/3/issuetypescreenscheme/project?
+# projectId=10017 response. RECORDED LIVE, ZZSPIKE run 2 (read-only,
+# 2026-09-12), host scrubbed to example.atlassian.net; project
+# name/key/ids are the real ZZSPIKE ones (no secret, per instruction).
+# Confirms the project's own issueTypeScreenScheme id, needed for the
+# mapping call below.
+HTTP 200
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 1,
+  "isLast": true,
+  "values": [
+    {
+      "issueTypeScreenScheme": {
+        "id": "10017",
+        "name": "ZZSPIKE: Scrum Issue Type Screen Scheme",
+        "description": "",
+        "projects": {
+          "maxResults": 0,
+          "startAt": 0,
+          "total": 0,
+          "isLast": true,
+          "values": []
+        }
+      },
+      "projectIds": [
+        "10017"
+      ]
+    }
+  ]
+}

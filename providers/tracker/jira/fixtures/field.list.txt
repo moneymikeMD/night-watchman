@@ -1,0 +1,100 @@
+# ./jira-api.sh raw GET /field
+# Captured live 2026-09-14 against example.atlassian.net (site-wide field list).
+# Trimmed from 90 entries to the three plugin custom fields plus two system fields,
+# so name resolution searches a real list. Field ids are per site: verify and touches
+# resolve by NAME at runtime, never hardcoded. `key` arrives "<redacted>" from the
+# wrapper default redaction (not used by the script). No credential-shaped value.
+[
+  {
+    "id": "status",
+    "key": "<redacted>",
+    "name": "Status",
+    "custom": false,
+    "orderable": false,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": [
+      "status"
+    ],
+    "schema": {
+      "type": "status",
+      "system": "status"
+    }
+  },
+  {
+    "id": "summary",
+    "key": "<redacted>",
+    "name": "Summary",
+    "custom": false,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": [
+      "summary"
+    ],
+    "schema": {
+      "type": "string",
+      "system": "summary"
+    }
+  },
+  {
+    "id": "customfield_10043",
+    "key": "<redacted>",
+    "name": "touches",
+    "untranslatedName": "touches",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": [
+      "touches[Paragraph]",
+      "touches",
+      "cf[10043]"
+    ],
+    "schema": {
+      "type": "string",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea",
+      "customId": 10043
+    }
+  },
+  {
+    "id": "customfield_10044",
+    "key": "<redacted>",
+    "name": "verify",
+    "untranslatedName": "verify",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": [
+      "verify[Paragraph]",
+      "verify",
+      "cf[10044]"
+    ],
+    "schema": {
+      "type": "string",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea",
+      "customId": 10044
+    }
+  },
+  {
+    "id": "customfield_10047",
+    "key": "<redacted>",
+    "name": "executor",
+    "untranslatedName": "executor",
+    "custom": true,
+    "orderable": true,
+    "navigable": true,
+    "searchable": true,
+    "clauseNames": [
+      "executor[Dropdown]",
+      "executor",
+      "cf[10047]"
+    ],
+    "schema": {
+      "type": "option",
+      "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select",
+      "customId": 10047
+    }
+  }
+]

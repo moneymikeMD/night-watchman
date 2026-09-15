@@ -1,0 +1,141 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+## [0.6.0] - 2026-09-14
+- decision: Jira enforces the field gates (verify, touches) and the status-order gate; scripts keep blocked_by, touches collisions and mixed/human_steps
+  cost: UNVERIFIED
+- jira-workflow-apply.sh --rules: additive validator merge from a committed rules spec, placeholders resolved by name, rehearsed on a scratch project; rules applied live
+  cost: UNVERIFIED
+- scripts drive the ticket lifecycle: dispatch start moves to In Progress, land-branch to Awaiting Deployment before the merge and Completed after the push (new no-default status flags); pipefail SIGPIPE fixes
+  cost: UNVERIFIED
+- publish/atlassian converter escapes double quotes in link URLs
+  cost: UNVERIFIED
+
+## [0.5.0] - 2026-09-14
+- parity-sweep.sh --source-root bottom-up enumeration of the source project (scripts, agents/skills, hook commands), allowlist, docs/decisions.md directive
+  cost: UNVERIFIED
+- publish provider kind (publish-brief, post-headline) with the first implementation providers/publish/atlassian, wired into session-start wrap-up
+  cost: UNVERIFIED
+- first bottom-up sweep finds classified; parity-sweep.sh dangling bucket for references to files absent in the source
+  cost: UNVERIFIED
+
+## [0.4.1] - 2026-09-14
+- agents/spec-reviewer: ticket-vs-diff review, no Agent tool
+  cost: UNVERIFIED
+- to-issues: decision tickets and Not yet specified fog
+  cost: UNVERIFIED
+- scripts/lib/wizard.sh guided human-step library, secrets via provider sink (MIT)
+  cost: UNVERIFIED
+
+## [0.4.0] - 2026-09-14
+- capability-ladder rung 1: build the lever from a proven run; a script beats fan-out
+  cost: UNVERIFIED
+- pstack-port cleanup: reflect section points at agents/reflector.md; evidence.md Migration OK pointer
+  cost: UNVERIFIED
+- session-start: resolve land-branch conflicts by ticket intent
+  cost: UNVERIFIED
+- skills/grill: round-based owner interview that hands off to to-issues
+  cost: UNVERIFIED
+- to-issues: prefactor, expand-contract slicing, red verify at base commit
+  cost: UNVERIFIED
+- issues.py scope: flag branch paths not declared in touches/appends
+  cost: ~24k tokens, 1 turn
+- diagnose-and-pr: diagnosis-loop reference, red-command gate, HITL loop template (MIT)
+  cost: UNVERIFIED
+- handoff-docs: suggested next, redaction rule, phase-boundary choice
+  cost: UNVERIFIED
+- decisions log: three-gate test before appending a why
+  cost: UNVERIFIED
+- writing-style: skill and agent prose rules; reflector no-op filter
+  cost: UNVERIFIED
+
+## [0.3.1] - 2026-09-14
+- providers/tracker/jira: Jira issue key never redacted (verified already satisfied, no code change)
+  cost: ~$0.02, 1 turn
+- script-analytics.py: --since/--until windows every per-script column; window owner_wait and tickets-per-owner-hour footer
+  cost: UNVERIFIED
+
+## [0.3.0] - 2026-09-14
+- session-start: brief contract, retry-by-failure-mode, child accounting, inspect-the-diff, exit predicate
+  cost: UNVERIFIED
+- skills/wave-trail: per-wave decision trail audited against the transcript
+  cost: UNVERIFIED
+- script-reviewer and diagnose-and-pr: safety-fact proof ladder, attack-the-premise, stale-state-first
+  cost: UNVERIFIED
+- capability-ladder: rule-enforcement ladder and reflect step
+  cost: UNVERIFIED
+- ethos observable-fact rule, to-issues red-team step, handoff-docs mid-wave pause
+  cost: UNVERIFIED
+- diagnose-and-pr: pre-diagnosis gates, PR body sections, flake classification
+  cost: UNVERIFIED
+- scripts/decision-log.sh + selftest
+  cost: UNVERIFIED
+- session-start wrap-up: wave-trail audit, status tags, reflector hand-off; retry table moved to references/
+  cost: UNVERIFIED
+- agents/reflector.md: correction-to-skill-edit proposals with owner approval
+  cost: UNVERIFIED
+- script-reviewer: hollow-selftest check, crash-point probe, output rules
+  cost: UNVERIFIED
+- templates/CLAUDE.md: delegation and claim rules
+  cost: UNVERIFIED
+- tickets-protocol: confidence tiers on the routing table
+  cost: UNVERIFIED
+- cost-reviewer: one adopted change per wave, variance, revert-not-tweak
+  cost: UNVERIFIED
+- docs/testing-philosophy.md: blinded evals for skill and agent changes
+  cost: UNVERIFIED
+- docs/writing-style.md plus librarian dedupe and compensation rules
+  cost: UNVERIFIED
+
+## [0.2.0] - 2026-09-14
+- trackers/jira: jira-workflow-apply.sh — add plugin stage statuses to a project's default workflow
+- T1 — issues.py: map Jira `Done` to completed and exclude it in the JQL
+- T2 — providers/tracker/jira: ship jira-api.sh + jira-common.sh as the default tracker provider
+- T3 — providers/tracker/jira/jira-space-create.sh: one-run Space bootstrap (project + six statuses + six custom fields)
+- T4 — providers/secrets: op and env implementations
+- T5 — providers/ contract: layout, verb sets, .night-watchman/config.toml reader
+- T6 — Reshuffle: move trackers/jira and optional/herdr into providers/
+- T8 — Evals for script-author and script-reviewer seeded from real history
+- T9 — Evals for librarian, researcher, diagnose-and-pr
+- T10 — Port read-shunt and bash-result-shunt PreToolUse hooks
+- T11 — Port shell-scripting conventions skill
+- T12 — providers/memory/memorygraph: recall.sh single-noun fan-out + store/recall verbs
+- T13 — Port Jira import, backfill, verify-keys trio
+- T14 — Port commit-staged-worktrees.sh into the herdr dispatch provider
+- T15 — Port cost-reviewer agent + generic cost ledger
+- T16 — Decisions / known-issues / scripts-claims conventions as templates
+- T17 — docs/ethos.md seed for this repo (capped, generic)
+- T18 — README rewrite to herdr's six-section shape
+- T19 — Docs site scaffold + publisher (human)
+- T20 — Docs pages: move content out of README/SKILL.md/script headers; generated reference
+- T21 — Release process: version bump, CHANGELOG from outcomes, tags
+- T24 — dispatch/herdr provider: implement watch and stop verbs from a recorded herdr spike
+- T25 — Pre-squash leftovers: generalize the adopter key in evals/README.md and its docs mirror; clean the generic "homelab" noun
+- T26 — Parity sweep of the source project (2026-09-13): fold new generic scripts, agents, skills, hooks into this repo
+- T27 — scripts/parity-sweep.sh: recurring drift check against the source project, wired into session-start
+- P1 — cost ledger: port the --repo/--project-slug session filter into claude-cost.py
+- P2 — memorygraph recall.sh: port multi-noun rank-fusion recall
+- P3 — port script-events-hook.sh (SubagentStop) and script-analytics.py
+- P4 — bash-result-shunt.sh: fold in the three detector fixes from the source project
+- P6 — herdr-ticket-start.sh: tracker-provider ticket resolution, early return, model pin
+- P7 — jira-api.sh: numeric issue id support and error_body redaction fixes
+- P8 — land-branch.sh: accept a ticket the worker already moved to awaiting-deployment; default tracker
+- P9 — jira-agile-api.sh: sprint-update and sprint-delete verbs
+- P10 — port the script-author-lite agent
+- P11 — port herdr-agent-pane.sh into the dispatch provider
+- P12 — land-branch.sh: land in a ../<repo>-land integration worktree with lock and dirty gate
+  cost: UNVERIFIED
+- P13 — jira-import.sh: read the create response correctly when the write path emits a stderr preamble
+- T28 — session-start: preflight the configured dispatch provider and make provider dispatch the rule, not an option
+- T29 — SessionEnd cost hook: append the session's cost and turns to the ledger and emit the outcome cost line automatically
+- P14 — script-analytics.py: invoke events, report --usage keep/retire?/flag, owner_wait, live-run fixes
+  cost: UNVERIFIED
+- P15 — script-analytics.py: per-ticket cost table and tracker status-duration events
+  cost: UNVERIFIED
+- P16 — scripts/script-retire.sh; cost-reviewer lists retire? candidates, librarian retires at wrap-up
+  cost: UNVERIFIED
+- P17 — script-author lint cap of two, script-reviewer default scope narrowed
+  cost: UNVERIFIED
+- P18 — session-start records accepted events before cost-reviewer; claude-cost.py writes ledger.jsonl
+  cost: UNVERIFIED

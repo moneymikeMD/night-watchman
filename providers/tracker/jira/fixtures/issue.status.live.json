@@ -1,0 +1,22 @@
+{
+  "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+  "id": "10657",
+  "self": "https://example.atlassian.net/rest/api/3/issue/10657",
+  "key": "ZZSPK2-1",
+  "fields": {
+    "status": {
+      "self": "https://example.atlassian.net/rest/api/3/status/10009",
+      "description": "",
+      "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+      "name": "To Do",
+      "id": "10009",
+      "statusCategory": {
+        "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+        "id": 2,
+        "key": "new",
+        "colorName": "blue-gray",
+        "name": "To Do"
+      }
+    }
+  }
+}

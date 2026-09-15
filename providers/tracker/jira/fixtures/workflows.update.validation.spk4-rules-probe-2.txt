@@ -1,0 +1,337 @@
+# ./jira-api.sh --yes write POST /workflows/update/validation <REQUEST below>
+# Captured live 2026-09-14 against example.atlassian.net, scratch project SPK4 (rules shape probe 2).
+# Non-mutating: the validation endpoint never writes. Payload is the full-passthrough
+# SPK4 workflow (see workflows.bulkget.spk4-rules-before.txt) with validators appended
+# to transitions 21 and 81. ruleKey kept: a Jira rule identifier, not a credential.
+# NEGATIVE CONTROL: bogus ruleType, unknown field id customfield_99999, unknown param names, nonexistent status 999999. Result: ERROR INVALID_RULE_CONFIGURATION for the ruleType, WARNING STATUS_NOT_FOUND for the status; the unknown field id and unknown param names were NOT flagged. Validation checks some parameters, not all.
+# Scanned for credential-shaped values before saving: none.
+# --- REQUEST
+{
+  "payload": {
+    "statuses": [
+      {
+        "id": "1",
+        "statusReference": "1",
+        "name": "Open",
+        "statusCategory": "TODO",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "10009",
+        "statusReference": "10009",
+        "name": "To Do",
+        "statusCategory": "TODO",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "10014",
+        "statusReference": "10014",
+        "name": "Completed",
+        "statusCategory": "DONE",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "10012",
+        "statusReference": "10012",
+        "name": "Awaiting Deployment",
+        "statusCategory": "IN_PROGRESS",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "10011",
+        "statusReference": "10011",
+        "name": "Triage",
+        "statusCategory": "TODO",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "3",
+        "statusReference": "3",
+        "name": "In Progress",
+        "statusCategory": "IN_PROGRESS",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "10013",
+        "statusReference": "10013",
+        "name": "Deferred",
+        "statusCategory": "TODO",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "10015",
+        "statusReference": "10015",
+        "name": "Cancelled",
+        "statusCategory": "DONE",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      },
+      {
+        "id": "10010",
+        "statusReference": "10010",
+        "name": "Done",
+        "statusCategory": "DONE",
+        "scope": {
+          "type": "GLOBAL"
+        },
+        "description": ""
+      }
+    ],
+    "workflows": [
+      {
+        "id": "9196fe68-64c6-43f6-8ad6-0138e3850564",
+        "version": {
+          "versionNumber": 1,
+          "id": "331622ac-47b9-4ce7-9fef-1fb97947700e"
+        },
+        "statuses": [
+          {
+            "statusReference": "10009",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "3",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "10010",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "1",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "10011",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "10012",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "10013",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "10014",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          },
+          {
+            "statusReference": "10015",
+            "layout": {},
+            "properties": {},
+            "deprecated": false
+          }
+        ],
+        "transitions": [
+          {
+            "id": "11",
+            "type": "GLOBAL",
+            "toStatusReference": "10009",
+            "links": [],
+            "name": "To Do",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "21",
+            "type": "GLOBAL",
+            "toStatusReference": "3",
+            "links": [],
+            "name": "In Progress",
+            "description": "",
+            "actions": [],
+            "validators": [
+              {
+                "ruleKey": "system:validate-field-value",
+                "parameters": {
+                  "ruleType": "notARuleType",
+                  "fieldsRequired": "customfield_99999",
+                  "bogusParam": "x"
+                }
+              }
+            ],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "31",
+            "type": "GLOBAL",
+            "toStatusReference": "10010",
+            "links": [],
+            "name": "Done",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "51",
+            "type": "GLOBAL",
+            "toStatusReference": "1",
+            "links": [],
+            "name": "Open",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "41",
+            "type": "GLOBAL",
+            "toStatusReference": "10011",
+            "links": [],
+            "name": "Triage",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "61",
+            "type": "GLOBAL",
+            "toStatusReference": "10012",
+            "links": [],
+            "name": "Awaiting Deployment",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "71",
+            "type": "GLOBAL",
+            "toStatusReference": "10013",
+            "links": [],
+            "name": "Deferred",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "81",
+            "type": "GLOBAL",
+            "toStatusReference": "10014",
+            "links": [],
+            "name": "Completed",
+            "description": "",
+            "actions": [],
+            "validators": [
+              {
+                "ruleKey": "system:previous-status-validator",
+                "parameters": {
+                  "previousStatusIds": "999999",
+                  "nonsense": "y"
+                }
+              }
+            ],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "91",
+            "type": "GLOBAL",
+            "toStatusReference": "10015",
+            "links": [],
+            "name": "Cancelled",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          },
+          {
+            "id": "1",
+            "type": "INITIAL",
+            "toStatusReference": "10009",
+            "links": [],
+            "name": "Create",
+            "description": "",
+            "actions": [],
+            "validators": [],
+            "triggers": [],
+            "properties": {}
+          }
+        ]
+      }
+    ]
+  },
+  "validationOptions": {
+    "levels": [
+      "ERROR",
+      "WARNING"
+    ]
+  }
+}
+# --- RESPONSE (HTTP 200)
+{
+  "errors": [
+    {
+      "type": "RULE",
+      "message": "ValidateAFieldValidator has an invalid rule type.",
+      "code": "INVALID_RULE_CONFIGURATION",
+      "level": "ERROR",
+      "elementReference": {
+        "ruleId": "6578887e-2b94-4397-b878-a4be9e2b5c99"
+      }
+    },
+    {
+      "type": "RULE",
+      "message": "Some referenced statuses could not be found.",
+      "code": "STATUS_NOT_FOUND",
+      "level": "WARNING",
+      "elementReference": {
+        "ruleId": "f60db94f-0c5b-465b-ba7c-2c447fcb2520"
+      }
+    }
+  ]
+}

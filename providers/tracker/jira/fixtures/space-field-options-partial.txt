@@ -1,0 +1,11 @@
+# space-field-options-partial.txt — GET
+# /rest/api/3/field/customfield_10044/context/10200/option response: only
+# "agent" already exists among the three target executor options
+# (agent/human/mixed), so ensure_executor_options must add exactly "human"
+# and "mixed" — idempotent skip on one, create on two.
+#
+# PROVENANCE: authored, not captured live — see
+# space-project-classic.txt's header.
+HTTP 200
+{"maxResults": 50, "startAt": 0, "total": 1, "isLast": true,
+ "values": [{"id": "10300", "value": "agent"}]}

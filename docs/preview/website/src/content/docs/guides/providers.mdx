@@ -1,0 +1,401 @@
+---
+title: Providers
+description: The one seam to the outside world — kinds, verbs, implementations, selection, and the config file's TOML subset.
+sidebar:
+  order: 3
+---
+
+Moved verbatim from
+[`providers/README.md`](https://github.com/moneymikeMD/night-watchman/blob/main/providers/README.md).
+
+Every night-watchman script that reaches outside the repo goes through
+this directory. Nothing calls a Jira client, a 1Password binary, a
+worktree dispatcher, or a memory CLI directly; it resolves a **kind** to
+an **implementation** and calls a fixed **verb** on it.
+
+The point is not abstraction for its own sake. It is that "what does this
+repo talk to?" should have one answer, in one committed file, that a
+reviewer can read in ten seconds.
+
+## Kinds and their verb sets
+
+The verb set is the contract. An implementation of a kind must accept
+exactly these verbs; a caller must not invent a new one for one
+implementation's benefit, because a verb only `jira` understands is how a
+pluggable seam quietly becomes a hard dependency on one tool.
+
+| Kind | Verbs | What it is |
+| --- | --- | --- |
+| `tracker` | `fetch` `transition` `comment` `create` | Where tickets live |
+| `secrets` | `read` | Where credentials live |
+| `dispatch` | `start` `watch` `stop` | How a wave of tickets gets run |
+| `memory` | `store` `recall` | Durable cross-session knowledge |
+
+**Shipped so far:** `secrets/op` and `secrets/env`, and
+`tracker/jira` — a port of the source project's `jira-api.sh` +
+`jira-common.sh`, de-identified: the site host comes from
+`[tracker.jira] host` in config and the credentials from the configured
+`secrets` provider (refs `jira.user` / `jira.token`), never a hardcoded
+literal. `transition`/`comment`/`create` are LIVE WRITES by default (no
+interactive confirmation) — deliberate, so a wave-dispatch script can call
+the tracker kind unattended; set `$NW_DRY_RUN=1`, or pass `--dry-run`
+before the verb, to have any verb print the request it would issue and
+exit 0 instead. `tracker/jira/jira-space-create.sh` is a
+one-run bootstrap for a brand-new Jira Space — project + the six stage
+statuses (via `trackers/jira/jira-workflow-apply.sh`) + the six custom
+fields + those fields on every project screen — each step idempotent, so
+a re-run converges rather than failing on "already there"; not a verb of
+the `tracker` contract itself, since it is a one-time setup operation, not
+part of the fetch/transition/comment/create surface every implementation
+must offer. The rest are planned as separate tickets, each porting
+code that already exists elsewhere in the repo:
+
+| Kind | Planned implementation |
+| --- | --- |
+| `dispatch` | `dispatch/herdr` (from `optional/herdr/`) |
+| `memory` | `memory/memorygraph` |
+
+Until those land, `provider.sh doctor` reports those kinds as
+`not-installed`, and that is the correct answer rather than a fault. The
+names above are the built-in defaults — what a kind resolves *to* — which
+is a separate question from whether it is installed. They are defaults,
+not requirements: the core still works with none of them reachable,
+because nothing in the core calls a provider unless the operation it was
+asked to do actually needs one.
+
+## Layout
+
+```
+providers/
+  README.md                       this file
+  lib/provider.sh                 resolve + dispatch (also a CLI)
+  lib/config.sh                   the .night-watchman/config.toml reader
+  lib/kit.sh                      die/warn/need/... (a copy; see its header)
+  config-selftest.sh              selftest for the two lib files
+  <kind>/<impl>/provider.sh       an implementation's executable entry point
+```
+
+An implementation is a directory holding an executable `provider.sh` that
+takes the verb as its first argument. That is the whole interface. It may
+keep anything else it wants alongside — a `lib/`, fixtures, its own
+selftest — and adopters are expected to: adding `providers/tracker/linear/`
+to your own repo is how you swap the tracker without forking this plugin.
+
+## Selection
+
+Highest priority first:
+
+1. **`NW_TRACKER` / `NW_SECRETS` / `NW_DISPATCH` / `NW_MEMORY`** — a
+   per-run override, for trying an implementation without committing to
+   it. Never the reviewed answer, always the temporary one.
+2. **`[providers]` in the nearest committed `.night-watchman/config.toml`**,
+   found by walking up from the working directory. This is the reviewed
+   answer. Copy `templates/night-watchman.config.toml` to
+   `.night-watchman/config.toml` in your repo and commit it.
+3. **The built-in defaults** in `lib/provider.sh`, so a fresh adopter with
+   no config gets a working system rather than an error about a file they
+   have never heard of.
+
+There is deliberately no `~/.night-watchman/config.toml` step. Provider
+selection is a property of the repo being worked on and is reviewed in
+that repo's history; a per-operator home-directory config would mean two
+people running the same script against the same repo silently hitting
+different providers.
+
+### What was rejected, and why
+
+- **A `--impl` flag on every script.** Works until you want to know what
+  the repo actually talks to, at which point the answer is spread across
+  every invocation in every skill, agent, and cron entry, with no single
+  place to look and nothing to review.
+- **Environment variables only.** Same problem, plus a worse one: not in
+  the repo's history, so a change to it leaves no trace.
+- **A block in `.claude/settings.json`.** That file belongs to Claude
+  Code, not to this plugin. Extending someone else's schema with our keys
+  means our config breaks when theirs changes, and it is not obviously
+  ours to a reader.
+
+## Using it
+
+```
+providers/lib/provider.sh resolve tracker            # -> jira
+providers/lib/provider.sh origin tracker             # -> env | config | default
+providers/lib/provider.sh verbs tracker              # -> fetch transition comment create
+providers/lib/provider.sh dir tracker                # -> .../providers/tracker/jira
+providers/lib/provider.sh config tracker.jira.host   # -> a key from the config
+providers/lib/provider.sh run tracker fetch PROJ-17   # -> execs the implementation
+providers/lib/provider.sh doctor                     # -> a table of all four kinds
+```
+
+`resolve` reports the winner; `origin` reports which of the three rules it
+came from. Both exist because "why is it talking to *that*?" is the
+question an operator actually has, and a bare implementation name cannot
+answer it. `doctor` prints the config path in effect alongside every kind,
+its implementation, where the selection came from, and whether it is
+installed — start there when something reaches the wrong place.
+
+`run` validates the verb against the kind's fixed set **before**
+dispatching, so an unknown verb is a contract error naming the legal set
+rather than whatever the implementation happens to do with an argument it
+does not recognise.
+
+The library is sourceable as well as executable: `. providers/lib/provider.sh`
+gives you `nw_resolve`, `nw_run`, `nw_config_get` and friends as shell
+functions, and deliberately does *not* turn on `set -e` in your script
+when sourced.
+
+## The config file
+
+`.night-watchman/config.toml` is read by `lib/config.sh`, which implements
+a fixed **TOML subset**, not TOML:
+
+- **Supported** — comments, `[table]` headers (dotted names allowed), and
+  `key = value` where the value is a basic string (`\"` `\\` `\n` `\t`
+  `\r` escapes), a literal string, an integer, or a boolean.
+- **Rejected, each with its own error naming the file, line, and reason** —
+  arrays, inline tables, arrays-of-tables, multi-line strings, floats,
+  dates, quoted keys, duplicate keys, duplicate table headers, and any
+  line that is none of the above.
+
+The rejections are the feature. A reader that quietly skipped a line it
+did not understand would let a typo three lines above `tracker = "jira"`
+silently fall the selection back to a built-in default, and the operator
+would get a clean run against the wrong provider with nothing printed. The
+subset is small enough to implement correctly in bash 3.2; a full TOML
+implementation there would be a large, badly-tested surface for a file
+that only holds provider selections and a handful of settings.
+
+No secret goes in this file — it is committed. Credentials come from the
+`secrets` provider at run time; what lives in config is the *reference*
+(an `op://` path, a vault name), never the value.
+
+## secrets: `op` and `env`
+
+`secrets` has one verb, `read REF`, and prints the secret on stdout, never
+elsewhere — no implementation may echo, log, or error-message the value.
+`REF` is a dotted lowercase name (e.g. `jira.token`), and a wrapper at
+`providers/secrets/read.sh` resolves the kind and dispatches for callers
+that only care about secrets:
+
+```
+providers/secrets/read.sh jira.token
+```
+
+- **`env`** maps `REF` straight to an environment variable:
+  `NW_` + `REF` with `.` → `_` and every letter upper-cased, so
+  `jira.token` → `NW_JIRA_TOKEN`. No config needed — this is the path a
+  stranger with no 1Password access uses to run the selftests and a first
+  session.
+- **`op`** looks up an item, field, and (optionally) vault for `REF` in
+  config and builds the `op://` URI itself, so a ref never doubles as the
+  1Password coordinate an operator has to keep in sync by hand:
+
+  ```
+  [secrets.op.jira.token]
+  item  = "..."            # required
+  field = "..."            # required
+  vault = "..."            # optional; falls back to [secrets.op].vault,
+                            # then the built-in default "Private"
+  ```
+
+  An item name containing parentheses breaks `op read` — a limitation of
+  `op` itself, not this provider.
+
+## Adding an implementation
+
+1. `mkdir -p providers/<kind>/<name>` and write an executable
+   `provider.sh` there that handles every verb in that kind's row above.
+2. Select it: `[providers] <kind> = "<name>"` in your
+   `.night-watchman/config.toml`, or `NW_<KIND>=<name>` for a one-off run.
+3. `providers/lib/provider.sh doctor` should show it as `installed`.
+
+Implementation names are a single lowercase path segment
+(`[a-z0-9_-]`). That is enforced as a **security** check, not a style one:
+the name is concatenated into a filesystem path and then executed, so
+`NW_TRACKER=../../../tmp/evil` is refused by the resolver rather than
+resolved by the kernel.
+
+## Testing
+
+`providers/config-selftest.sh` covers both library files: the supported
+grammar, every rejected construct by name, the discovery walk, the
+three-level precedence, the path-traversal refusal, verb validation,
+argument passthrough, and a drift check that the shipped template still
+declares every kind the resolver knows about. It runs entirely against
+scratch directories — there is no live target for this layer to reach, so
+there is nothing here to accidentally write to.
+
+## Private config (owner-local secrets coordinates)
+
+The committed `.night-watchman/config.toml` never carries 1Password
+coordinates, because this repo is published. Keep them in a private copy
+outside the repo and point the reader at it:
+
+```
+export NW_CONFIG=~/.config/night-watchman/<project>.toml   # mode 600
+```
+
+That file is the committed config plus `[tracker.jira] host = ...` and the
+`[secrets.op.jira.user]` / `[secrets.op.jira.token]` tables (item, field,
+optional vault). It holds names only; the value is fetched by `op read` at
+run time and reaches only the wrapper's stdin. Without `NW_CONFIG` the
+tracker verbs fail with "no 1Password item configured", which is the
+intended behaviour on a fresh checkout.
+
+## Core plus optional layers
+
+Moved from README.md's "Core plus optional layers" section.
+
+Rather than a monolith that assumes one particular toolchain,
+night-watchman ships a dependency-free core and treats everything else as
+an optional layer you install separately if you want it — the same model
+as a terse-communication-mode plugin already in wide use in this
+ecosystem, which bundles its own core skill and leaves everything else
+opt-in.
+
+The core assumes nothing beyond Claude Code itself. Tickets default to
+plain markdown files with YAML frontmatter (file mode) — no external
+tracker, no account, no network call required to use any part of this
+plugin. A real issue tracker (Jira today) is wired in as an adapter behind
+a `--source` flag, never as the only path.
+
+## Herdr ticket-start (worktree-dispatch tool)
+
+Moved from README.md's "Optional layers" section.
+
+`providers/dispatch/herdr/` is the `dispatch` provider kind's `herdr`
+implementation — a ported dispatch script for Herdr specifically (the
+worktree-dispatch tool referenced above): one command that opens a Herdr
+worktree workspace for a Jira-tracked ticket, starts a Claude agent in it
+PINNED to a chosen `--model` (never inheriting your shell's global
+default), and hands it the session-start skill's dispatch brief —
+refusing outright if the ticket's Jira executor field says a human needs
+to be in the loop, and treating an already-open workspace on that branch
+as an idempotent no-op rather than an error. To enable it: copy
+`providers/dispatch/herdr/` (the script, its selftest, and its own
+`lib/kit.sh` copy) into your project, then have your session-start skill
+or wave-dispatch step call `providers/dispatch/herdr/herdr-ticket-start.sh
+<ticket-id> --jira-api PATH` (or export `$ISSUES_JIRA_API`, the same
+variable `scripts/land-branch.sh`'s jira mode uses) for each ticket to fan
+out — or go through the provider seam (`providers/lib/provider.sh run
+dispatch start <ticket-id> ...`). Requires `HERDR_ENV=1` (set
+automatically inside a Herdr-managed session), `herdr`/`jq`/`git` on PATH,
+and a jira-api.sh-shaped wrapper — this plugin ships one by default at
+`providers/tracker/jira/jira-api.sh`. The executor custom-field id and its
+agent/human/mixed option ids are configurable via
+`HERDR_EXECUTOR_FIELD`/`HERDR_EXECUTOR_AGENT_ID`/`HERDR_EXECUTOR_HUMAN_ID`/
+`HERDR_EXECUTOR_MIXED_ID` env vars, since they are specific to whichever
+Jira instance you point it at. Run
+`providers/dispatch/herdr/herdr-ticket-start-selftest.sh` after copying it
+in — it never touches a real Herdr binary or a real Jira project, only
+per-scenario stubs. The provider's `watch` verb polls `herdr agent get`
+then `herdr agent wait --until STATE --timeout MS`; `stop` looks up the
+agent's `workspace_id` via `herdr agent get` and closes it with `herdr
+workspace close` — an agent with no `workspace_id` is refused outright
+(exit 2) rather than guessed at with an unrecorded `herdr pane close`
+call — both implemented against fixtures recorded from a live
+herdr binary under `providers/dispatch/herdr/fixtures/`, with their own
+`provider-selftest.sh`.
+
+## Jira sprint loop (providers/tracker/jira)
+
+Moved from README.md's "Optional layers" section.
+
+`providers/tracker/jira/` is a ported Jira Cloud Agile REST API client
+(`jira-agile-api.sh`, pinned to `/rest/agile/1.0`) plus its selftest and
+fixtures, for a project that wants to wrap its session-start work in a
+Jira Sprint the way a production system this plugin was extracted from
+does. It is a sibling adapter to the plain issue-tracker wrapper
+`scripts/land-branch.sh`'s jira mode already assumes (`--jira-api PATH` /
+`$ISSUES_JIRA_API`, pinned to `/rest/api/3`) — this one exists because
+that surface has no sprint endpoints at all. Like every tracker adapter in
+this plugin, it is opt-in: nothing in `skills/session-start/` requires or
+references it, and adopting the loop below is a decision a consuming
+project's own session-start skill makes for itself.
+
+**The loop**, as prose guidance for a project's own session-start (not
+enforced by this plugin):
+
+- **Future sprints come first.** If your team pre-builds upcoming sprints
+  with their tickets already added, list the board's `future` sprints
+  before creating a new one (`raw GET '/board/<id>/sprint?state=future'`)
+  and start the earliest one (`sprint-start`) rather than creating
+  another. Only create a new sprint (`sprint-create` then `sprint-start`)
+  when no future sprint exists.
+- **Add a ticket to the sprint as it starts work**, not in a batch at the
+  end — `sprint-add-issue <sprint-id> <ticket-key> [<ticket-key>...]`
+  accepts more than one key per call, so a whole wave can be added in one
+  request.
+- **Close the sprint at wrap-up** (`sprint-close`), after the wave's
+  tickets have landed. `sprint-close` refuses a sprint that is still
+  `future` rather than silently starting it on your behalf (starting it
+  sets its real start date to "now" — see the script's own header for the
+  full state-machine note); run `sprint-start` first.
+- **Gate the first live sprint on a real board.** `sprint-create` and
+  `sprint-start` are one-way writes against real, shared Jira state.
+  Before the very first sprint is ever opened on a given board, treat that
+  first run as a decision requiring the project owner's explicit
+  go-ahead (show the exact commands, wait for confirmation) rather than
+  something an unattended session runs on its own — the same caution
+  `scripts/land-branch.sh`'s header applies to any transition against a
+  live tracker. Once a first run has succeeded and been recorded (e.g. a
+  dated decision-log entry), later sprints on that board are routine.
+
+To enable it: copy `providers/tracker/jira/` (the script, its selftest,
+its fixtures, and its shared `lib/`) into your project, export
+`JIRA_HOST`/`JIRA_AGILE_USER`/`JIRA_AGILE_TOKEN` (no defaults are
+hardcoded to any one team's Jira instance — see the script's own header),
+and call `providers/tracker/jira/jira-agile-api.sh <command>` from
+wherever your session-start or wrap-up step lives. Requires
+`curl`/`jq`/`column` on PATH. Run
+`providers/tracker/jira/jira-agile-api-selftest.sh` after copying it in —
+it never touches a real Jira site or a real credential, only a stubbed
+`curl` with `JIRA_HOST` pointed at `127.0.0.1`.
+
+**Jira workflow bootstrap.** A company-managed Jira project created from
+the "simplified scrum classic" template ships a workflow with only To
+Do/In Progress/Done — too few statuses for this plugin's own stage set.
+`providers/tracker/jira/jira-workflow-apply.sh <PROJECT_KEY> [--dry-run]
+[--yes]` adds the missing six (Open, Triage, Awaiting Deployment,
+Deferred, Completed, Cancelled), each reached from any status via a
+GLOBAL transition, by rendering the project's own default workflow's FULL
+definition (its existing statuses/transitions plus the missing ones —
+never a delta) through a `jira-api.sh`-shaped wrapper (`--jira-api PATH` /
+`$ISSUES_JIRA_API`, the same convention as `land-branch.sh`'s jira mode).
+It resolves every status by name at request time rather than hardcoding a
+site-specific id or category, validates the rendered body against Jira's
+own `/workflows/update/validation` endpoint before ever showing the "about
+to write" preview, reports "already complete" and exits 0 if nothing is
+missing, and always prints the exact final request body and waits for
+`--yes` before issuing the one call that actually mutates state. That
+validation endpoint turned out to need its own envelope — `{"payload":
+<the update body>, "validationOptions": {"levels": ["ERROR","WARNING"]}}`,
+not the bare body — found live against a disposable scratch project; a
+real ERROR-level finding refuses the write, a WARNING-level one is shown
+but does not. Every read-only-by-semantics call this script makes (the
+two GETs, a version bulk-get, and the validation call itself) runs
+unconditionally, even under `--dry-run`, precisely so a caller can see
+Jira's own verdict on a candidate body before anyone reaches for `--yes`.
+Run `providers/tracker/jira/jira-workflow-apply-selftest.sh` after
+copying it in — like its sibling above, it never touches a real Jira
+site, replaying fixtures through a fake wrapper that hard-refuses the one
+call that actually mutates state (`write POST /workflows/update`) in
+every case that should never reach it.
+
+The bulk-get read this script rebuilds an update from goes through the
+wrapper's `--show-secrets` flag, and every existing status/transition is
+carried forward with EVERY field the read returned, not a reshaped
+subset — a live apply found the hard way that `/workflows/update`
+**replaces** a transition wholesale rather than merging it, so a request
+missing a field (a post-function, a validator) doesn't leave it
+defaulted, it deletes it. The fields in question (`ruleKey`,
+`permissionKey`) are Jira-internal rule identifiers, not credentials, but
+the wrapper's own redaction can't tell the difference by name alone.
+Every write prints a before/after snapshot pair and a deep diff of each
+existing transition's rules; any difference is a distinct exit code (2),
+not a silent success. `--restore-from PATH` re-applies an earlier
+snapshot's workflow document verbatim (with a freshly-fetched version) —
+useful for repairing a project a pre-fix run damaged, provided that
+snapshot was itself captured with `--show-secrets`; one that wasn't is
+refused outright, since there is no way to recover a rule value that was
+only ever seen as `"<redacted>"`.

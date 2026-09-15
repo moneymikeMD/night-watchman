@@ -1,0 +1,35 @@
+# space-project-classic.txt — GET /rest/api/3/project/<KEY> response for a
+# HEALTHY company-managed "simplified scrum classic" project: style
+# "classic", projectTypeKey "software", and an Epic issue type at
+# hierarchyLevel 1.
+#
+# PROVENANCE: authored, not captured live — this fixture was built with no live
+# Jira host reachable (the orchestrator runs that spike separately; see
+# jira-space-create-selftest.sh's own header). The field NAMES/shapes
+# below (style, projectTypeKey, issueTypes[].hierarchyLevel, id/key) match
+# Jira Cloud REST v3's documented Project resource and this repo's own
+# jira-api.sh view_projects comment ("style/projectTypeKey are printed
+# deliberately — a Work Management project can masquerade as the software
+# project a script expected"). Replace with a real capture (jira-api.sh raw
+# GET /project/<KEY> against a throwaway classic-template project) before
+# trusting this at the same level as providers/tracker/jira/fixtures/*.
+#
+# .id is "10017" to line up with the REAL project id from the ZZSPIKE live
+# run 2 capture (see space-itss-project.txt etc.) — everything downstream
+# of ensure_project keys off PROJECT_ID, so the step-5 chain's fixtures
+# only make sense replayed against this same id.
+HTTP 200
+{
+  "id": "10017",
+  "key": "ZZSPACE",
+  "name": "ZZ Space",
+  "projectTypeKey": "software",
+  "style": "classic",
+  "issueTypes": [
+    {"id": "10001", "name": "Epic", "hierarchyLevel": 1},
+    {"id": "10002", "name": "Story", "hierarchyLevel": 0},
+    {"id": "10003", "name": "Task", "hierarchyLevel": 0},
+    {"id": "10004", "name": "Bug", "hierarchyLevel": 0},
+    {"id": "10005", "name": "Subtask", "hierarchyLevel": -1, "subtask": true}
+  ]
+}

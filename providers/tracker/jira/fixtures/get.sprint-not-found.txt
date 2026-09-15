@@ -1,0 +1,10 @@
+# ./jira-agile-api.sh raw GET /sprint/999999999
+# Captured live against a real Jira Cloud site, a sprint id that has never
+# existed. No redaction needed: no credential-shaped field present.
+HTTP 404
+{
+  "errorMessages": [
+    "We could not find the sprint"
+  ],
+  "errors": {}
+}

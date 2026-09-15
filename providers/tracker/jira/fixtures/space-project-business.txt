@@ -1,0 +1,21 @@
+# space-project-business.txt — GET /rest/api/3/project/<KEY> response for
+# the FAILURE mode this script's ASSERT step exists to catch: a stale or
+# wrong projectTemplateKey silently yields a Business (team-managed,
+# "next-gen") project instead of the classic software one requested (the
+# lesson learned live). No Epic issue type, style "next-gen", projectTypeKey
+# "business".
+#
+# PROVENANCE: authored, not captured live — see space-project-classic.txt's
+# header for why, and for the docs this shape is drawn from.
+HTTP 200
+{
+  "id": "10102",
+  "key": "ZZBIZ",
+  "name": "ZZ Biz",
+  "projectTypeKey": "business",
+  "style": "next-gen",
+  "issueTypes": [
+    {"id": "10021", "name": "Task", "hierarchyLevel": 0},
+    {"id": "10022", "name": "Subtask", "hierarchyLevel": -1, "subtask": true}
+  ]
+}

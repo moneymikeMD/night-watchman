@@ -1,0 +1,23 @@
+# space-fields-existing.txt — GET /rest/api/3/field response used for the
+# main happy-path selftest run: five of the six target custom fields
+# (touches, verify, human_steps, appends, defer_until) already exist under
+# the right schema.custom type; "executor" is absent, so ensure_fields
+# must create exactly that one. A couple of unrelated system/custom
+# fields are included so name-matching has to actually filter on
+# `.custom == true` and an exact name, not just "the field list has six
+# entries".
+#
+# PROVENANCE: authored, not captured live — see
+# space-project-classic.txt's header. schema.custom values match Jira
+# Cloud's documented customfieldtypes keys (also used, unverified live,
+# in jira-space-create.sh's own POST /field bodies) — the same open item.
+HTTP 200
+[
+  {"id": "summary", "name": "Summary", "custom": false, "schema": {"type": "string"}},
+  {"id": "customfield_10001", "name": "Story Points", "custom": true, "schema": {"type": "number", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float"}},
+  {"id": "customfield_10043", "name": "touches", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10045", "name": "verify", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10046", "name": "human_steps", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10047", "name": "appends", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10048", "name": "defer_until", "custom": true, "schema": {"type": "date", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:datepicker"}}
+]

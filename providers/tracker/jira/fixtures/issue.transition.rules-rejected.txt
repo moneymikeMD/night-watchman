@@ -1,0 +1,14 @@
+# ./jira-api.sh --yes write POST /issue/PROJ-108/transitions '{"transition":{"id":"21"}}'   (then id 81)
+# Captured live 2026-09-14 against example.atlassian.net, run from the
+# orchestrating session right after `jira-workflow-apply.sh <KEY> --rules
+# workflow-rules.json --yes` applied the four rules (deep diff sent-vs-stored []).
+# Scratch issue PROJ-108 had empty verify and touches, was never In Progress, and
+# was Cancelled afterwards. Both transitions were rejected with HTTP 400 — live
+# proof the validators are enforced, not merely stored. The first three messages
+# are the spec's own errorMessage strings; "The issue never transitioned through
+# the desired status: In Progress" is Jira's built-in previous-status text.
+# No credential-shaped value present.
+# --- transition 21 (In Progress): HTTP 400
+{"errorMessages":["verify is required before work starts","touches is required before work starts"],"errors":{}}
+# --- transition 81 (Completed): HTTP 400
+{"errorMessages":["verify is required before completing","The issue never transitioned through the desired status: In Progress"],"errors":{}}

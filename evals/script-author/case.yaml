@@ -1,0 +1,127 @@
+schema_version: '1'
+name: nwm8-brief-chr-no-rule-strip
+description: script-author, given the shell-library recipe brief for a second target project, must produce a prose design
+  plan (no code) for a script whose selftest is structurally incapable of reaching the network and whose
+  update body carries existing transitions' actions/validators/triggers/links forward in full (the real
+  SPK4 rule-strip regression fixed in bfe325b).
+tags:
+- script-author
+- jira
+- regression
+execution:
+  prompt: "Plan (do not write) a one-shot fixup script for a Jira company-managed project created from\
+    \ the \"simplified scrum classic\" template: that template ships a workflow with only To Do/In Progress/Done,\
+    \ but this plugin's stage set needs six more (Open, Triage, Awaiting Deployment, Deferred, Completed,\
+    \ Cancelled), each reachable from any status via a GLOBAL transition with a caller-assigned id (51/41/61/71/81/91,\
+    \ same order as the status names above).\n\nTarget this at project key CHR. The design covers two\
+    \ files:\n  - trackers/jira/jira-workflow-apply-chr.sh\n  - trackers/jira/jira-workflow-apply-chr-selftest.sh\n\
+    \nDo NOT write either file. Do not produce any code, and do not use fenced code blocks anywhere in\
+    \ your response. Write/Edit/Bash tools are NOT available in this evaluation in any case — do not attempt\
+    \ to use them. Your final response must open with exactly two lines naming, verbatim, the two files\
+    \ your plan is for — \"trackers/jira/jira-workflow-apply-chr.sh\" and \"trackers/jira/jira-workflow-apply-chr-selftest.sh\"\
+    \ — followed by your complete design plan as prose, covering at\
+    \ least:\n  (a) the script's overall shape — its stages in order, what each stage reads or writes,\
+    \ and its flags/gating;\n  (b) exactly how the selftest is structurally incapable of reaching the network\
+    \ — specifically, that the selftest itself unsets $ISSUES_JIRA_API before invoking the script under\
+    \ test, so that an ambient export already present in the shell that runs the selftest cannot leak\
+    \ through and be picked up in place of the stub;\n  (c) how the update body's construction carries\
+    \ every existing transition's actions/validators/triggers/links forward in full from the bulk-get\
+    \ response, rather than a reshaped subset re-derived field-by-field; and\n  (d) the --show-secrets\
+    \ round-trip for the bulk-get: why that flag must be used for this specific read, and how its output\
+    \ flows unmodified into the update body.\n\nRecipe (already proven live against real Jira sites on\
+    \ a sibling project, NWM):\n  1. Resolve each target status name to its site-wide global status id\
+    \ AND its statusCategory (a required TODO/IN_PROGRESS/DONE enum) via GET /rest/api/3/statuses/search?maxResults=100.\
+    \ Never hardcode an id or category — both are assigned per Jira site and differ between sites. Fail\
+    \ loudly on any missing name.\n  2. Read the project's own editable default workflow, named exactly\
+    \ \"Software Simplified Workflow for Project CHR\", via GET /rest/api/3/workflow/search?workflowName=<urlencoded>&expand=transitions,statuses,\
+    \ for its entityId and current status/transition names only — this response's own shape ({to} as a\
+    \ bare string, no version) is NOT the shape the update endpoint needs.\n  3. Fetch the workflow's\
+    \ FULL editable representation AND its `version` via POST /rest/api/3/workflows {workflowNames:[NAME]}\
+    \ — a bulk-get that does not mutate anything despite the POST verb, so it is issued unconditionally,\
+    \ even under --dry-run. This response is keyed by a plain top-level string `name` per workflow object\
+    \ (not nested under an {name, entityId} pair) — select on that plain `name` field, not a nested one.\n\
+    \n     IMPORTANT — a real regression on this exact recipe (fixed in a later round, project SPK4):\
+    \ the wrapper's own redaction helper blanks any field whose NAME contains \"key\" — including an existing\
+    \ transition's actions[].ruleKey / validators[].parameters.permissionKey, which are Jira-internal\
+    \ rule identifiers, not credentials. Read this bulk-get through the wrapper's --show-secrets flag\
+    \ specifically so those fields survive intact, and then carry EVERY existing status and transition\
+    \ forward into the update body with EVERY field the bulk-get returned — never a reshaped subset of\
+    \ just {id, name, type, toStatusReference}. A live apply once confirmed /workflows/update REPLACES\
+    \ a transition wholesale rather than merging: a minimal reshaped body doesn't get its missing fields\
+    \ defaulted, it gets them DELETED. A before/after regression check after the write is good insurance,\
+    \ but the request body itself must not be the thing doing the stripping.\n  4. Validate the fully-rendered\
+    \ body via POST /rest/api/3/workflows/update/validation — envelope {payload: <body>, validationOptions:\
+    \ {levels: [\"ERROR\",\"WARNING\"]}} (the bare body 400s) — before ever showing the \"about to write\"\
+    \ preview. Abort on any ERROR-level finding.\n  5. Only past that point, gated on --yes, POST the\
+    \ SAME body to /rest/api/3/workflows/update. Every ADDED status carries BOTH `id` AND `statusReference`\
+    \ set to the real global status id (omitting `id` collides with the name already existing site-wide).\
+    \ Every ADDED transition carries the caller-assigned numeric id from the list above.\n  6. Read back\
+    \ and assert every target name is present.\n\nFlags: --jira-api PATH (a jira-api.sh-shaped wrapper:\
+    \ raw GET; write POST/PUT/PATCH; --dry-run; --yes; --show-secrets), defaulting to $ISSUES_JIRA_API.\
+    \ --dry-run runs every read-only-by-semantics call and prints the final body without ever calling\
+    \ /workflows/update. --yes actually issues the write.\n\nYour plan must also describe a selftest design,\
+    \ fixture-only (stubbed responses, no real network). Two properties from real incidents on this exact\
+    \ recipe are non-negotiable and must be explicit in your prose plan — they will be checked directly\
+    \ against what you write:\n\n1. The selftest must be structurally incapable of reaching the network\
+    \ — including when $ISSUES_JIRA_API already happens to be exported in the ambient shell before the\
+    \ selftest runs (a real regression once let a \"no --jira-api flag given\" test case silently pick\
+    \ up the real wrapper instead of its stub). State plainly that the selftest itself runs `unset ISSUES_JIRA_API`\
+    \ before exercising any \"no --jira-api flag given\" case, so an ambient export cannot leak in regardless\
+    \ of what the caller's environment looked like.\n\n2. The main script's update-body construction must\
+    \ carry forward every existing transition's actions/validators/triggers/links in full, per the IMPORTANT\
+    \ note in step 3 above — not a reshaped subset, and not merely detected as lost after the fact.\n\n\
+    Do not run anything against a live Jira project. Target bash 3.2 (no associative arrays, no `${var^^}`,\
+    \ no readarray/mapfile). There is no shared shell library (lib/kit.sh) or real jira-api.sh wrapper\
+    \ available to run against, so reason about correctness structurally rather than by executing anything."
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+runs: 2
+graders:
+- type: regex
+  name: response-has-main-script-label
+  target: last_message
+  pattern: trackers/jira/jira-workflow-apply-chr\.sh
+  match: contains
+  weight: 1
+- type: regex
+  name: response-has-selftest-label
+  target: last_message
+  pattern: trackers/jira/jira-workflow-apply-chr-selftest\.sh
+  match: contains
+  weight: 1
+- type: regex
+  name: response-unsets-jira-api-env
+  target: last_message
+  pattern: unset\s+ISSUES_JIRA_API
+  match: contains
+  weight: 2
+- type: regex
+  name: response-reads-with-show-secrets
+  target: last_message
+  pattern: --show-secrets
+  match: contains
+  weight: 2
+- type: regex
+  name: response-does-not-reshape-existing-transitions
+  target: last_message
+  pattern: transitions\s*\|\s*map\(\{\s*id,\s*name,\s*type,\s*toStatusReference\s*\}\)
+  match: not_contains
+  weight: 2
+- type: regex
+  name: response-preserves-actions-and-validators
+  target: last_message
+  pattern: (?=[\s\S]*actions)(?=[\s\S]*validators)
+  flags: i
+  match: contains
+  weight: 2
+- type: regex
+  name: response-carries-existing-transitions-forward
+  target: last_message
+  pattern: (?=[\s\S]*existing transition)(?=[\s\S]*(forward|verbatim|in full|preserved|carried))
+  flags: i
+  match: contains
+  weight: 1

@@ -1,0 +1,49 @@
+# SOURCE-SPECIFIC allowlist for scripts/parity-sweep.sh --source-root mode.
+# Lists capabilities the source project's own orchestration
+# surface references that this plugin deliberately never provides a
+# generic provider for: lab-infra concerns (host/media/network ops,
+# TrueNAS, Proxmox, Grafana/monitoring, Caddy reverse-proxy config) that
+# are specific to that one deployment, not to the plugin's own contract.
+#
+# A reference matching a pattern here is an expected gap, not an audit
+# finding — it stays out of templates/parity-map.tsv, which is the
+# classification store for capabilities that *were* considered for
+# porting. See docs/decisions.md for the directive this
+# implements and providers/README.md for the provider-neutral contract
+# these patterns are exempt from.
+#
+# One shell glob pattern per line, matched against the referenced path
+# relative to --source-root. '#' starts a comment; blank lines ignored.
+# Porting any one of these, should the plugin ever want to, is its own
+# ticket — this file only keeps the sweep quiet about known lab-infra
+# scope, it does not decide that scope is permanent.
+
+# host/physical-machine and TrueNAS/Proxmox operations
+scripts/host/*
+scripts/api/proxmox-api.sh
+
+# media stack and network debugging
+scripts/api/portainer-api.sh
+scripts/api/unifi-api.sh
+scripts/deploy/portainer-redeploy.sh
+scripts/deploy/stack-*
+scripts/network/*
+
+# IaC apply (OpenTofu) — lab-infra only, this plugin has no IaC provider
+scripts/deploy/tofu.sh
+
+# monitoring/Grafana
+scripts/monitoring/*
+
+# Caddy reverse-proxy site config
+scripts/deploy/caddy-sites.sh
+
+# lab-local secrets plumbing (distinct from the generic secrets provider)
+scripts/secrets/*
+scripts/api/op-item.sh
+
+# lab-specific shared shell lib and lint entrypoint (this plugin ships its
+# own minimal scripts/lib/kit.sh instead, see kit.sh's own header)
+scripts/lib/labkit.sh
+scripts/lib/labkit-selftest.sh
+scripts/lint.sh

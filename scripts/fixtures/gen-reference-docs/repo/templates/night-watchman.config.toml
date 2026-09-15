@@ -1,0 +1,4 @@
+# fixture-config.toml — a tiny fixture config template.
+
+[providers]
+tracker = "fake"

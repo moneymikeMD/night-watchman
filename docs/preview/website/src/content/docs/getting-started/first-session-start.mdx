@@ -1,0 +1,120 @@
+---
+title: Your First Session Start
+description: The opening move for a fresh session — orient, verify awaiting-deployment, fan out startable work, and land the results.
+sidebar:
+  order: 3
+---
+
+Moved verbatim (steps 1–4) from the
+[`session-start`](https://github.com/moneymikeMD/night-watchman/blob/main/skills/session-start/SKILL.md)
+skill. See the [session-start guide](/guides/session-start/) for the trap
+lists and the split-session rule in more depth.
+
+Many sessions in an unattended-operations project open the same way: "start
+on what can run in parallel, verify what is awaiting deploy, read docs
+first." This skill is that routine, so the main model spends its budget on
+judgement and the subagents spend theirs on the work.
+
+The main model reads, decides, and dispatches. It does not verify, survey,
+or diff anything itself — see the orchestrator/cheap-executor rule in
+`templates/CLAUDE.md`.
+
+## 1. Orient (main thread, a handful of cheap reads)
+
+```bash
+cat docs/README.md                                                     # if one exists
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py next  issues/   # startable now, tool-as-truth
+python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py board issues/   # what is where
+head -60 docs/known-issues.md                                          # severity table only, if it exists
+git log -1 --format=%B                                                 # last session's commit body
+memorygraph recall --query "<project>" --limit 8                       # if memorygraph is installed as an optional layer; single keyword, multi-word returns 0
+```
+
+Swap `issues/` for `--source jira` (or whatever adapter is configured) if
+the project has moved its ticket set off the filesystem — see the
+[tickets protocol guide](/guides/tickets-protocol/). An unreachable tracker
+should stop orientation here, loudly, rather than partway through a wave:
+fail before dispatching, not during it.
+
+Read topic files in `docs/` only when a ticket points at one. Do not open
+an archival handoff-docs directory proactively — a handoff doc is written
+once and then superseded by the tickets and docs it fed, not re-read as
+living truth. Open it only if the user says to.
+
+Skip open tickets whose `blocked_by` is non-empty and whose `executor` is
+`human`; `next` already filters these.
+
+## 2. Verify awaiting-deployment (delegate, read-only)
+
+Every ticket in `awaiting-deployment/` (or its tracker equivalent) has a
+`verify` block and, if `executor: mixed`, `human_steps`. Hand the whole set
+to one read-only-briefed agent (the cheapest model that can follow
+instructions and read output — haiku-class): run the verify commands,
+report MET / NOT MET / PARTIAL with evidence, name what remains human-only.
+It must not deploy, restart, recreate, rotate, or delete anything.
+
+Traps, in order of how often they actually bite:
+
+- A deploy step a ticket's `verify` assumes has not happened yet may have
+  happened implicitly as a side effect of unrelated work. Verify against
+  the live system, not the ticket's assumption of what has not changed.
+- "The process is running" or "the container is Up" is not "verify met". A
+  collector with a bad credential starts cleanly and reports healthy while
+  doing nothing. Insist on the ticket's stated observation, not a proxy for
+  it.
+- Sign-in flows, test emails, and console clicks stay human. Report them as
+  owed; never mark a ticket completed on the strength of an HTTP 200.
+
+## 3. Fan out startable work (delegate, one message)
+
+For each startable ticket, pick the smallest brief a pinned-model agent can
+finish without asking questions, and launch them all in **one** message:
+
+| Ticket shape | Agent | Model |
+| --- | --- | --- |
+| Verify / probe / "is it up" | a read-only triage agent | cheapest available |
+| A survey with a recommendation the user must approve | a general-purpose agent | mid-tier |
+| Research a fact outside the repo (a version, a maturity check, a licence) | `researcher` | mid-tier |
+| New or changed script | `script-author` → `script-reviewer` | mid-tier / top-tier for review judgement |
+| Ticket moves, decisions, known-issues, wrap-up | `librarian` | cheapest available |
+| Domain-specific work (infra, deploy, a particular stack) | whatever domain agents the project itself defines — this plugin ships none; a project wires its own | project-specific |
+
+A ticket whose next step is a decision only the user can make is still
+startable: the deliverable is the evidence that makes the decision one
+glance — a classified diff, a table with a recommendation column, a
+numbered plan with UNVERIFIED markers flagged. Touch the ticket body only
+if the acceptance criteria moved; put the evidence in a comment/note
+instead — see the [tickets protocol guide](/guides/tickets-protocol/).
+
+Every brief carries: READ-ONLY on live systems unless stated; never print a
+secret; do not commit; end with a compact table. Two agents must not
+`touches` the same path — `issues.py waves` says so before anyone starts.
+
+Live actions the user approves mid-session (a migration, a retirement, a
+major upgrade) run on the main thread so approval and action share one
+context — but they still go through a script in `scripts/`, reviewed by
+`script-reviewer` first if new.
+
+Check the project's `ethos.md` (see `templates/ethos.md`) before asking the
+user a question — if a default covers it, apply it and say so instead of
+asking. Batch every pending decision into one prompt rather than
+interrupting per agent.
+
+## 4. Judge and land (main thread)
+
+When the reports come back:
+
+- `${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh` lands a finished branch:
+  merges it, lints the merged tree, completes the ticket (file-mode
+  directory move, or a tracker transition if one is configured), and
+  pushes — or stops at the first failure and reverts the merge. See the
+  script's own header for the full contract.
+- Ticket verify fully MET → `librarian` completes it.
+- PARTIAL → post a dated note saying exactly which human steps remain;
+  touch the ticket body only if the acceptance criteria moved; it stays put.
+- New fact about the project → the matching `docs/` topic file, updated in
+  place; new "why" → a dated append to the decisions log; problem found,
+  not fixed → `${CLAUDE_PLUGIN_ROOT}/scripts/known-issue.sh add`.
+- Run `${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint` before any ticket transition.
+- Every user answer this session → a row in `ethos.md`'s decision log, and
+  a default adjusted if the pattern moved.

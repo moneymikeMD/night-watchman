@@ -1,0 +1,46 @@
+---
+title: Install
+description: Installing night-watchman from a local checkout or the GitHub marketplace, and declaring which providers your repo uses.
+sidebar:
+  order: 1
+---
+
+Moved verbatim from the ["Install" section](https://github.com/moneymikeMD/night-watchman/blob/main/README.md#install) of the project README.
+
+From a local checkout (this repo cloned or checked out anywhere on disk):
+
+```
+claude plugin marketplace add /path/to/night-watchman
+claude plugin install night-watchman@night-watchman
+```
+
+From the GitHub marketplace (once published there):
+
+```
+claude plugin marketplace add moneymikeMD/night-watchman
+claude plugin install night-watchman@night-watchman
+```
+
+Both forms install the dependency-free core only. Enable an optional layer
+(below) by copying its directory into your project and following that
+layer's own section.
+
+To declare which providers your repo uses, copy the template and commit it:
+
+```
+mkdir -p .night-watchman
+cp templates/night-watchman.config.toml .night-watchman/config.toml
+providers/lib/provider.sh doctor
+```
+
+Every value in that template is already the built-in default, so this step
+changes no behaviour on day one. It is worth doing anyway: it puts the
+answer to "what does this repo talk to?" in the repo's history, where a
+change to it shows up in a diff.
+
+On a fresh tree today `doctor` reports `not-installed` for all four kinds.
+That is expected, not a fault: the contract has landed, and the
+implementations are still being ported into `providers/` (see the table in
+[`providers/README.md`](/guides/providers/)). `IMPL` and `ORIGIN` are
+still the real answers — what the kind resolves to, and which rule
+decided — and both are worth reading before the implementations arrive.

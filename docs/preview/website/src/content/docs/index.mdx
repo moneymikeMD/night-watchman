@@ -1,0 +1,106 @@
+---
+title: Night Watchman
+description: An unattended-operations engine for Claude Code — tickets as dispatch contracts, a decision profile, a capability ladder, and the discipline that keeps an expensive model from doing work a cheap one could do instead.
+template: splash
+sidebar:
+  order: 1
+---
+
+An unattended-operations engine for Claude Code: tickets written as dispatch
+contracts, a decision profile that reduces the questions a session has to
+ask, a capability ladder for turning repeated work into something cheaper
+than a model re-deriving it, and the discipline that keeps an expensive
+main-thread model from doing work a cheap one could do instead.
+
+## Where to go next
+
+- **[Getting Started](/getting-started/install/)** — install the plugin,
+  set up your first config, and run your first session-start.
+- **[Guides](/guides/tickets-protocol/)** — the ticket protocol,
+  session-start traps, providers, adopting an existing repo, evals, the
+  capability ladder, shell scripting, and testing philosophy.
+- **[Reference](/reference/)** — script headers, config schema, and
+  provider verb sets.
+
+## What's in the box
+
+Moved from README.md's "What's in the box" section.
+
+**Skills**
+- `session-start` — the opening move for a fresh session: orient from
+  `docs/`, verify what's pending deployment, and fan startable work out to
+  the right agent.
+- `tickets-protocol` — the ticket lifecycle, frontmatter contract, and
+  knowledge-routing rules (a rule goes to `CLAUDE.md`, a fact to `docs/`, a
+  "why" to a decision log, a problem-not-fixed to a known-issues register).
+- `to-issues` — turns a finished planning conversation into independently
+  workable tickets on disk, file mode by default, with a Jira `--source`
+  adapter for repos that have migrated their tracker.
+- `capability-ladder` — script beats agent beats skill: when novel work
+  gets done inline because nothing existing could take it, that's a gap,
+  not an exception.
+- `handoff-docs` — writing session handoffs for a reader with no memory of
+  the session that produced them.
+
+**Hooks** (PreToolUse, on by default)
+- `guard-fs-writes.sh` — blocks a destructive command (`rm -rf`, `git
+  stash`/`checkout --`/`reset`/`clean` against the main worktree, an
+  out-of-tree `mv`/redirect) before it runs, rather than after.
+- `read-shunt.sh` — a Read (or bare `cat`) of a file over the line
+  threshold is summarised by a stateless `haiku` subprocess instead of
+  being returned to the calling model in full; the same path read again
+  in the same session is served unshunted, so nothing is permanently
+  unreadable. Ported from the source project's `read-shunt.sh`
+  (itself modeled on Portal by Spotify's read-shunt mechanism).
+- `bash-result-shunt.sh` — a short, curated set of known-noisy Bash
+  command shapes (an uncapped `git log`, an unfiltered `jira-api.sh
+  board`/`raw` search pull) is blocked before it runs, with guidance on
+  the flag or pipe to add; the exact same command run again in the same
+  session is allowed through. Deliberately does NOT gate `issues.py
+  board`/`waves` — this plugin's own to-issues tracker has no filter
+  flag to add, so gating it would block the exact command session-start
+  and tickets-protocol tell every session to run.
+
+**Agents**
+- `librarian` — maintains `docs/` and tickets per the knowledge protocol.
+- `researcher` — finds external facts (versions, upgrade paths, licence
+  terms) with a sourced table and a verified/UNVERIFIED confidence mark.
+- `script-reviewer` — reviews scripts before they touch anything real,
+  including a name-the-oracle independence check.
+- `script-author` — writes the reusable operational scripts the reviewer
+  checks, with a script-bar test to keep one-off commands out of the repo.
+
+**Providers** — see the [Providers guide](/guides/providers/) for the
+full contract.
+- `providers/` — the one seam to the outside world: four kinds
+  (`tracker`, `secrets`, `dispatch`, `memory`), a fixed verb set each, and
+  selection from a committed `.night-watchman/config.toml` with
+  `NW_<KIND>` env overrides for a one-off run.
+- `providers/lib/config.sh` — a bash 3.2 reader for a fixed TOML *subset*
+  that errors by name on anything outside it, rather than silently
+  skipping a line it did not understand.
+
+**Scripts**
+- `known-issue.sh` — one file per finding under a generated index, so the
+  index can never silently drift from the entries it summarizes.
+- `land-branch.sh` — merges a finished ticket branch, moves its ticket to
+  completed (file mode), and stops at the first failure rather than
+  half-landing.
+- `lib/kit.sh` — the small die/warn/need/show_help/tmpfile shell helpers
+  the two scripts above share; deliberately minimal so the core stays
+  dependency-free.
+
+**Docs**
+- `docs/testing-philosophy.md` — why a script with a write path must be
+  structurally unable to reach a live target while under test, not just
+  told not to.
+
+**Templates**
+- `templates/ethos.md` — the decision-profile pattern, with one anonymised
+  example row.
+- `templates/CLAUDE.md` — the orchestrator/cheap-executor rule and the
+  never-test-against-a-live-target rule, ready to merge into a project's
+  own `CLAUDE.md`.
+- `templates/night-watchman.config.toml` — the annotated provider
+  selection file; copy to `.night-watchman/config.toml` in your repo and
+  commit it.

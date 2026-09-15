@@ -1,0 +1,174 @@
+schema_version: '1'
+name: nwm8-round1-five-bugs
+description: 'script-reviewer must catch the five real bugs found in the round-1 pass of trackers/jira/jira-workflow-apply.sh,
+  reconstructed as an inline fixture (see the fixture''s own header for provenance: git show 409ea45:trackers/jira/jira-workflow-apply.sh,
+  and commits bfe325b / 4a347ab). Inlined directly in the prompt so this suite needs no --scaffold or
+  --allow-tools grant to run.'
+tags:
+- script-reviewer
+- jira
+- regression
+execution:
+  prompt: "A teammate wrote the script below (jira-workflow-apply-round1.sh) to add missing statuses/transitions\
+    \ to a Jira project's default workflow via POST /rest/api/3/workflows/update, through a jira-api.sh-shaped\
+    \ wrapper. It has NOT been run against any live Jira project yet. Review it (and its selftest, also\
+    \ below) before anyone runs it against a live system. Treat these two code blocks as the actual file\
+    \ contents — there is nothing else on disk to read for this review.\n\n```bash\n# jira-workflow-apply-round1.sh\n\
+    #!/bin/bash\n#\n# ROUND-1 FIXTURE (frozen for evals/script-reviewer). This is a\n# trimmed reconstruction\
+    \ of the first pass of trackers/jira/jira-workflow-apply.sh,\n# with the five bugs found during that\
+    \ review still in place, seeded from\n# the real incident narrated in the final script's header comments\n\
+    # (git show 409ea45:trackers/jira/jira-workflow-apply.sh) and commit\n# history (bfe325b, 4a347ab).\
+    \ NEVER run this against a live Jira project —\n# it is a review fixture only.\n#\n# Adds six plugin-stage\
+    \ statuses/transitions to a project's default\n# workflow via POST /rest/api/3/workflows/update, through\
+    \ a\n# jira-api.sh-shaped wrapper.\n\nset -euo pipefail\n. \"$(cd \"$(dirname \"$0\")\" && pwd)/lib/kit.sh\"\
+    \n\nTARGET_STATUS_LIST='Open\nTriage\nAwaiting Deployment\nDeferred\nCompleted\nCancelled'\nTARGET_TRANSITION_IDS='51\n\
+    41\n61\n71\n81\n91'\n\nPROJECT_KEY=\"\"\nJIRA_API_PATH=\"${ISSUES_JIRA_API:-}\"\nDRY_RUN=0\nASSUME_YES=0\n\
+    \nwhile [ $# -gt 0 ]; do\n    case \"$1\" in\n        -h|--help|help) show_help ;;\n        --jira-api)\
+    \ [ $# -ge 2 ] || die \"--jira-api needs a path\"; JIRA_API_PATH=\"$2\"; shift 2 ;;\n        --dry-run)\
+    \ DRY_RUN=1; shift ;;\n        --yes|-y)  ASSUME_YES=1; shift ;;\n        --) shift; break ;;\n  \
+    \      -*) die \"unknown flag '$1' — run with --help\" ;;\n        *) [ -z \"$PROJECT_KEY\" ] || die\
+    \ \"unexpected extra argument '$1'\"; PROJECT_KEY=\"$1\"; shift ;;\n    esac\ndone\n\n[ -n \"$PROJECT_KEY\"\
+    \ ] || die \"a PROJECT_KEY is required\"\n[ -n \"$JIRA_API_PATH\" ] || die \"no jira-api.sh-shaped\
+    \ wrapper given — pass --jira-api PATH or export \\$ISSUES_JIRA_API\"\n[ -x \"$JIRA_API_PATH\" ] ||\
+    \ die \"--jira-api path is not an executable file: '$JIRA_API_PATH'\"\n\nneed jq\n\njira_raw_get()\
+    \ { \"$JIRA_API_PATH\" raw GET \"$1\"; }\njira_write() { local method=\"$1\" path=\"$2\" body=\"$3\"\
+    ; \"$JIRA_API_PATH\" --yes write \"$method\" \"$path\" \"$body\"; }\n\n# ---------------------------------------------------------------\
+    \ status ids\n#\n# resolve_status_ids — populate RESOLVED_STATUS_IDS by NAME from\n# GET /statuses/search?maxResults=100.\n\
+    RESOLVED_STATUS_IDS=\"\"\nresolve_status_ids() {\n    local all missing=\"\" name id ids=\"\"\n  \
+    \  all=$(jira_raw_get \"/statuses/search?maxResults=100\") \\\n        || die \"could not read /statuses/search\"\
+    \n    while IFS= read -r name; do\n        [ -n \"$name\" ] || continue\n        id=$(printf '%s'\
+    \ \"$all\" | jq -r --arg n \"$name\" '[.values[] | select(.name == $n)][0].id // empty') \\\n    \
+    \        || die \"could not parse /statuses/search response while resolving '$name'\"\n        if\
+    \ [ -z \"$id\" ]; then\n            missing=\"$missing$name, \"\n        else\n            ids=\"\
+    $ids$id\n\"\n        fi\n    done <<EOF\n$TARGET_STATUS_LIST\nEOF\n    [ -z \"$missing\" ] || die\
+    \ \"these status names do not exist on this Jira site: ${missing%, }\"\n    RESOLVED_STATUS_IDS=\"\
+    $ids\"\n}\n\n# --------------------------------------------------------------- workflow read\n\nWORKFLOW_NAME=\"\
+    \"\nWORKFLOW_ENTITY_ID=\"\"\nWORKFLOW_JSON=\"\"\n\nread_workflow() {\n    local key=\"$1\" enc total\n\
+    \    WORKFLOW_NAME=\"Software Simplified Workflow for Project $key\"\n    enc=$(jq -rn --arg v \"\
+    $WORKFLOW_NAME\" '$v|@uri') || die \"could not url-encode workflow name\"\n    WORKFLOW_JSON=$(jira_raw_get\
+    \ \"/workflow/search?workflowName=$enc&expand=transitions,statuses\") \\\n        || die \"could not\
+    \ read workflow '$WORKFLOW_NAME'\"\n    total=$(printf '%s' \"$WORKFLOW_JSON\" | jq -r '.total //\
+    \ 0') || die \"could not parse workflow/search response\"\n    [ \"$total\" -ge 1 ] 2>/dev/null ||\
+    \ die \"no workflow named '$WORKFLOW_NAME' was found\"\n    WORKFLOW_ENTITY_ID=$(printf '%s' \"$WORKFLOW_JSON\"\
+    \ | jq -r '.values[0].id.entityId // empty') \\\n        || die \"could not read the workflow's entityId\"\
+    \n    [ -n \"$WORKFLOW_ENTITY_ID\" ] || die \"workflow/search response has no id.entityId\"\n}\n\n\
+    workflow_status_names() { printf '%s' \"$WORKFLOW_JSON\" | jq -r '.values[0].statuses[].name'; }\n\
+    workflow_transition_names() { printf '%s' \"$WORKFLOW_JSON\" | jq -r '.values[0].transitions[].name';\
+    \ }\n\nname_in_list() { printf '%s\\n' \"$2\" | grep -qxF \"$1\"; }\n\nMISSING_STATUS_NAMES=\"\"\n\
+    MISSING_TRANSITION_NAMES=\"\"\n\ncompute_missing() {\n    local have_statuses have_transitions name\n\
+    \    have_statuses=$(workflow_status_names) || die \"could not read current statuses\"\n    have_transitions=$(workflow_transition_names)\
+    \ || die \"could not read current transitions\"\n    MISSING_STATUS_NAMES=\"\"\n    MISSING_TRANSITION_NAMES=\"\
+    \"\n    while IFS= read -r name; do\n        [ -n \"$name\" ] || continue\n        name_in_list \"\
+    $name\" \"$have_statuses\" || MISSING_STATUS_NAMES=\"$MISSING_STATUS_NAMES$name\n\"\n        name_in_list\
+    \ \"$name\" \"$have_transitions\" || MISSING_TRANSITION_NAMES=\"$MISSING_TRANSITION_NAMES$name\n\"\
+    \n    done <<EOF\n$TARGET_STATUS_LIST\nEOF\n}\n\n# ---------------------------------------------------------------\
+    \ update body\n#\n# build_update_body <bulkget-response-json> <version-json> — renders the\n# POST\
+    \ /workflows/update request body.\n#\n# NOTE: additions are computed from MISSING_STATUS_NAMES only.\
+    \ A name\n# whose status already exists but whose transition is still missing (or\n# vice versa) is\
+    \ not separately covered here.\nbuild_update_body() {\n    local bulkget_json=\"$1\" version_json=\"\
+    $2\"\n    jq -n \\\n        --argjson bulkget \"$bulkget_json\" \\\n        --arg wfname \"$WORKFLOW_NAME\"\
+    \ \\\n        --argjson version \"$version_json\" \\\n        --arg targetNamesNL \"$TARGET_STATUS_LIST\"\
+    \ \\\n        --arg statusIdsNL \"$RESOLVED_STATUS_IDS\" \\\n        --arg transitionIdsNL \"$TARGET_TRANSITION_IDS\"\
+    \ \\\n        --arg missingStatusNamesNL \"$MISSING_STATUS_NAMES\" \\\n        '\n        def lines:\
+    \ split(\"\\n\") | map(select(length > 0));\n        ( $targetNamesNL | lines ) as $allNames\n   \
+    \     | ( $statusIdsNL | lines ) as $allIds\n        | ( $transitionIdsNL | lines ) as $allTransIds\n\
+    \        | ( $missingStatusNamesNL | lines ) as $missingStatusNames\n        | [ range(0; ($allNames\
+    \ | length))\n            | { name: $allNames[.], id: $allIds[.], transitionId: $allTransIds[.] }\n\
+    \          ] as $resolved\n        # Additions: status + transition for every name still missing a\n\
+    \        # STATUS. statusCategory is left null — resolve_status_ids above\n        # never captured\
+    \ it, and it is a required enum on any status\n        # definition /workflows/update accepts.\n \
+    \       | [ $resolved[] | select(.name as $n | $missingStatusNames | index($n) != null)\n        \
+    \    | { id: .id, statusReference: .id, name: .name, statusCategory: null }\n          ] as $status_additions\n\
+    \        | [ $resolved[] | select(.name as $n | $missingStatusNames | index($n) != null)\n       \
+    \     | { id: .transitionId, name: .name, type: \"GLOBAL\", toStatusReference: .id }\n          ]\
+    \ as $transition_additions\n        | ($bulkget.workflows[] | select(.name == $wfname)) as $wf\n \
+    \       # Request body carries ONLY the additions — existing statuses and\n        # transitions already\
+    \ on the workflow are not re-declared here.\n        | {\n            statuses: $status_additions,\n\
+    \            workflows: [ {\n                id: $wf.id,\n                version: $version,\n   \
+    \             statuses: ($status_additions | map({statusReference})),\n                transitions:\
+    \ $transition_additions\n            } ]\n        }\n        '\n}\n\n# ---------------------------------------------------------------\
+    \ main\n\nresolve_status_ids\nread_workflow \"$PROJECT_KEY\"\ncompute_missing\n\nif [ -z \"$MISSING_STATUS_NAMES\"\
+    \ ] && [ -z \"$MISSING_TRANSITION_NAMES\" ]; then\n    echo \"already complete.\"\n    exit 0\nfi\n\
+    \nVERSION_BULKGET_BODY=$(jq -n --arg n \"$WORKFLOW_NAME\" '{workflowNames: [$n]}') \\\n    || die\
+    \ \"could not build /workflows bulk-get request body\"\nVERSION_RESP=$(jira_write POST /workflows\
+    \ \"$VERSION_BULKGET_BODY\") \\\n    || die \"could not obtain the workflow's current version\"\n\
+    # Version selector: nested under an {name, entityId} id object, matching\n# workflow/search's OWN\
+    \ read shape rather than POST /workflows's actual\n# response shape (a plain top-level string `name`\
+    \ per workflow object).\nVERSION_JSON=$(printf '%s' \"$VERSION_RESP\" | jq -c --arg n \"$WORKFLOW_NAME\"\
+    \ '[.workflows[] | select(.id.name == $n)][0].version // null') \\\n    || die \"could not parse POST\
+    \ /workflows response\"\n[ \"$VERSION_JSON\" != \"null\" ] || die \"POST /workflows returned no 'version'\
+    \ for '$WORKFLOW_NAME'\"\n\nFINAL_BODY=$(build_update_body \"$VERSION_RESP\" \"$VERSION_JSON\") \\\
+    \n    || die \"could not render the /workflows/update request body\"\n\necho \"This is the request\
+    \ body for /rest/api/3/workflows/update:\"\nprintf '%s\\n' \"$FINAL_BODY\" | jq .\n\nif [ \"$DRY_RUN\"\
+    \ = \"1\" ]; then\n    exit 0\nfi\n\nif [ \"$ASSUME_YES\" != \"1\" ]; then\n    warn \"not confirmed\
+    \ (no --yes) — the update was never sent.\"\n    exit 3\nfi\n\njira_write POST /workflows/update \"\
+    $FINAL_BODY\" \\\n    || die \"POST /workflows/update failed outright\"\n```\n\n```bash\n# jira-workflow-apply-round1-selftest.sh\n\
+    #!/bin/bash\n#\n# ROUND-1 FIXTURE (frozen for evals/script-reviewer). Trimmed\n# selftest harness\
+    \ for jira-workflow-apply-round1.sh, reconstructed from\n# the real incident: the harness stubs $JIRA_API_PATH\
+    \ but never clears\n# $ISSUES_JIRA_API from the environment it inherits, so a developer who\n# has\
+    \ that variable exported for this project's own session-start (a\n# normal, common state) has every\
+    \ \"no --jira-api\" test case silently pick\n# up the REAL wrapper instead of the stub, and it can\
+    \ reach the network.\n#\n# NEVER run this against a live Jira project — it is a review fixture only.\n\
+    \nset -euo pipefail\n\nSCRIPT=\"$(cd \"$(dirname \"$0\")\" && pwd)/jira-workflow-apply-round1.sh\"\
+    \nTMPD=$(mktemp -d)\ntrap 'rm -rf \"$TMPD\"' EXIT\n\nPASS=0\nFAIL=0\ncheck() {\n    local label=\"\
+    $1\" got=\"$2\" want=\"$3\"\n    if printf '%s' \"$got\" | grep -qF \"$want\"; then\n        PASS=$((PASS\
+    \ + 1))\n    else\n        FAIL=$((FAIL + 1))\n        echo \"FAIL: $label (expected to find '$want')\"\
+    \ >&2\n    fi\n}\n\n# Stub wrapper — always available on PATH-relative lookup for the tests\n# below,\
+    \ but nothing here removes $ISSUES_JIRA_API from the environment\n# before exercising the \"no --jira-api\
+    \ flag given\" cases.\nSTUB=\"$TMPD/stub-jira-api.sh\"\ncat > \"$STUB\" <<'EOF'\n#!/bin/bash\necho\
+    \ '{\"stub\": true}'\nEOF\nchmod +x \"$STUB\"\n\n# case: no --jira-api flag given — should fall back\
+    \ to $ISSUES_JIRA_API.\n# If that variable is already exported in the ambient shell (e.g. a\n# developer's\
+    \ own project session-start left it set), this test exercises\n# whatever wrapper THAT points at,\
+    \ not the stub above.\nOUT=$(\"$SCRIPT\" NWM --dry-run 2>&1) && RC=0 || RC=$?\ncheck \"falls back\
+    \ to \\$ISSUES_JIRA_API when no --jira-api given\" \"$OUT\" \"PROJECT_KEY\"\n\necho \"selftest: $PASS\
+    \ passed, $FAIL failed\"\n[ \"$FAIL\" -eq 0 ]\n```\n\nStructure your review as a numbered findings\
+    \ list — one entry per issue, each stating what the problem is, what input/scenario triggers it, and\
+    \ what should happen instead — followed by a final line starting exactly with \"VERDICT:\" giving\
+    \ your overall go/no-go call on running this against a live system. Do not lead with a rewritten script;\
+    \ a one-line untested fix suggestion per finding is fine, a full replacement script is not.\n"
+  max_turns: 15
+  timeout_seconds: 300
+  allowed_tools: []
+runs: 3
+graders:
+- type: regex
+  name: finds-delta-body-vs-full-definition
+  target: last_message
+  pattern: (existing (status|transition)(es)?[a-z ]*(dropped|not (re-)?declared|not carried|missing)|only
+    the addition|additions only|(drop|strip|wipe|delete)[a-z ]{0,20}existing)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-empty-body-on-partial-state
+  target: last_message
+  pattern: (MISSING_TRANSITION_NAMES|missingTransitionNames)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-wrong-version-selector
+  target: last_message
+  pattern: \.id\.name
+  match: contains
+  weight: 1
+- type: regex
+  name: finds-statuscategory-null
+  target: last_message
+  pattern: (?=[\s\S]*statusCategory)(?=[\s\S]*\bnull\b)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-selftest-env-leak
+  target: last_message
+  pattern: ISSUES_JIRA_API
+  match: contains
+  weight: 1
+- type: regex
+  name: review-format-contract
+  target: last_message
+  pattern: VERDICT
+  match: contains
+  weight: 2
+  flags: i

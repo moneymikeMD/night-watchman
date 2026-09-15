@@ -1,0 +1,181 @@
+{
+  "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations,customfield_10010.requestTypePractice",
+  "fields": {
+    "aggregateprogress": {
+      "progress": 0,
+      "total": 0
+    },
+    "aggregatetimeestimate": null,
+    "aggregatetimeoriginalestimate": null,
+    "aggregatetimespent": null,
+    "assignee": {
+      "accountId": "000000:00000000-0000-0000-0000-000000000000",
+      "accountType": "atlassian",
+      "active": true,
+      "avatarUrls": {},
+      "displayName": "Example User",
+      "emailAddress": "user@example.com",
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=000000%3A00000000-0000-0000-0000-000000000000",
+      "timeZone": "America/New_York"
+    },
+    "attachment": [],
+    "comment": {
+      "comments": [],
+      "maxResults": 0,
+      "self": "https://example.atlassian.net/rest/api/3/issue/10655/comment",
+      "startAt": 0,
+      "total": 0
+    },
+    "components": [],
+    "created": "2026-09-12T12:11:28.456-0400",
+    "creator": {
+      "accountId": "000000:00000000-0000-0000-0000-000000000000",
+      "accountType": "atlassian",
+      "active": true,
+      "avatarUrls": {},
+      "displayName": "Example User",
+      "emailAddress": "user@example.com",
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=000000%3A00000000-0000-0000-0000-000000000000",
+      "timeZone": "America/New_York"
+    },
+    "customfield_10001": null,
+    "customfield_10002": [],
+    "customfield_10003": null,
+    "customfield_10004": null,
+    "customfield_10005": null,
+    "customfield_10006": null,
+    "customfield_10007": null,
+    "customfield_10008": null,
+    "customfield_10009": null,
+    "customfield_10010": null,
+    "customfield_10014": null,
+    "customfield_10015": null,
+    "customfield_10016": null,
+    "customfield_10017": null,
+    "customfield_10019": "0|i0040f:",
+    "customfield_10020": null,
+    "customfield_10021": null,
+    "customfield_10022": null,
+    "customfield_10023": null,
+    "customfield_10024": null,
+    "customfield_10025": null,
+    "customfield_10026": null,
+    "customfield_10027": null,
+    "customfield_10028": null,
+    "customfield_10029": null,
+    "customfield_10030": null,
+    "customfield_10031": null,
+    "customfield_10032": null,
+    "customfield_10033": null,
+    "customfield_10034": null,
+    "customfield_10037": null,
+    "customfield_10040": null,
+    "customfield_10041": null,
+    "customfield_10042": null,
+    "customfield_10043": null,
+    "customfield_10044": null,
+    "customfield_10045": null,
+    "customfield_10046": null,
+    "customfield_10047": null,
+    "customfield_10048": null,
+    "description": null,
+    "duedate": null,
+    "environment": null,
+    "fixVersions": [],
+    "issuelinks": [],
+    "issuetype": {
+      "avatarId": 10318,
+      "description": "A small, distinct piece of work.",
+      "hierarchyLevel": 0,
+      "iconUrl": "https://example.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+      "id": "10010",
+      "name": "Task",
+      "self": "https://example.atlassian.net/rest/api/3/issuetype/10010",
+      "subtask": false
+    },
+    "labels": [],
+    "lastViewed": null,
+    "priority": {
+      "iconUrl": "https://example.atlassian.net/images/icons/priorities/medium_new.svg",
+      "id": "3",
+      "name": "Medium",
+      "self": "https://example.atlassian.net/rest/api/3/priority/3"
+    },
+    "progress": {
+      "progress": 0,
+      "total": 0
+    },
+    "project": {
+      "avatarUrls": {},
+      "id": "10009",
+      "key": "NWM",
+      "name": "Night Watchman",
+      "projectTypeKey": "software",
+      "self": "https://example.atlassian.net/rest/api/3/project/10009",
+      "simplified": false
+    },
+    "reporter": {
+      "accountId": "000000:00000000-0000-0000-0000-000000000000",
+      "accountType": "atlassian",
+      "active": true,
+      "avatarUrls": {},
+      "displayName": "Example User",
+      "emailAddress": "user@example.com",
+      "self": "https://example.atlassian.net/rest/api/3/user?accountId=000000%3A00000000-0000-0000-0000-000000000000",
+      "timeZone": "America/New_York"
+    },
+    "resolution": null,
+    "resolutiondate": null,
+    "security": null,
+    "status": {
+      "description": "",
+      "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+      "id": "10009",
+      "name": "To Do",
+      "self": "https://example.atlassian.net/rest/api/3/status/10009",
+      "statusCategory": {
+        "colorName": "blue-gray",
+        "id": 2,
+        "key": "new",
+        "name": "To Do",
+        "self": "https://example.atlassian.net/rest/api/3/statuscategory/2"
+      }
+    },
+    "statusCategory": {
+      "colorName": "blue-gray",
+      "id": 2,
+      "key": "new",
+      "name": "To Do",
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2"
+    },
+    "statuscategorychangedate": "2026-09-12T12:11:28.778-0400",
+    "subtasks": [],
+    "summary": "PROJ-14 live probe (throwaway, will be cancelled)",
+    "timeestimate": null,
+    "timeoriginalestimate": null,
+    "timespent": null,
+    "timetracking": {},
+    "updated": "2026-09-12T12:11:28.501-0400",
+    "versions": [],
+    "votes": {
+      "hasVoted": false,
+      "self": "https://example.atlassian.net/rest/api/3/issue/PROJ-42/votes",
+      "votes": 0
+    },
+    "watches": {
+      "isWatching": true,
+      "self": "https://example.atlassian.net/rest/api/3/issue/PROJ-42/watchers",
+      "watchCount": 1
+    },
+    "worklog": {
+      "maxResults": 20,
+      "startAt": 0,
+      "total": 0,
+      "worklogs": []
+    },
+    "workratio": -1
+  },
+  "id": "10655",
+  "key": "PROJ-42",
+  "self": "https://example.atlassian.net/rest/api/3/issue/10655"
+}

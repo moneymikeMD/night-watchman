@@ -1,0 +1,25 @@
+# POST /wiki/api/v2/pages creating a throwaway page (deleted afterwards)
+# Recorded: 2026-09-10/11, real calls against a live Atlassian Cloud site
+# (copied from the production client's recorded fixtures).
+# De-identified: site host -> example.atlassian.net; account, space and
+# parent-page ids replaced with same-shape placeholders. Field
+# names, types and all other values are as the API returned them.
+---
+{
+  "id": "425996",
+  "status": "current",
+  "title": "ZZPROBE confluence-api spike (throwaway, safe to delete)",
+  "spaceId": "4242",
+  "parentId": "9001",
+  "parentType": "page",
+  "authorId": "112233:00000000-0000-0000-0000-000000000000",
+  "ownerId": "112233:00000000-0000-0000-0000-000000000000",
+  "createdAt": "2026-09-11T11:55:16.777Z",
+  "version": { "number": 1, "message": "", "minorEdit": false },
+  "body": { "storage": { "representation": "storage", "value": "<p>throwaway spike page for confluence-api.sh</p>" } },
+  "_links": {
+    "webui": "/spaces/SD/pages/425996/ZZPROBE+confluence-api+spike+throwaway+safe+to+delete",
+    "tinyui": "/x/DIAG",
+    "base": "https://example.atlassian.net/wiki"
+  }
+}

@@ -1,0 +1,19 @@
+# space-fields-after-executor-create.txt — the re-fetched GET
+# /rest/api/3/field response ensure_fields issues right after creating
+# "executor", so a later duplicate name in FIELD_NAMES would see it too
+# (see ensure_fields's own comment on why it re-reads). Same six target
+# fields as space-fields-existing.txt, "executor" now present.
+#
+# PROVENANCE: authored, not captured live — see
+# space-project-classic.txt's header.
+HTTP 200
+[
+  {"id": "summary", "name": "Summary", "custom": false, "schema": {"type": "string"}},
+  {"id": "customfield_10001", "name": "Story Points", "custom": true, "schema": {"type": "number", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:float"}},
+  {"id": "customfield_10043", "name": "touches", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10044", "name": "executor", "custom": true, "schema": {"type": "option", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select"}},
+  {"id": "customfield_10045", "name": "verify", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10046", "name": "human_steps", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10047", "name": "appends", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}},
+  {"id": "customfield_10048", "name": "defer_until", "custom": true, "schema": {"type": "date", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:datepicker"}}
+]

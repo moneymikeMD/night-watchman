@@ -1,0 +1,9 @@
+# space-project-create-response.txt — POST /rest/api/3/project response:
+# Jira's CreatedProject shape ({self, id, key}).
+#
+# PROVENANCE: authored, not captured live — see space-project-classic.txt's
+# header. .id is "10017" to match PROJECT_CLASSIC's own .id and the
+# REAL screen-scheme chain fixtures (see space-itss-project.txt etc.) —
+# this is the id the post-create readback and step 5 both key off.
+HTTP 201
+{"self": "https://example.atlassian.net/rest/api/3/project/10017", "id": "10017", "key": "ZZSPACE"}

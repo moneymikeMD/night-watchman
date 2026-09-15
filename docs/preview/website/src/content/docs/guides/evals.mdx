@@ -1,0 +1,77 @@
+---
+title: Evals
+description: claude plugin eval suites for this plugin's agents, seeded from real failures rather than synthetic fixtures.
+sidebar:
+  order: 5
+---
+
+Moved verbatim from
+[`evals/README.md`](https://github.com/moneymikeMD/night-watchman/blob/main/evals/README.md).
+
+`claude plugin eval` suites for this plugin's agents, seeded from real
+failures rather than synthetic fixtures.
+
+## evals/script-reviewer
+
+One case, `nwm8-round1-five-bugs`. The prompt inlines a reconstructed
+"round 1" snapshot of `trackers/jira/jira-workflow-apply.sh` (and its
+selftest) with five real bugs from that history still present:
+
+1. **delta-body-vs-full-definition** — the update body carries only the
+   new additions, dropping the workflow's existing statuses/transitions.
+2. **empty-body-on-partial-state** — additions are computed from
+   `MISSING_STATUS_NAMES` only, never `MISSING_TRANSITION_NAMES`.
+3. **wrong-version-selector** — `VERSION_JSON` selects on `.id.name`, a
+   shape that doesn't match `POST /workflows`'s actual response.
+4. **statusCategory null** — `resolve_status_ids` never resolves the
+   category, so every new status definition hardcodes `statusCategory:
+   null`.
+5. **selftest leaking via `$ISSUES_JIRA_API`** — the selftest never
+   unsets that variable, so an ambient export lets it hit the real
+   wrapper instead of its stub.
+
+Provenance: `git show 409ea45:trackers/jira/jira-workflow-apply.sh` and
+commits `bfe325b`, `4a347ab` (the fixes). The fixture text lives inline in
+`case.yaml`'s prompt — not on disk as separate files — so the suite needs
+no `--scaffold` or `--allow-tools` grant to run under the plain
+`claude plugin eval evals/script-reviewer`. (The frozen fixture scripts
+also live under `fixtures/` for human reading; the case doesn't read them
+at eval time.)
+
+Graders are deterministic `regex` checks against the review's final
+response (not `llm` judges) — an early version used `llm` graders and hit
+real scoring flakiness from the default (haiku) judge model failing
+objectively-correct reviews. Regex against stable code-identifiers the
+fixture's own bugs are tied to (`.id.name`, `MISSING_TRANSITION_NAMES`,
+`ISSUES_JIRA_API`, a `statusCategory`+`null` proximity check, a `VERDICT`
+line) proved reliable across repeated runs.
+
+## evals/script-author
+
+One case, `nwm8-brief-chr-no-rule-strip`. Gives script-author the same shell-library recipe
+recipe for a second target project (ADOPT) and requires two properties from
+real incidents on this exact recipe:
+
+1. The selftest must be structurally incapable of reaching the network,
+   including when `$ISSUES_JIRA_API` is already exported ambiently.
+2. The update body must carry every existing transition's
+   actions/validators/triggers/links forward in full (the real SPK4
+   rule-strip regression fixed in `bfe325b`) — not a reshaped subset
+   merely detected as lost after the fact.
+
+Because `Write`/`Edit`/`Bash` are gated tools not granted under the plain
+verify invocation, the case asks for both files' contents as labeled
+fenced code blocks in the final response, and grades that response text
+with the same style of deterministic `regex` checks as script-reviewer.
+
+## Known environment flakiness
+
+While authoring these suites, `claude plugin eval` runs in this sandbox
+intermittently hung indefinitely on the very first model turn (zero
+transcript growth for many minutes) — reproduced on both suites, with and
+without gated-tool grants, from both this repo and a minimal throwaway
+plugin. Confirmed NOT a defect in either case file: the exact same
+`script-reviewer` case scored a clean 1.00 (all five findings plus the
+verdict line) on the runs that did complete. If a local run appears stuck
+with no output for more than ~3–5 minutes, it is very likely this
+flakiness rather than a hung agent — Ctrl-C and re-run.

@@ -1,0 +1,128 @@
+# ./jira-api.sh raw GET "/statuses/search?maxResults=100"
+# Captured live 2026-09-11 against example.atlassian.net (site-wide, not
+# project-scoped — this endpoint lists every status defined on the site).
+# Trimmed to 100 lines from a much longer real response (there are 15
+# statuses on this site); every status jira-workflow-apply.sh's target set
+# needs to resolve by name is present with scope.type GLOBAL and a numeric
+# string id: Open=1, In Progress=3, To Do=10009, Done=10010, Triage=10011,
+# Awaiting Deployment=10012, Deferred=10013, Completed=10014, Cancelled=
+# 10015. The trim keeps the full set of matching entries plus enough
+# surrounding site-wide clutter (Closed, Building, Build Broken, ...) to
+# prove name resolution has to search a real list, not assume the six
+# target names are the only entries. No credential-shaped field present.
+{
+  "startAt": 0,
+  "total": 15,
+  "isLast": true,
+  "maxResults": 100,
+  "values": [
+    {
+      "id": "10012",
+      "name": "Awaiting Deployment",
+      "statusCategory": "IN_PROGRESS",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "401",
+      "name": "Build Broken",
+      "statusCategory": "IN_PROGRESS",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": "The source code committed for this work item has possibly broken the build."
+    },
+    {
+      "id": "400",
+      "name": "Building",
+      "statusCategory": "IN_PROGRESS",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": "Source code has been committed, and JIRA is waiting for the code to be built before moving to the next status."
+    },
+    {
+      "id": "10015",
+      "name": "Cancelled",
+      "statusCategory": "DONE",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "6",
+      "name": "Closed",
+      "statusCategory": "DONE",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": "The work item is considered finished, the resolution is correct. work items which are closed can be reopened."
+    },
+    {
+      "id": "10014",
+      "name": "Completed",
+      "statusCategory": "DONE",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10013",
+      "name": "Deferred",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10010",
+      "name": "Done",
+      "statusCategory": "DONE",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "3",
+      "name": "In Progress",
+      "statusCategory": "IN_PROGRESS",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": "This work item is being actively worked on at the moment by the assignee."
+    },
+    {
+      "id": "1",
+      "name": "Open",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": "The work item is open and ready for the assignee to start work on it."
+    },
+    {
+      "id": "10009",
+      "name": "To Do",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10011",
+      "name": "Triage",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    }
+  ]
+}

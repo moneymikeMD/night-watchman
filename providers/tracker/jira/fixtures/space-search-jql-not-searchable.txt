@@ -1,0 +1,16 @@
+# ./jira-api.sh raw GET '/search/jql?jql=project%20%3D%20NWM%20AND%20%22proj111probe2%22%20is%20EMPTY&fields=key&maxResults=1'
+# Captured live 2026-09-14 against example.atlassian.net, project NWM
+# (PROJ-111's own spike), probing the field from space-search-jql-field-
+# create.txt BEFORE its searcherKey PUT. CRITICAL, corrects an earlier
+# wrong guess in this file's own history: the API's HTTP 400 body carries
+# NO "not searchable" text at all — that wording belongs to the
+# Automation UI, a different surface entirely. The real, only signal
+# ensure_field_searchable() has is the HTTP 400 itself, on a probe of a
+# field it just found-or-created with a well-formed JQL clause.
+HTTP 400
+{
+  "errorMessages": [
+    "Your query couldn't be processed. Make sure it's valid and try again later."
+  ],
+  "errors": {}
+}

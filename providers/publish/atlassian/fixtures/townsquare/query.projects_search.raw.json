@@ -1,0 +1,8 @@
+# projects_search, unredacted so the bare `key` field survives
+# Recorded: 2026-09-10/11, real calls against a live Atlassian Cloud site
+# (copied from the production client's recorded fixtures).
+# De-identified: site host -> example.atlassian.net; account ids, and the
+# one project key/name, replaced with same-shape placeholders. Field
+# names, types and all other values are as the API returned them.
+---
+{"data":{"projects_search":{"edges":[{"node":{"key":"PROJ-1","name":"Example Project","state":{"label":"Pending"},"id":"ari:cloud:townsquare:6e91b541-5dc7-4d6d-b95e-e1bd6229d921:project/14c6054a-a5e4-4b29-baa8-e680e2aa1263"}}]}}}

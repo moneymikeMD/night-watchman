@@ -1,0 +1,27 @@
+# ./jira-api.sh --yes write POST /field '{"name":"proj111probe2","type":"com.atlassian.jira.plugin.system.customfieldtypes:textarea"}'
+# Captured live 2026-09-14 against example.atlassian.net, project NWM
+# (PROJ-111's own spike): a throwaway textarea field, created WITHOUT a
+# searcherKey — the create-time omission this fixture chain exists to
+# exercise. Field deleted after the spike; id (customfield_10077) kept as
+# recorded, real for the duration of the capture only.
+HTTP 201
+{
+  "id": "customfield_10077",
+  "key": "customfield_10077",
+  "name": "proj111probe2",
+  "untranslatedName": "proj111probe2",
+  "custom": true,
+  "orderable": true,
+  "navigable": true,
+  "searchable": true,
+  "clauseNames": [
+    "proj111probe2[Paragraph]",
+    "proj111probe2",
+    "cf[10077]"
+  ],
+  "schema": {
+    "type": "string",
+    "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea",
+    "customId": 10077
+  }
+}

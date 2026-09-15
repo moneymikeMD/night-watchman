@@ -1,0 +1,27 @@
+# projects_createUpdate given a project key instead of an ARI
+# Recorded: 2026-09-10/11, real calls against a live Atlassian Cloud site
+# (copied from the production client's recorded fixtures).
+# De-identified: site host -> example.atlassian.net; account ids, and the
+# one project key/name, replaced with same-shape placeholders. Field
+# names, types and all other values are as the API returned them.
+---
+{
+  "errors": [
+    {
+      "message": "Argument 'projectId' annotated with @ARI did not contain valid ARI: not-a-real-ari",
+      "locations": [],
+      "extensions": {
+        "errorSource": "GRAPHQL_GATEWAY",
+        "statusCode": 400,
+        "agg": {
+          "severity": "NORMAL",
+          "ugcPiiSafe": false
+        },
+        "classification": "InvalidARI"
+      }
+    }
+  ],
+  "data": {
+    "projects_createUpdate": null
+  }
+}

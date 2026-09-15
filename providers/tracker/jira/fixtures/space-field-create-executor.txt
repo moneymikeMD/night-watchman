@@ -1,0 +1,15 @@
+# space-field-create-executor.txt — POST /rest/api/3/field response after
+# creating "executor" (select, single choice). Jira Cloud's CustomField
+# create response shape: id ("customfield_NNNNN"), key, name, custom,
+# schema.
+#
+# PROVENANCE: authored, not captured live — see
+# space-project-classic.txt's header.
+HTTP 201
+{
+  "id": "customfield_10044",
+  "key": "customfield_10044",
+  "name": "executor",
+  "custom": true,
+  "schema": {"type": "option", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:select", "customId": 10044}
+}

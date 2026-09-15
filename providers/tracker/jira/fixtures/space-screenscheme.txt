@@ -1,0 +1,43 @@
+# space-screenscheme.txt — GET /rest/api/3/screenscheme?id=10049&id=10050&
+# id=10051 response (the REPEATED-id bulk form — see jira-space-create.sh's
+# own header on why: there is no per-id GET /screenscheme/<id> at all,
+# HTTP 405 "Method 'GET' is not supported", and the comma-joined
+# id=a,b,c form is HTTP 400 "Failed to convert 'id'"). RECORDED LIVE,
+# ZZSPIKE run 2 (read-only, 2026-09-12); `.self` host scrubbed to
+# example.atlassian.net. Each of the three screen schemes here carries
+# only a `default` screen (no separate create/edit/view) — one screen
+# id per scheme, none shared across schemes in this template.
+HTTP 200
+{
+  "self": "https://example.atlassian.net/rest/api/3/screenscheme?startAt=0&maxResults=25",
+  "maxResults": 25,
+  "startAt": 0,
+  "total": 3,
+  "isLast": true,
+  "values": [
+    {
+      "id": 10049,
+      "name": "ZZSPIKE: Scrum Default Screen Scheme",
+      "description": "",
+      "screens": {
+        "default": 10049
+      }
+    },
+    {
+      "id": 10050,
+      "name": "ZZSPIKE: Scrum Bug Screen Scheme",
+      "description": "",
+      "screens": {
+        "default": 10050
+      }
+    },
+    {
+      "id": 10051,
+      "name": "ZZSPIKE: Scrum Epic Screen Scheme",
+      "description": "",
+      "screens": {
+        "default": 10051
+      }
+    }
+  ]
+}

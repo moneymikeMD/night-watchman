@@ -1,0 +1,72 @@
+# ./jira-api.sh --yes write POST /workflows/update/validation '<envelope>'
+# Captured live 2026-09-11 against example.atlassian.net, project SPK4.
+# This is iteration step (b2) from workflows.update.validation.spk4.txt's
+# header: every status declaration (existing AND new) given both `id` and
+# `statusReference`, but the six new TRANSITIONS not yet added to the
+# workflow's own `transitions` list. HTTP 200, ZERO errors, six WARNINGs
+# (NO_INBOUND_TRANSITIONS_TO_STATUS, one per new status) — the expected,
+# lower-severity complaint that a status exists but nothing transitions
+# into it yet, resolved one step later (step (c)) by adding the
+# transitions. Kept as a real WARNING-only capture (validate_update_body's
+# WARNING branch warns and continues rather than dying — this is the
+# fixture proving that branch against something Jira actually returned,
+# not a hand-typed guess). No redaction applied.
+HTTP 200
+{
+  "errors": [
+    {
+      "type": "STATUS_LAYOUT",
+      "message": "This status cannot be reached from the start of the workflow.",
+      "code": "NO_INBOUND_TRANSITIONS_TO_STATUS",
+      "level": "WARNING",
+      "elementReference": {
+        "statusReference": "1"
+      }
+    },
+    {
+      "type": "STATUS_LAYOUT",
+      "message": "This status cannot be reached from the start of the workflow.",
+      "code": "NO_INBOUND_TRANSITIONS_TO_STATUS",
+      "level": "WARNING",
+      "elementReference": {
+        "statusReference": "10011"
+      }
+    },
+    {
+      "type": "STATUS_LAYOUT",
+      "message": "This status cannot be reached from the start of the workflow.",
+      "code": "NO_INBOUND_TRANSITIONS_TO_STATUS",
+      "level": "WARNING",
+      "elementReference": {
+        "statusReference": "10012"
+      }
+    },
+    {
+      "type": "STATUS_LAYOUT",
+      "message": "This status cannot be reached from the start of the workflow.",
+      "code": "NO_INBOUND_TRANSITIONS_TO_STATUS",
+      "level": "WARNING",
+      "elementReference": {
+        "statusReference": "10013"
+      }
+    },
+    {
+      "type": "STATUS_LAYOUT",
+      "message": "This status cannot be reached from the start of the workflow.",
+      "code": "NO_INBOUND_TRANSITIONS_TO_STATUS",
+      "level": "WARNING",
+      "elementReference": {
+        "statusReference": "10014"
+      }
+    },
+    {
+      "type": "STATUS_LAYOUT",
+      "message": "This status cannot be reached from the start of the workflow.",
+      "code": "NO_INBOUND_TRANSITIONS_TO_STATUS",
+      "level": "WARNING",
+      "elementReference": {
+        "statusReference": "10015"
+      }
+    }
+  ]
+}

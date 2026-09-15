@@ -1,0 +1,100 @@
+{
+  "cloud": true,
+  "rules": [
+    {
+      "name": "defer_until expiry",
+      "state": "ENABLED",
+      "description": "night-watchman: return a Deferred ticket to To Do once defer_until has passed. Imported from templates/jira-automation-defer-until.json.",
+      "authorAccountId": "AUTHOR_ACCOUNT_ID",
+      "actor": {
+        "type": "ACCOUNT_ID",
+        "value": "ACTOR_ACCOUNT_ID"
+      },
+      "trigger": {
+        "parentId": null,
+        "conditionParentId": null,
+        "component": "TRIGGER",
+        "type": "jira.jql.scheduled",
+        "value": {
+          "schedule": {
+            "cronExpression": "",
+            "method": "BASIC",
+            "rate": 0,
+            "rateInterval": 86400,
+            "rRule": "BEGIN:VEVENT\nDTSTART;TZID=America/New_York:20260914T192837\nRRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0;BYSECOND=0;INTERVAL=1\nEND:VEVENT\n"
+          },
+          "jql": "project = PROJ AND status = Deferred AND \"defer_until\" <= now()",
+          "executionMode": "jql",
+          "onlyUpdatedIssues": false
+        },
+        "conditions": [],
+        "children": [],
+        "schemaVersion": 1,
+        "connectionId": null
+      },
+      "components": [
+        {
+          "parentId": null,
+          "conditionParentId": null,
+          "component": "ACTION",
+          "type": "jira.issue.transition",
+          "value": {
+            "operations": [],
+            "advancedFields": null,
+            "sendNotifications": true,
+            "destinationStatus": {
+              "type": "NAME",
+              "value": "To Do"
+            },
+            "transitionMatch": ""
+          },
+          "conditions": [],
+          "children": [],
+          "schemaVersion": 11,
+          "connectionId": null
+        },
+        {
+          "parentId": null,
+          "conditionParentId": null,
+          "component": "ACTION",
+          "type": "jira.issue.comment",
+          "value": {
+            "comment": "defer_until passed; returned to To Do by Automation",
+            "publicComment": false,
+            "commentVisibility": null,
+            "sendNotifications": true,
+            "addCommentOnce": true
+          },
+          "conditions": [],
+          "children": [],
+          "schemaVersion": 2,
+          "connectionId": null
+        }
+      ],
+      "canOtherRuleTrigger": false,
+      "notifyOnError": "FIRSTERROR",
+      "projects": [],
+      "labels": [],
+      "tags": [],
+      "ruleScope": {
+        "resources": [
+          "ari:cloud:jira:CLOUD_ID:project/PROJECT_ID"
+        ]
+      },
+      "ruleHome": {
+        "ruleLifecycleHome": {
+          "locationARI": "ari:cloud:jira:CLOUD_ID:project/PROJECT_ID"
+        },
+        "ruleBillingHome": {
+          "locationARI": "ari:cloud:jira-software::site/CLOUD_ID"
+        }
+      },
+      "writeAccessType": "OWNER_ONLY",
+      "readAccessType": "UNRESTRICTED",
+      "collaborators": [],
+      "billingType": "NORMAL",
+      "ruleArchetype": null,
+      "editRestrictions": null
+    }
+  ]
+}

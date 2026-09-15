@@ -1,0 +1,60 @@
+---
+title: The Capability Ladder
+description: How to decide whether repeated work should become a script, an agent, or a skill.
+sidebar:
+  order: 6
+---
+
+Moved verbatim from the
+[`capability-ladder`](https://github.com/moneymikeMD/night-watchman/blob/main/skills/capability-ladder/SKILL.md)
+skill.
+
+Novel work becomes a capability, not a one-off. If the main thread ends up
+doing something inline because no existing script, agent, or skill could take
+it, that is a gap, not an exception — before the task is called done, author
+the missing piece so the next occurrence is delegable.
+
+The ladder, in order of preference:
+
+## 1. A script
+
+Use when the work is reusable, must be run by the operator (sudo, or
+interactive on something the agent cannot reach), or touches a credential/host
+and needs guardrails regardless of reuse. A script fired by a cheap model
+costs a fraction of any model reasoning through the same steps from a skill,
+every time it runs, and its behavior is fixed and reviewable once rather than
+re-derived on every invocation.
+
+## 2. An agent
+
+Use when the work needs judgement but is bounded and repeatable enough to
+brief once — a fixed role, a fixed tool subset, and a pinned cheap model. An
+agent is the right layer when a script alone can't decide, but the decision
+space is still narrow enough to write down in a brief a cheap model can
+follow without supervision.
+
+## 3. A skill
+
+Use when the work needs the main thread's judgement over a changing
+situation — the value is in *what to do next*, not in executing fixed steps.
+A skill that could be a script is a smell: if every run of it would produce
+the same sequence of actions regardless of what it finds, it is not judgement,
+it is a procedure, and belongs one rung down.
+
+## How to tell which rung
+
+- Could this run unattended with a cheap model and produce a deterministic
+  `verify` result? → **script**.
+- Does it need a bounded judgement call inside a fixed brief? → **agent**.
+- Does it need to read a changing situation and decide what happens next? →
+  **skill**, run on the main thread.
+
+## The rule that makes this stick
+
+The default for any task an existing agent can take is to delegate it off the
+main thread — the main thread's job is to read context, decide, sequence,
+judge results, and talk to the user, not to do the work itself (see the
+orchestrator rule in `templates/CLAUDE.md`). When nothing existing can take a
+recurring task, climb the ladder from the bottom: try to make it a script
+first; only reach for an agent, then a skill, if the work genuinely needs more
+judgement than the rung below can hold.

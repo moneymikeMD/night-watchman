@@ -1,0 +1,20 @@
+# ./jira-api.sh raw GET '/search/jql?jql=project%20%3D%20NWM%20AND%20%22proj111probe2%22%20is%20EMPTY&fields=key&maxResults=1'
+# Captured live 2026-09-14 against example.atlassian.net, project NWM
+# (PROJ-111's own spike): the SAME probe as space-search-jql-not-
+# searchable.txt, re-run after the searcherKey PUT — now HTTP 200 with a
+# real issues array (matched PROJ-111 itself, whose "proj111probe2" field
+# was of course empty). PROJ-111/10805 is this project's own real ticket
+# id — not a fictional fixture id, it just happened to be the match.
+HTTP 200
+{
+  "issues": [
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+      "id": "10805",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10805",
+      "key": "PROJ-111"
+    }
+  ],
+  "nextPageToken": "<redacted>",
+  "isLast": false
+}

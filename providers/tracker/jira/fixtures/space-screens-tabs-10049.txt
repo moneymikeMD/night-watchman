@@ -1,0 +1,10 @@
+# space-screens-tabs-10049.txt — GET /rest/api/3/screens/10049/tabs
+# response. RECORDED LIVE, ZZSPIKE run 2 (read-only, 2026-09-12). One
+# tab, the template's default "Field Tab".
+HTTP 200
+[
+  {
+    "id": 10052,
+    "name": "Field Tab"
+  }
+]

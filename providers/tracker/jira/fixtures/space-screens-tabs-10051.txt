@@ -1,0 +1,10 @@
+# space-screens-tabs-10051.txt — GET /rest/api/3/screens/10051/tabs
+# response. RECORDED LIVE, ZZSPIKE run 2 (read-only, 2026-09-12). One
+# tab, the template's default "Field Tab" (Epic's own screen).
+HTTP 200
+[
+  {
+    "id": 10054,
+    "name": "Field Tab"
+  }
+]

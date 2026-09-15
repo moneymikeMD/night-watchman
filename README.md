@@ -1,0 +1,91 @@
+
+<div align="center">
+  <h1>night-watchman</h1>
+  <img src="assets/night-watchman-logo.jpeg" alt="night-watchman" width="200">
+</div>
+
+**the night shift for your Claude Code repo.**
+
+Claude Code plugin: tickets become dispatch contracts, a session starts
+itself, cheap models do the reading, the expensive one only decides.
+
+- **tickets an agent can start cold** — frontmatter says what to touch,
+  how to verify, who finishes.
+- **a session that opens itself** — orient, verify what's pending, fan
+  work out in parallel.
+- **expensive model decides, cheap model reads** — hooks and briefs keep
+  the main thread out of tool output.
+- **script beats agent beats skill** — repeated work climbs down the
+  ladder to something cheaper than re-deriving it.
+- **fewer questions every week** — a capped decision profile the session
+  checks before asking you.
+
+This plugin was extracted from a production system that has been
+measuring its own operating cost since before this repo existed — the
+honest version, caveats included, lives in [docs/evidence.md](docs/evidence.md).
+
+## Install
+
+From a local checkout (this repo cloned or checked out anywhere on disk):
+
+```
+claude plugin marketplace add /path/to/night-watchman
+claude plugin install night-watchman@night-watchman
+```
+
+From the GitHub marketplace (once published there):
+
+```
+claude plugin marketplace add moneymikeMD/night-watchman
+claude plugin install night-watchman@night-watchman
+```
+
+Both forms install the dependency-free core only. To declare which
+providers your repo uses, copy the template and commit it:
+
+```
+mkdir -p .night-watchman
+cp templates/night-watchman.config.toml .night-watchman/config.toml
+providers/lib/provider.sh doctor
+```
+
+Every value in the template is already the built-in default, so this step
+changes no behaviour on day one — it just puts "what does this repo talk
+to?" in the repo's own history.
+
+## Docs
+
+The full docs site lives at `docs/preview/website` and is not published
+yet, so browse it locally instead: `cd docs/preview/website && bun install
+&& bun run dev`. For everything else this README doesn't cover —
+decision logs, known issues, testing philosophy, session handoffs — start
+at [docs/README.md](docs/README.md).
+
+## Optional layers
+
+None of these are dependencies; each is a standalone tool this system was
+built alongside and can use if present. See
+[providers/README.md](providers/README.md) for how each plugs into the
+provider contract.
+
+- A **worktree-dispatch tool**, for running multiple agent processes in
+  parallel terminal panes.
+- A **token-savings code-graph MCP**, for answering "where is X" and
+  "what calls Y" without a full-repo read.
+- A **cost-tracking CLI proxy**, for filtering verbose command output
+  before it reaches the model.
+- A **persistent memory-graph CLI**, for durable cross-session knowledge —
+  decisions, root causes, gotchas.
+
+## Contribute
+
+Anything under `scripts/` (and each provider's own scripts) follows the
+shared shell-library conventions in
+[`skills/shell-scripting`](skills/shell-scripting/SKILL.md) — read that
+before touching a script. An agent-facing change should come with an eval
+case; see [`evals/README.md`](evals/README.md) for how those are
+structured and run.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

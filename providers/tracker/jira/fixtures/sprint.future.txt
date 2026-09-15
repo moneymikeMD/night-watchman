@@ -1,0 +1,13 @@
+# ./jira-agile-api.sh sprint-create 10 "selftest-fixture-sprint"
+# Captured live against a real Jira Cloud site, a throwaway scratch
+# project (created and deleted for this fixture recording, never touching
+# a real board). Response body from POST /rest/agile/1.0/sprint. No
+# redaction needed.
+{
+  "id": 5,
+  "self": "https://yourteam.atlassian.net/rest/agile/1.0/sprint/5",
+  "state": "future",
+  "name": "selftest-fixture-sprint",
+  "createdDate": "2026-09-10T14:17:26.858Z",
+  "originBoardId": 10
+}

@@ -1,0 +1,55 @@
+name: Website Deploy
+
+# Scaffold only. No publisher has been chosen yet — DOCS_DEPLOY_HOOK
+# is a placeholder secret name. The deploy step is guarded so this workflow
+# never fails CI just because the secret is unset; it becomes a real deploy
+# once an owner picks a publisher and sets the secret.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/website-deploy.yml"
+      - "docs/preview/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: night-watchman-website-deploy
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: docs/preview/website
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build
+        run: bun run build
+
+      - name: Trigger deploy
+        # No publisher is wired up yet; this step is a no-op until an owner
+        # sets DOCS_DEPLOY_HOOK to a real deploy-hook URL.
+        if: ${{ secrets.DOCS_DEPLOY_HOOK != '' }}
+        env:
+          DEPLOY_HOOK: ${{ secrets.DOCS_DEPLOY_HOOK }}
+        run: |
+          curl -fsS -X POST "$DEPLOY_HOOK" > /dev/null
+          echo "Triggered website deploy"
+
+      - name: No publisher configured
+        if: ${{ secrets.DOCS_DEPLOY_HOOK == '' }}
+        run: echo "DOCS_DEPLOY_HOOK is not set — skipping deploy (no publisher chosen yet)."

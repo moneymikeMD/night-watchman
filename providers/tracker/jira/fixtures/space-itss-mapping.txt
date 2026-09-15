@@ -1,0 +1,30 @@
+# space-itss-mapping.txt — GET /rest/api/3/issuetypescreenscheme/mapping?
+# issueTypeScreenSchemeId=10017 response. RECORDED LIVE, ZZSPIKE run 2
+# (read-only, 2026-09-12), no host in this body to scrub. Three distinct
+# screenSchemeId values (10049/10050/10051) — the simplified-scrum
+# classic template gives Bug and Epic their own screen scheme, not one
+# shared default the way the workflow's statuses are shared.
+HTTP 200
+{
+  "maxResults": 50,
+  "startAt": 0,
+  "total": 3,
+  "isLast": true,
+  "values": [
+    {
+      "issueTypeScreenSchemeId": "10017",
+      "issueTypeId": "default",
+      "screenSchemeId": "10049"
+    },
+    {
+      "issueTypeScreenSchemeId": "10017",
+      "issueTypeId": "10012",
+      "screenSchemeId": "10050"
+    },
+    {
+      "issueTypeScreenSchemeId": "10017",
+      "issueTypeId": "10000",
+      "screenSchemeId": "10051"
+    }
+  ]
+}

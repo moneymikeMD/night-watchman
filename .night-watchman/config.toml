@@ -1,0 +1,35 @@
+# night-watchman's own provider selection — this repo dogfoods the plugin
+# it ships. See templates/night-watchman.config.toml for the annotated
+# copy adopters start from, and providers/README.md for the contract.
+
+[providers]
+tracker  = "jira"
+secrets  = "op"
+dispatch = "herdr"
+memory   = "memorygraph"
+publish  = "atlassian"
+
+[tracker.jira]
+# `host` is deliberately absent. The Jira client reads $JIRA_HOST from the
+# environment already, and this repo is published later as a single
+# squashed commit — the operator's own Jira site name has no reason to be
+# in it. An adopting repo that is not going public should set `host` here,
+# as the template does.
+project = "NWM"
+
+[memory.memorygraph]
+tag = "night-watchman"
+
+[publish.atlassian]
+# The site identifiers below are deliberately absent, exactly like
+# [tracker.jira] host: this repo is published later as a single squashed
+# commit, and the operator's own space, page and Home Project ids have no
+# reason to be in it. They live in the private config $NW_CONFIG points
+# at (see providers/README.md, "Private config"). `host` falls back to
+# [tracker.jira] host there too. An adopting repo that is not going public
+# sets them here, as the template does.
+# space        = "<numeric Confluence space id>"
+# root_page    = "<numeric id of the page project update pages sit under>"
+# project_feed = "<Home Project ARI>"
+project_name = "night-watchman"
+status       = "on_track"

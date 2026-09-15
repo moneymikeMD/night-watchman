@@ -1,0 +1,8 @@
+# space-whoami.txt — GET /rest/api/3/myself response, trimmed to the
+# fields this script reads (accountId).
+#
+# PROVENANCE: authored placeholder, structurally the same shape as
+# jira-api.sh's own view_whoami (already confirmed live) — only
+# the account identity is synthetic.
+HTTP 200
+{"accountId": "5f9a1111aaaa2222bbbb3333", "displayName": "ZZ Bootstrap Bot", "emailAddress": "zz@example.atlassian.net", "active": true}

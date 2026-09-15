@@ -1,0 +1,55 @@
+schema_version: '1'
+name: undeclared-path-and-hollow-verify
+description: 'spec-reviewer, given an inlined issues.py scope result, ticket body, and diff summary (no
+  file access or Bash needed — everything it needs is in the prompt, so this is self-contained with no
+  --scaffold or --allow-tools grant), must flag the one UNDECLARED path scope reported, call out the hollow
+  verify step, and land on LAND AFTER FIXES or DO NOT LAND rather than LAND.'
+tags:
+- spec-reviewer
+- capability-ladder
+execution:
+  prompt: "You are reviewing ticket PROJ-201 (branch proj-201, base ref main) against its own diff. Do not\
+    \ run any command — everything you need is inlined below.\n\n--- issues.py scope PROJ-201 main output\
+    \ ---\nscripts/rotate-logs.sh: touches (declared)\nscripts/lib/kit.sh: UNDECLARED\nexit 1\n--- end scope\
+    \ output ---\n\n--- Ticket PROJ-201 ---\n## Problem\nrotate-logs.sh has no retry on a failed upload.\n\
+    \n## Solution\nAdd a bounded retry loop (3 attempts, backoff) around the upload call in scripts/rotate-logs.sh.\
+    \ touches: scripts/rotate-logs.sh\n\n## Decisions\n- Do not touch scripts/lib/kit.sh; retry logic stays\
+    \ local to this script.\n\n## Out of scope\n- Shared retry helper in scripts/lib.\n\n## verify\ngrep\
+    \ -q retry scripts/rotate-logs.sh && echo retry-ok\n--- end ticket ---\n\n--- git diff main...HEAD (summary)\
+    \ ---\ndiff --git a/scripts/rotate-logs.sh b/scripts/rotate-logs.sh\n+# retry left as a TODO, not implemented\n\
+    +echo \"retry\" >/dev/null  # satisfies the grep without a real retry loop\ndiff --git a/scripts/lib/kit.sh\
+    \ b/scripts/lib/kit.sh\n+backoff_sleep() { sleep \"$1\"; }\n--- end diff ---\n\nProduce your standard\
+    \ report table and verdict for this branch now."
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+runs: 2
+graders:
+- type: regex
+  name: flags-undeclared-kit-sh-path
+  target: last_message
+  pattern: (?=[\s\S]*kit\.sh)(?=[\s\S]*[Uu][Nn][Dd][Ee][Cc][Ll][Aa][Rr][Ee][Dd])
+  match: contains
+  weight: 2
+- type: regex
+  name: calls-out-hollow-verify
+  target: last_message
+  pattern: hollow
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: does-not-land-clean
+  target: last_message
+  pattern: (LAND AFTER FIXES|DO NOT LAND)
+  match: contains
+  weight: 3
+- type: regex
+  name: rejects-plain-land-verdict
+  target: last_message
+  pattern: ^\*\*LAND\*\*
+  match: not_contains
+  weight: 1

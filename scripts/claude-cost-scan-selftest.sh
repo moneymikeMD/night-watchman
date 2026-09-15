@@ -1,0 +1,90 @@
+#!/bin/bash
+#
+# Selftest for claude-cost-scan.py. Runs entirely against fixture
+# transcripts under scripts/fixtures/claude-cost-scan/ — structurally
+# offline, never reads the real ~/.claude/projects tree. Exercises the
+# --repo/--project-slug filter, the same-message-id dedupe, --since
+# filtering, and --ledger-line's exact output shape.
+#
+# Usage: scripts/claude-cost-scan-selftest.sh [path-to-claude-cost-scan.py]
+# Defaults to the sibling scripts/claude-cost-scan.py.
+
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+SCAN="${1:-$HERE/claude-cost-scan.py}"
+[ -r "$SCAN" ] || { echo "cannot read $SCAN" >&2; exit 2; }
+
+FIXTURES="$HERE/fixtures/claude-cost-scan"
+[ -d "$FIXTURES" ] || { echo "cannot read fixtures dir $FIXTURES" >&2; exit 2; }
+PRICES="$HERE/../templates/claude-prices.tsv"
+
+PASS=0
+FAIL=0
+ok()  { echo "ok - $1"; PASS=$((PASS + 1)); }
+bad() { echo "FAIL - $1"; FAIL=$((FAIL + 1)); }
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+run() { python3 "$SCAN" --projects-dir "$FIXTURES" --prices "$PRICES" "$@"; }
+
+# ---- test 1: --repo derives the right slug and only sees that repo's data.
+OUT=$(run --repo /Users/fixture/repoA --format tsv)
+if printf '%s\n' "$OUT" | grep -q "^sess-1	claude-haiku-4-5-20251001	1	20"; then
+    ok "--repo slugifies the path and finds repoA's subagent turn"
+else
+    bad "--repo did not find repoA's subagent turn (got: $OUT)"
+fi
+if printf '%s\n' "$OUT" | grep -q "sess-2"; then
+    bad "--repo repoA leaked repoB's session into the report"
+else
+    ok "--repo scopes to one repo, excluding sibling repoB"
+fi
+
+# ---- test 2: same-message-id dedupe keeps one turn, the last values seen.
+if printf '%s\n' "$OUT" | grep -q "^sess-1	claude-sonnet-5	2	250"; then
+    ok "duplicate message-id lines dedupe into one turn (last values win)"
+else
+    bad "expected sess-1/claude-sonnet-5 to be 2 turns/250 tokens after dedupe (got: $OUT)"
+fi
+
+# ---- test 3: --project-slug reaches repoB directly.
+OUT_B=$(run --project-slug=-Users-fixture-repoB --format tsv)
+if printf '%s\n' "$OUT_B" | grep -q "^sess-2	claude-opus-5	1	2000"; then
+    ok "--project-slug reads repoB's transcript directly"
+else
+    bad "expected repoB's turn via --project-slug (got: $OUT_B)"
+fi
+
+# ---- test 4: --since excludes the earlier turn.
+OUT_SINCE=$(run --repo /Users/fixture/repoA --since 2026-09-02T00:00:00Z --format tsv)
+if printf '%s\n' "$OUT_SINCE" | grep -q "^TOTAL		1	50"; then
+    ok "--since filters out turns before the bound"
+else
+    bad "expected only the 2026-09-05 turn after --since (got: $OUT_SINCE)"
+fi
+
+# ---- test 5: --ledger-line prints exactly the ticket outcome-comment shape.
+LINE=$(run --repo /Users/fixture/repoA --ledger-line)
+# literal '$0.0030', not a variable to expand
+# shellcheck disable=SC2016
+if [ "$LINE" = 'cost: $0.0030, 3 turns' ]; then
+    ok "--ledger-line prints the exact ticket outcome-comment shape"
+else
+    bad "unexpected --ledger-line output: $LINE"
+fi
+
+# ---- test 6: an unknown repo/slug is a loud refusal, not empty success.
+if run --project-slug=-Users-fixture-does-not-exist >/dev/null 2>"$WORK/err"; then
+    bad "an unknown slug should have been refused"
+else
+    if grep -q "no transcripts found" "$WORK/err"; then
+        ok "an unknown slug is refused with a clear message"
+    else
+        bad "unknown-slug refusal message missing expected text"
+    fi
+fi
+
+echo
+echo "$PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

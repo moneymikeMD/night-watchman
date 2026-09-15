@@ -1,0 +1,14 @@
+# ./jira-agile-api.sh sprint-close 5 (same throwaway sprint)
+# Captured live against a real Jira Cloud site, a throwaway scratch
+# project. Response body from POST /rest/agile/1.0/sprint/5 {state:closed}.
+{
+  "id": 5,
+  "self": "https://yourteam.atlassian.net/rest/agile/1.0/sprint/5",
+  "state": "closed",
+  "name": "selftest-fixture-sprint",
+  "startDate": "2026-09-10T14:17:34.000Z",
+  "endDate": "2026-09-11T14:17:34.000Z",
+  "completeDate": "2026-09-10T14:17:44.691Z",
+  "createdDate": "2026-09-10T14:17:26.858Z",
+  "originBoardId": 10
+}

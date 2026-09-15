@@ -1,0 +1,8 @@
+# GET /wiki/api/v2/pages/1 (missing id); a bad credential returns the same body
+# Recorded: 2026-09-10/11, real calls against a live Atlassian Cloud site
+# (copied from the production client's recorded fixtures).
+# De-identified: site host -> example.atlassian.net; account ids, and the
+# one project key/name, replaced with same-shape placeholders. Field
+# names, types and all other values are as the API returned them.
+---
+{"errors":[{"status":404,"code":"NOT_FOUND","title":"Cannot find a page with id [1]","detail":null}]}

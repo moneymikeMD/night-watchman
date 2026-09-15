@@ -1,0 +1,20 @@
+.claude/
+.serena/
+.memorygraph/
+.tokensave/
+__pycache__/
+*.pyc
+.DS_Store
+.idea/
+evals/results/
+
+# docs/preview/website (Astro Starlight docs scaffold)
+docs/preview/website/node_modules/
+docs/preview/website/dist/
+docs/preview/website/.astro/
+
+# per-session cost line written by hooks/session-cost.sh; never committed
+.night-watchman/last-session-cost.txt
+
+# per-wave decision trail; a working artifact for the wave, not project history
+.night-watchman/wave-trail.tsv

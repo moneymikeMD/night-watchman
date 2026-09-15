@@ -1,0 +1,82 @@
+schema_version: '1'
+name: chat-pasted-ticket-file-and-refuse
+description: 'librarian, given a chat-pasted ticket (title + description only, no frontmatter, nothing
+  filed anywhere yet), must produce a prose design plan — not a filing action, not a tool call beyond
+  Read/Grep/Glob — describing exactly what it would do to file the ticket in Jira and what it would refuse
+  to do. Ethos default (docs/ethos.md, 2026-09-12 evidence): the smaller, reversible option, so
+  this is a design-plan / prose-response case graded on last_message, never a build task that writes files
+  or calls the network.'
+tags:
+- librarian
+- jira
+- tickets-protocol
+execution:
+  prompt: "A teammate pasted the following into chat. Nothing about it has been filed anywhere yet —\
+    \ no frontmatter, no ticket file, no Jira issue:\n\n---\nTitle: CHR workflow is missing a Deferred\
+    \ status\nDescription: Tickets that should be parked for a while have nowhere to go in CHR's Jira\
+    \ workflow. There's no Deferred status, so they either sit in To Do (looks active) or get closed\
+    \ (looks abandoned). Someone should add a Deferred status to CHR's workflow.\n---\n\nThis project's\
+    \ tracker is Jira, reachable at https://example.atlassian.net, project key CHR. Do NOT file anything,\
+    \ transition anything, comment on anything, or call any tool other than Read/Grep/Glob to consult\
+    \ this repo's own docs/skills/scripts as reference material — Write/Edit/Bash are not available in\
+    \ this evaluation in any case, and no network or live Jira call is available either. Nothing you do\
+    \ here reaches example.atlassian.net or any other host.\n\nDescribe, in prose only, exactly what you\
+    \ personally would do, end to end, to turn this chat message into a filed Jira ticket in CHR, following\
+    \ this plugin's tickets-protocol skill and the librarian agent's own rules — AND name anything about\
+    \ this request you would refuse to do, or would deliberately do differently than a naive filing, citing\
+    \ the rule that makes you refuse.\n\nYour response must include, verbatim (you may add surrounding\
+    \ context around each), every one of these five sentences:\n\n1. \"I run issues.py lint before any\
+    \ ticket transition.\"\n2. \"I will not transition a ticket to a stage that requires verify if verify\
+    \ is empty.\"\n3. \"I never mark a ticket completed from a read-only verify.\"\n4. A sentence naming\
+    \ all six of this project's Jira custom fields by their exact frontmatter names, in this exact order:\
+    \ touches, verify, human_steps, appends, executor, defer_until.\n5. A sentence explaining how those\
+    \ six fields are represented when written to Jira — say plainly which of them go over as an ADF (Atlassian\
+    \ Document Format) document and which do not (do not claim a single uniform representation covers\
+    \ all six if it doesn't; read providers/tracker/jira/jira-backfill.sh and skills/to-issues/references/frontmatter.md\
+    \ with Read/Grep if you need to check).\n\nAlso state, in your own words, why an under-specified ticket\
+    \ like this one (no acceptance criteria, no touches list, no verify command) cannot go straight to\
+    \ a startable stage as-is, and what you would add before it could.\n\nDo not produce any code or fenced\
+    \ code blocks. Do not attempt to actually file, comment on, or transition anything — describe only."
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+runs: 2
+graders:
+- type: regex
+  name: names-all-six-custom-fields
+  target: last_message
+  pattern: (?=[\s\S]*\btouches\b)(?=[\s\S]*\bverify\b)(?=[\s\S]*\bhuman_steps\b)(?=[\s\S]*\bappends\b)(?=[\s\S]*\bexecutor\b)(?=[\s\S]*\bdefer_until\b)
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: mentions-adf-representation
+  target: last_message
+  pattern: (ADF|Atlassian Document)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: runs-lint-before-transition
+  target: last_message
+  pattern: issues\.py\s+lint\s+before\s+any\s+ticket\s+transition
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: refuses-transition-without-verify
+  target: last_message
+  pattern: will\s+not\s+transition\s+a\s+ticket\s+to\s+a\s+stage\s+that\s+requires\s+verify\s+if\s+verify\s+is\s+empty
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: never-completes-from-readonly-verify
+  target: last_message
+  pattern: never\s+mark\s+a\s+ticket\s+completed\s+from\s+a\s+read-only\s+verify
+  match: contains
+  weight: 2
+  flags: i

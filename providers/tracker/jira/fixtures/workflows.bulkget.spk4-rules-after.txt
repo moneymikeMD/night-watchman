@@ -1,0 +1,338 @@
+# ./jira-api.sh --show-secrets --yes write POST /workflows '{"workflowNames":["Software Simplified Workflow for Project SPK4"]}'
+# Captured live 2026-09-14 against example.atlassian.net, scratch project SPK4,
+# immediately after POST /workflows/update with the probe-3 body
+# (workflows.update.validation.spk4-rules-probe-3.txt payload): version 1 -> 2.
+# Recorded shapes of the rules as Jira stores them: transition 21 carries two
+# system:validate-field-value (fieldRequired verify/touches), transition 81 carries
+# validate-field-value (verify) + system:previous-status-validator (previousStatusIds 3).
+# Diff vs request on ruleKey+parameters for all 10 transitions: empty. Jira added a uuid
+# id to each new rule. ruleKey kept: rule identifiers, not credentials.
+# Scanned for credential-shaped values before saving: none.
+{
+  "statuses": [
+    {
+      "id": "1",
+      "statusReference": "1",
+      "name": "Open",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10009",
+      "statusReference": "10009",
+      "name": "To Do",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10014",
+      "statusReference": "10014",
+      "name": "Completed",
+      "statusCategory": "DONE",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10012",
+      "statusReference": "10012",
+      "name": "Awaiting Deployment",
+      "statusCategory": "IN_PROGRESS",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10011",
+      "statusReference": "10011",
+      "name": "Triage",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "3",
+      "statusReference": "3",
+      "name": "In Progress",
+      "statusCategory": "IN_PROGRESS",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10013",
+      "statusReference": "10013",
+      "name": "Deferred",
+      "statusCategory": "TODO",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10015",
+      "statusReference": "10015",
+      "name": "Cancelled",
+      "statusCategory": "DONE",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    },
+    {
+      "id": "10010",
+      "statusReference": "10010",
+      "name": "Done",
+      "statusCategory": "DONE",
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "description": ""
+    }
+  ],
+  "workflows": [
+    {
+      "scope": {
+        "type": "GLOBAL"
+      },
+      "version": {
+        "versionNumber": 2,
+        "id": "ef20397a-c586-402d-9a5c-97c2185b75c1"
+      },
+      "id": "9196fe68-64c6-43f6-8ad6-0138e3850564",
+      "name": "Software Simplified Workflow for Project SPK4",
+      "description": "",
+      "isEditable": true,
+      "startPointLayout": {},
+      "statuses": [
+        {
+          "statusReference": "10009",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "3",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "10010",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "1",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "10011",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "10012",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "10013",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "10014",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        },
+        {
+          "statusReference": "10015",
+          "layout": {},
+          "properties": {},
+          "deprecated": false
+        }
+      ],
+      "transitions": [
+        {
+          "id": "11",
+          "type": "GLOBAL",
+          "toStatusReference": "10009",
+          "links": [],
+          "name": "To Do",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "21",
+          "type": "GLOBAL",
+          "toStatusReference": "3",
+          "links": [],
+          "name": "In Progress",
+          "description": "",
+          "actions": [],
+          "validators": [
+            {
+              "ruleKey": "system:validate-field-value",
+              "parameters": {
+                "ruleType": "fieldRequired",
+                "fieldsRequired": "customfield_10044",
+                "ignoreContext": "true",
+                "errorMessage": "verify is required before work starts"
+              },
+              "id": "6bceb88f-467a-460e-b1aa-3d5d5a21b916"
+            },
+            {
+              "ruleKey": "system:validate-field-value",
+              "parameters": {
+                "ruleType": "fieldRequired",
+                "fieldsRequired": "customfield_10043",
+                "ignoreContext": "true",
+                "errorMessage": "touches is required before work starts"
+              },
+              "id": "e56f4066-2557-4336-8db3-9f5de87b415e"
+            }
+          ],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "31",
+          "type": "GLOBAL",
+          "toStatusReference": "10010",
+          "links": [],
+          "name": "Done",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "51",
+          "type": "GLOBAL",
+          "toStatusReference": "1",
+          "links": [],
+          "name": "Open",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "41",
+          "type": "GLOBAL",
+          "toStatusReference": "10011",
+          "links": [],
+          "name": "Triage",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "61",
+          "type": "GLOBAL",
+          "toStatusReference": "10012",
+          "links": [],
+          "name": "Awaiting Deployment",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "71",
+          "type": "GLOBAL",
+          "toStatusReference": "10013",
+          "links": [],
+          "name": "Deferred",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "81",
+          "type": "GLOBAL",
+          "toStatusReference": "10014",
+          "links": [],
+          "name": "Completed",
+          "description": "",
+          "actions": [],
+          "validators": [
+            {
+              "ruleKey": "system:validate-field-value",
+              "parameters": {
+                "ruleType": "fieldRequired",
+                "fieldsRequired": "customfield_10044",
+                "ignoreContext": "true",
+                "errorMessage": "verify is required before completing"
+              },
+              "id": "9bf411a2-b199-4eec-a082-78d3aa9eae49"
+            },
+            {
+              "ruleKey": "system:previous-status-validator",
+              "parameters": {
+                "previousStatusIds": "3",
+                "mostRecentStatusOnly": "false"
+              },
+              "id": "f0c6f83f-7194-48eb-b626-98620dd4d7e6"
+            }
+          ],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "91",
+          "type": "GLOBAL",
+          "toStatusReference": "10015",
+          "links": [],
+          "name": "Cancelled",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        },
+        {
+          "id": "1",
+          "type": "INITIAL",
+          "toStatusReference": "10009",
+          "links": [],
+          "name": "Create",
+          "description": "",
+          "actions": [],
+          "validators": [],
+          "triggers": [],
+          "properties": {}
+        }
+      ]
+    }
+  ]
+}
