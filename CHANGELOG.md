@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.7.0] - 2026-09-15
+- first public release: history squashed to a single commit; private session logs, ticket ids and site identifiers removed from the tree; fixtures use placeholder hosts and ids
+- land-branch.sh: LAND_BRANCH_COAUTHOR / LAND_BRANCH_SESSION are optional; unset means no trailer, commits default to the owner alone
+- guard-fs-writes.sh: the argv of ssh, scp, rsync and mosh is opaque remote payload when one of them is the segment's command word (after NAME=value, env, command prefixes); a trailing local redirect is still checked; opacity state is saved and restored across nested scans
+- dispatch start: detects Claude Code's folder-trust dialog in a fresh Herdr worktree, answers it, and continues to the brief hand-off instead of failing agent_not_ready
+- known-issues: quoted ssh payloads containing an unescaped operator are still mis-split by the segment splitter; words after bash -c / eval in the same segment bypass the guard (fix pending); the tilde-escape selftest case fails on Linux only
+
 ## [0.6.0] - 2026-09-14
 - decision: Jira enforces the field gates (verify, touches) and the status-order gate; scripts keep blocked_by, touches collisions and mixed/human_steps
   cost: UNVERIFIED
