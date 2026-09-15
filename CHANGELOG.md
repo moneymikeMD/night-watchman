@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here.
 
+## [0.7.1] - 2026-09-15
+- docs site deploys to GitHub Pages from docs/preview/website: one workflow builds with bun, configure-pages supplies --site/--base, deploy-pages publishes; the sample astro.yml is gone
+- README: install from the GitHub marketplace first (`claude plugin marketplace add moneymikeMD/night-watchman`), local checkout second; links the published documentation
+- no logic changes in the core product
+
 ## [0.7.0] - 2026-09-15
 - first public release: history squashed to a single commit; private session logs, ticket ids and site identifiers removed from the tree; fixtures use placeholder hosts and ids
 - land-branch.sh: LAND_BRANCH_COAUTHOR / LAND_BRANCH_SESSION are optional; unset means no trailer, commits default to the owner alone
