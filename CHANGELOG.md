@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here.
 
+## [0.7.2] - 2026-09-15
+- docs site: in-page links were root-absolute (`/guides/...`) and 404ed under the GitHub Pages base path `/night-watchman/`; all 20 content links are now relative, verified by a build-time scan of every internal href
+- no logic changes in the core product
+
 ## [0.7.1] - 2026-09-15
 - docs site deploys to GitHub Pages from docs/preview/website: one workflow builds with bun, configure-pages supplies --site/--base, deploy-pages publishes; the sample astro.yml is gone
 - README: install from the GitHub marketplace first (`claude plugin marketplace add moneymikeMD/night-watchman`), local checkout second; links the published documentation
