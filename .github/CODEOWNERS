@@ -1,0 +1,7 @@
+# Every path, one owner. This repo is a solo project; the entry exists so
+# `require_code_owner_review` on the main ruleset has something to resolve
+# against — it was set before this file existed, and enforced nothing.
+#
+# Review requests are routed here automatically. The admin bypass on the
+# ruleset still applies, so the owner's own merges are not gated on it.
+* @moneymikeMD
