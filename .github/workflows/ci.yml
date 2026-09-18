@@ -25,9 +25,11 @@ jobs:
       - name: shellcheck
         run: |
           set -euo pipefail
+          # -e SC1091: several scripts source a sibling through a variable
+          # path resolved at runtime, which shellcheck cannot follow statically.
           find hooks providers scripts -name '*.sh' \
             -not -path 'scripts/fixtures/*' -print0 \
-          | xargs -0 shellcheck -x -P SCRIPTDIR
+          | xargs -0 shellcheck -x -e SC1091 -P SCRIPTDIR
 
       - name: selftests
         run: |
