@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  selftests:
+    # macOS, not ubuntu: this repo targets bash 3.2 (the /bin/bash every macOS
+    # ships), and its scripts are written to that limit deliberately. A Linux
+    # runner's bash 5.x would pass code that breaks on the machines this
+    # actually runs on, and one selftest is already known to fail there
+    # (docs/known-issues/guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2.md).
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: bash version (this is the target, not an accident)
+        run: /bin/bash --version | head -1
+
+      - name: install shellcheck
+        run: brew install shellcheck
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          find hooks providers scripts -name '*.sh' \
+            -not -path 'scripts/fixtures/*' -print0 \
+          | xargs -0 shellcheck -x -P SCRIPTDIR
+
+      - name: selftests
+        run: |
+          set -uo pipefail
+          failed=0
+          while IFS= read -r t; do
+            case "$t" in
+              # Quarantined: each fails one assertion for a filed, pre-existing
+              # reason. Run separately below so a real regression elsewhere is
+              # not masked by a red suite. Move back here as each is resolved.
+              ./providers/config-selftest.sh) continue ;;
+              ./providers/tracker/jira/jira-workflow-apply-selftest.sh) continue ;;
+            esac
+            printf '\n=== %s\n' "${t#./}"
+            if "$t"; then :; else
+              printf '!!! FAILED: %s\n' "${t#./}"
+              failed=1
+            fi
+          done < <(find . -name '*selftest*.sh' \
+                     -not -path './.git/*' \
+                     -not -path './scripts/fixtures/*' \
+                     -not -path './evals/*' | sort)
+          exit "$failed"
+
+      - name: known-failing selftests (informational)
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          # docs/known-issues.md carries an entry for each of these. They are
+          # run so a SECOND failure in the same suite is still visible.
+          providers/config-selftest.sh || true
+          providers/tracker/jira/jira-workflow-apply-selftest.sh || true
+
+      - name: known-issues index is not drifted
+        run: scripts/known-issue.sh lint

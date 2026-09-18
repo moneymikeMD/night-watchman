@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # Only github-actions: this plugin's core is dependency-free bash, and the
+  # docs site under docs/preview/website uses bun, which Dependabot does not
+  # support as an ecosystem.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
