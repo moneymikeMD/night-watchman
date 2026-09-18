@@ -111,6 +111,12 @@ secret; do not commit; end with a compact table; plus:
 - STANDING — this project's standing orders, pasted verbatim into every
   spawn and every resume.
 
+When a dispatch provider starts the ticket, the start verb carries all of
+these: it renders `templates/dispatch-brief.md` (the single source of STANDING
+and REPORT) and takes the per-ticket lines as `--timebox` and repeatable
+`--forbidden`. The orchestrator's job is choosing those lines, not retyping the
+brief; a follow-up prompt is for review rounds only.
+
 A brief missing any of these is a refuse-to-spawn condition. Two agents must
 not `touches` the same path — `issues.py waves` says so before anyone starts.
 
