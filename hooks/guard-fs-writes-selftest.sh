@@ -581,6 +581,35 @@ assert_exit "still blocks 'git stash push -u -m ssh' — 'ssh' as a -m VALUE aft
 # in-place instead (guard-fs-writes.sh, "ssh/scp/rsync/mosh opacity stack"
 # comment). -------------------------------------------------------------
 
+# --- 28. NWM-118: per-segment scan state is re-entrant. A destructive
+# local command AFTER a nesting keyword in the same segment must still be
+# scanned; harmless trailing commands must still pass. ----------------------
+
+OUT="$NOT_WORKTREE_NOT_SCRATCH"
+GOT="$(run_guard "$FAKE_WORKTREE" "bash -c \"true\" rm -rf $OUT")"
+assert_exit "blocks 'bash -c \"true\" rm -rf <outside>' — words after the -c string must still be scanned" 2 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "sh -c \"x\" mv a $OUT/b")"
+assert_exit "blocks 'sh -c \"x\" mv a <outside>/b'" 2 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "eval true rm -rf $OUT")"
+assert_exit "blocks 'eval true rm -rf <outside>'" 2 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "find . -exec true {} \\; -exec rm -rf $OUT \\;")"
+assert_exit "blocks a second find -exec rm -rf <outside> after a first harmless -exec" 2 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "echo x | xargs bash -c \"true\" rm -rf $OUT")"
+assert_exit "blocks 'xargs bash -c \"true\" rm -rf <outside>'" 2 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "echo \"\$(echo \"\$(true)\")\" rm -rf $OUT")"
+assert_exit "blocks nested \$( \$( ) ) inside a double-quoted word followed by rm -rf <outside>" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "bash -c \"true\" echo hello")"
+assert_exit "allows 'bash -c \"true\" echo hello' (harmless trailing command)" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "sh -c \"x\" ls -la")"
+assert_exit "allows 'sh -c \"x\" ls -la'" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "eval true echo hi")"
+assert_exit "allows 'eval true echo hi'" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "find . -exec true {} \\; -exec echo {} \\;")"
+assert_exit "allows two harmless find -exec clauses" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "bash -c \"true\" rm -rf ./inside-dir")"
+assert_exit "allows 'bash -c \"true\" rm -rf <inside worktree>' (fix must not widen the policy)" 0 "$GOT"
+
 echo
 echo "$N assertion(s), $((N - FAIL)) passed" >&2
 if [ "$FAIL" -ne 0 ]; then

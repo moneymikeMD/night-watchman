@@ -2,7 +2,8 @@
 title: "guard-fs-writes.sh: trailing words after a re-execution context in the same segment bypass local rules"
 heading_raw: "guard-fs-writes.sh: trailing words after a re-execution context in the same segment bypass local rules — HIGH"
 severity: HIGH
-status: open
+status: resolved
+resolved: 2026-09-18
 qualifiers: []
 note: "pre-existing, unrelated to the ssh-opacity fix; found while verifying it"
 tickets: []
@@ -40,3 +41,5 @@ to _ss_words/_ss_n/_ss_i too) or bash -c/sh -c/eval would need find's own
 "advance _ss_i to end of segment after a nested scan" pattern applied to
 them as well. Either fix deserves its own ticket and its own focused
 selftest coverage, not a drive-by bundled into an unrelated fix.
+
+**Resolved 2026-09-18 (NWM-118).** scan_segment, scan_dollar_parens_in_word and scan_command_text now save and restore all their per-call globals (including _ss_words/_ss_n/_ss_i) in a frame stack around each call. Verified: 11 new selftest cases (5 fail against the old hook, all pass on the fix), 91/91 on bash 3.2.57 (macOS), shellcheck clean.

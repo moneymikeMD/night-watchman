@@ -483,6 +483,65 @@ _ss_opaque_pop() {
   unset "_SS_OPAQUE_STACK[$_sop_last]"
 }
 
+# Recursion-safe state frames: scan_segment, scan_dollar_parens_in_word and
+# scan_command_text keep per-call state in globals and re-enter each other,
+# so each saves its own variables on entry and restores them on exit.
+_FRAME_STACK=()
+_frame_push() {
+  local _fp_v _fp_a _fp_n _fp_i
+  for _fp_v in $1; do
+    if [ -n "${!_fp_v+x}" ]; then
+      _FRAME_STACK+=("1" "${!_fp_v}")
+    else
+      _FRAME_STACK+=("0" "")
+    fi
+  done
+  for _fp_a in $2; do
+    eval "_fp_n=\${#${_fp_a}[@]}"
+    _fp_i=0
+    while [ "$_fp_i" -lt "$_fp_n" ]; do
+      eval "_FRAME_STACK+=(\"\${${_fp_a}[${_fp_i}]}\")"
+      _fp_i=$((_fp_i + 1))
+    done
+    _FRAME_STACK+=("$_fp_n")
+  done
+}
+_frame_pop() {
+  local _fq_v _fq_a _fq_n _fq_last _fq_start _fq_i _fq_rev=""
+  for _fq_a in $2; do _fq_rev="$_fq_a $_fq_rev"; done
+  for _fq_a in $_fq_rev; do
+    _fq_last=$((${#_FRAME_STACK[@]} - 1))
+    _fq_n="${_FRAME_STACK[$_fq_last]}"
+    unset "_FRAME_STACK[$_fq_last]"
+    _fq_start=$((_fq_last - _fq_n))
+    eval "$_fq_a=()"
+    _fq_i=0
+    while [ "$_fq_i" -lt "$_fq_n" ]; do
+      eval "$_fq_a+=(\"\${_FRAME_STACK[$((_fq_start + _fq_i))]}\")"
+      _fq_i=$((_fq_i + 1))
+    done
+    _fq_i=$((_fq_n - 1))
+    while [ "$_fq_i" -ge 0 ]; do
+      unset "_FRAME_STACK[$((_fq_start + _fq_i))]"
+      _fq_i=$((_fq_i - 1))
+    done
+  done
+  _fq_rev=""
+  for _fq_v in $1; do _fq_rev="$_fq_v $_fq_rev"; done
+  for _fq_v in $_fq_rev; do
+    _fq_last=$((${#_FRAME_STACK[@]} - 1))
+    if [ "${_FRAME_STACK[$((_fq_last - 1))]}" = "1" ]; then
+      printf -v "$_fq_v" '%s' "${_FRAME_STACK[$_fq_last]}"
+    else
+      unset "$_fq_v"
+    fi
+    unset "_FRAME_STACK[$_fq_last]" "_FRAME_STACK[$((_fq_last - 1))]"
+  done
+}
+_SS_FRAME_VARS="_ss_after _ss_cmd_word_idx _ss_ek _ss_et _ss_eval_rest _ss_exec_cmd _ss_find_has_action _ss_find_paths _ss_fk2 _ss_flag _ss_ftok _ss_git_block _ss_git_linked _ss_git_opts _ss_git_subcmd _ss_gj _ss_gk _ss_gk2 _ss_gtok _ss_i _ss_j _ss_k _ss_line _ss_n _ss_next_i _ss_opaque _ss_saw_recursive _ss_stash_action _ss_tgt _ss_word _ss_words _ss_xargs_cmd _ss_xeval _ss_xj2 _ss_xk _ss_xtok"
+_SDP_FRAME_VARS="_sdp_body _sdp_c _sdp_c2 _sdp_cj _sdp_depth _sdp_i _sdp_j _sdp_len _sdp_text"
+_SCT_FRAME_VARS="_sct_no_heredoc _sct_old_ifs _sct_segments _sct_text"
+
 # tokenize_quoted_cca: a private, quote-aware tokenizer identical in logic
 # to tokenize_quoted, but writing to its OWN global array (_CCA_WORDS)
 # rather than _ss_words. collect_same_command_assignments can be called
@@ -825,7 +884,7 @@ is_quoted_word() {
 # this — single quotes really do suppress command substitution too, so
 # they stay fully inert, matching real shell semantics. Backtick-style
 # `` `...` `` substitution is a documented gap, not handled here.
-scan_dollar_parens_in_word() {
+_scan_dollar_parens_in_word_body() {
   _sdp_text="$1"
   _sdp_len=${#_sdp_text}
   _sdp_i=0
@@ -864,6 +923,13 @@ scan_dollar_parens_in_word() {
       _sdp_i=$((_sdp_i + 1))
     fi
   done
+  return 0
+}
+
+scan_dollar_parens_in_word() {
+  _frame_push "$_SDP_FRAME_VARS" ""
+  _scan_dollar_parens_in_word_body "$@"
+  _frame_pop "$_SDP_FRAME_VARS" ""
   return 0
 }
 
@@ -928,7 +994,7 @@ tokenize_quoted() {
   return 0
 }
 
-scan_segment() {
+_scan_segment_body() {
   _ss_line="$1"
   tokenize_quoted "$_ss_line"
   _ss_n="${#_ss_words[@]}"
@@ -1318,6 +1384,13 @@ scan_segment() {
   return 0
 }
 
+scan_segment() {
+  _frame_push "$_SS_FRAME_VARS" "_ss_words"
+  _scan_segment_body "$@"
+  _frame_pop "$_SS_FRAME_VARS" "_ss_words"
+  return 0
+}
+
 # Strip heredoc BODIES (everything between a <<WORD/<<-WORD/<<'WORD'/<<"WORD"
 # opener and its terminator line, inclusive of the terminator) before this
 # text is split into segments and scanned — heredoc content is literal
@@ -1400,7 +1473,7 @@ strip_heredocs() {
 # this, `find ./inside -exec rm -rf {} \;` (a legitimate inside-worktree
 # command) split into a segment ending in a stray trailing `\`, which then
 # reached `rm`'s own target check as if it were a real path and blocked.
-scan_command_text() {
+_scan_command_text_body() {
   _sct_text="$1"
   _sct_no_heredoc="$(strip_heredocs "$_sct_text")"
   collect_same_command_assignments "$_sct_no_heredoc"
@@ -1415,6 +1488,13 @@ scan_command_text() {
 '
   done
   IFS="$_sct_old_ifs"
+  return 0
+}
+
+scan_command_text() {
+  _frame_push "$_SCT_FRAME_VARS" ""
+  _scan_command_text_body "$@"
+  _frame_pop "$_SCT_FRAME_VARS" ""
   return 0
 }
 
