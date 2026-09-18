@@ -42,6 +42,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 SUT_SRC="$HERE/herdr-ticket-start.sh"
 KIT_SRC="$HERE/lib/kit.sh"
+BRIEF_SRC="$HERE/../../../templates/dispatch-brief.md"
+[ -f "$BRIEF_SRC" ] || die "cannot find templates/dispatch-brief.md"
 [ -f "$SUT_SRC" ] || die "cannot find herdr-ticket-start.sh next to this selftest"
 [ -f "$KIT_SRC" ] || die "cannot find lib/kit.sh"
 
@@ -130,6 +132,7 @@ make_repo() {
     cp "$SUT_SRC" "$d/herdr-ticket-start.sh" || return 1
     chmod +x "$d/herdr-ticket-start.sh" || return 1
     cp "$KIT_SRC" "$d/lib/kit.sh" || return 1
+    cp "$BRIEF_SRC" "$d/dispatch-brief.md" || return 1
     git -C "$d" init -q -b main || return 1
     git -C "$d" config core.hooksPath "$d/.githooks-empty" || return 1
     git -C "$d" config commit.gpgsign false || return 1
@@ -242,8 +245,7 @@ EOF
 # install_stub_herdr <repo> — a stub speaking exactly the four subcommands
 # herdr-ticket-start.sh calls: `worktree list`, `worktree create`,
 # `agent start`, `agent prompt`. Every invocation's argv is appended to
-# $STUB_HERDR_LOG (one line per call, space-joined — none of these
-# arguments legitimately contain embedded newlines). Behaviour is driven by
+# $STUB_HERDR_LOG (one line per call, newlines in the brief flattened to spaces). Behaviour is driven by
 # env vars so the same stub file serves every scenario:
 #   STUB_LIST_JSON     canned stdout for `worktree list`
 #   STUB_LIST_FAIL=1   `worktree list` exits 1 with a stderr message
@@ -285,7 +287,7 @@ install_stub_herdr() {
     local repo="$1"
     cat > "$repo/bin/herdr" <<'STUBEOF'
 #!/bin/bash
-printf '%s\n' "$*" >> "$STUB_HERDR_LOG"
+printf '%s\n' "$(printf '%s' "$*" | tr '\n' ' ')" >> "$STUB_HERDR_LOG"
 [ -n "${STUB_ORDER_LOG:-}" ] && printf 'herdr %s\n' "$*" >> "$STUB_ORDER_LOG"
 DIALOG_FLAG="$(dirname "$0")/../dialog-answered"
 case "$1 $2" in
@@ -375,6 +377,10 @@ call_count() {
 # status id) unless RUN_SUT_NO_PROGRESS=1.
 run_sut() {
     local repo="$1" ticket="$2" herdr_env="$3"; shift 3
+    local brief_flags=(--timebox "3 hours" --forbidden "selftest ban")
+    [ "${RUN_SUT_NO_BRIEF:-0}" = 1 ] && brief_flags=()
+    set -- ${brief_flags[@]+"${brief_flags[@]}"} "$@"
+    export HERDR_BRIEF_TEMPLATE="$repo/dispatch-brief.md"
     if [ "${RUN_SUT_NO_PROGRESS:-0}" = 1 ]; then
         ( cd "$repo" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
             STUB_JIRA_LOG="${STUB_JIRA_LOG:-$repo/jira.log}" \
@@ -408,7 +414,7 @@ scenario_happy_default_model() {
     assert_eq "A0 agent start calls" "1" "$(call_count "$log" "agent start")"
     assert_eq "A0 agent prompt calls" "1" "$(call_count "$log" "agent prompt")"
     assert_contains "A0 agent start argv carries --model sonnet" "$(grep '^agent start' "$log" || true)" "--model sonnet"
-    assert_contains "A0 agent prompt names the Jira issue key, not a file path" "$(grep '^agent prompt' "$log" || true)" "PROJ-900 (see it in Jira)"
+    assert_contains "A0 agent prompt names the Jira issue key, not a file path" "$(grep '^agent prompt' "$log" || true)" "PROJ-900 worker brief"
     assert_contains "A0 default agent prompt argv carries the bounded wait" "$(grep '^agent prompt' "$log" || true)" "--wait --until working --timeout 60000"
     case "$(grep '^agent prompt' "$log" || true)" in
         *3600000*)
@@ -1086,6 +1092,83 @@ scenario_lifecycle_no_matching_transition() {
     assert_eq "L6 transition POSTs" "0" "$(jira_posts "$repo" PROJ-996)"
 }
 
+# B0 — dry-run prints the whole brief: four headings, ticket key, timebox,
+# every --forbidden line, tracker line with the jira-api path and project.
+scenario_brief_dry_run() {
+    local repo out rc
+    repo=$(make_repo) || { echo "FAIL: B0 setup" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10020 "Scratch brief ticket"
+    install_stub_herdr "$repo"
+    : > "$repo/herdr.log"
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" \
+        run_sut "$repo" PROJ-940 1 --timebox "90 minutes" --forbidden "no touching a" --forbidden "no touching b" --dry-run) && rc=0 || rc=$?
+    assert_eq "B0 exit code" "0" "$rc"
+    assert_contains "B0 TIMEBOX heading" "$out" "## TIMEBOX"
+    assert_contains "B0 FORBIDDEN heading" "$out" "## FORBIDDEN"
+    assert_contains "B0 REPORT heading" "$out" "## REPORT"
+    assert_contains "B0 STANDING heading" "$out" "## STANDING"
+    assert_contains "B0 TRACKER heading" "$out" "## TRACKER"
+    assert_contains "B0 ticket key" "$out" "PROJ-940 worker brief"
+    assert_contains "B0 timebox text" "$out" "90 minutes. On expiry"
+    assert_contains "B0 first forbidden" "$out" "- no touching a"
+    assert_contains "B0 second forbidden" "$out" "- no touching b"
+    assert_contains "B0 tracker jira-api path" "$out" "$repo/bin/jira-api-stub.sh"
+    assert_contains "B0 tracker project" "$out" "Jira project PROJ"
+    assert_eq "B0 prompt calls" "0" "$(call_count "$repo/herdr.log" "agent prompt")"
+}
+
+# B1 — the real prompt carries the rendered brief with no unfilled placeholder.
+scenario_brief_sent() {
+    local repo log out rc
+    repo=$(make_repo) || { echo "FAIL: B1 setup" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10020 "Scratch brief sent ticket"
+    install_stub_herdr "$repo"
+    log="$repo/herdr.log"; : > "$log"
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" STUB_CREATE_JSON="$CREATE_FIXTURE_JSON" run_sut "$repo" PROJ-941 1) && rc=0 || rc=$?
+    assert_eq "B1 exit code" "0" "$rc"
+    assert_eq "B1 prompt calls" "1" "$(call_count "$log" "agent prompt")"
+    assert_contains "B1 logged prompt has STANDING" "$(cat "$log")" "## STANDING"
+    assert_contains "B1 logged prompt has the timebox" "$(cat "$log")" "3 hours"
+    case "$(cat "$log")" in
+        *@KEY@*|*@TIMEBOX@*|*@FORBIDDEN@*|*@TRACKER@*|*@BRANCH@*|*@MODEL@*)
+            echo "FAIL: B1 logged prompt has an unfilled placeholder" >&2; FAIL=1 ;;
+        *) echo "ok: B1 no unfilled placeholder" ;;
+    esac
+}
+
+# B2/B3 — a missing timebox or forbidden dies naming the field before any herdr call.
+scenario_brief_missing_field() {
+    local repo log out rc field
+    for field in timebox forbidden; do
+        repo=$(make_repo) || { echo "FAIL: B2 setup" >&2; FAIL=1; return; }
+        install_stub_jira "$repo" 10020 "Scratch brief missing ticket"
+        install_stub_herdr "$repo"
+        log="$repo/herdr.log"; : > "$log"
+        if [ "$field" = timebox ]; then
+            out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_NO_BRIEF=1 run_sut "$repo" PROJ-942 1 --forbidden x) && rc=0 || rc=$?
+        else
+            out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_NO_BRIEF=1 run_sut "$repo" PROJ-943 1 --timebox "1 hour") && rc=0 || rc=$?
+        fi
+        assert_eq "B2 $field missing exit code" "1" "$rc"
+        assert_contains "B2 $field missing names the field" "$out" "no $(printf '%s' "$field" | tr '[:lower:]' '[:upper:]')"
+        assert_eq "B2 $field missing worktree create calls" "0" "$(call_count "$log" "worktree create")"
+        assert_eq "B2 $field missing agent start calls" "0" "$(call_count "$log" "agent start")"
+        assert_eq "B2 $field missing agent prompt calls" "0" "$(call_count "$log" "agent prompt")"
+    done
+}
+
+# B4 — the missing-status refusal names the STATUS id, not the transition id.
+scenario_brief_status_hint() {
+    local repo out rc
+    repo=$(make_repo) || { echo "FAIL: B4 setup" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10020 "Scratch status hint ticket"
+    install_stub_herdr "$repo"
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_NO_PROGRESS=1 run_sut "$repo" PROJ-944 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "B4 exit code" "1" "$rc"
+    assert_contains "B4 names STATUS id" "$out" "STATUS id of In Progress"
+    assert_contains "B4 warns off transition id" "$out" "not a transition id"
+}
+
 # ------------------------------------------------------------------------ run
 
 scenario_happy_default_model
@@ -1123,6 +1206,10 @@ scenario_lifecycle_post_rejected
 scenario_lifecycle_readback_stuck
 scenario_lifecycle_missing_status_flag
 scenario_lifecycle_no_matching_transition
+scenario_brief_dry_run
+scenario_brief_sent
+scenario_brief_missing_field
+scenario_brief_status_hint
 
 if [ "$FAIL" = 1 ]; then
     echo "herdr-ticket-start-selftest.sh: FAILED" >&2
