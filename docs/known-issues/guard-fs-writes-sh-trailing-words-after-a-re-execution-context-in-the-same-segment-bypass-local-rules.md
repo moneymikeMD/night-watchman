@@ -42,4 +42,4 @@ to _ss_words/_ss_n/_ss_i too) or bash -c/sh -c/eval would need find's own
 them as well. Either fix deserves its own ticket and its own focused
 selftest coverage, not a drive-by bundled into an unrelated fix.
 
-**Resolved 2026-09-18 (NWM-118).** scan_segment, scan_dollar_parens_in_word and scan_command_text now save and restore all their per-call globals (including _ss_words/_ss_n/_ss_i) in a frame stack around each call. Verified: 11 new selftest cases (5 fail against the old hook, all pass on the fix), 91/91 on bash 3.2.57 (macOS), shellcheck clean.
+**Resolved 2026-09-18 (NWM-118).** scan_segment, scan_dollar_parens_in_word and scan_command_text now save and restore all their per-call globals (including _ss_words/_ss_n/_ss_i) in a frame stack around each call. Verified: 16 new selftest cases (13 re-entrancy and control cases, 7 of them red on the old hook, plus 3 stderr-oracle cases), 96/96 on bash 3.2.57 (macOS), shellcheck clean.

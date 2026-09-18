@@ -487,6 +487,9 @@ _ss_opaque_pop() {
 # scan_command_text keep per-call state in globals and re-enter each other,
 # so each saves its own variables on entry and restores them on exit.
 _FRAME_STACK=()
+_ss_words=()
+_ss_find_paths=()
+_ss_git_opts=()
 _frame_push() {
   local _fp_v _fp_a _fp_n _fp_i
   for _fp_v in $1; do
@@ -538,9 +541,10 @@ _frame_pop() {
     unset "_FRAME_STACK[$_fq_last]" "_FRAME_STACK[$((_fq_last - 1))]"
   done
 }
-_SS_FRAME_VARS="_ss_after _ss_cmd_word_idx _ss_ek _ss_et _ss_eval_rest _ss_exec_cmd _ss_find_has_action _ss_find_paths _ss_fk2 _ss_flag _ss_ftok _ss_git_block _ss_git_linked _ss_git_opts _ss_git_subcmd _ss_gj _ss_gk _ss_gk2 _ss_gtok _ss_i _ss_j _ss_k _ss_line _ss_n _ss_next_i _ss_opaque _ss_saw_recursive _ss_stash_action _ss_tgt _ss_word _ss_words _ss_xargs_cmd _ss_xeval _ss_xj2 _ss_xk _ss_xtok"
+_SS_FRAME_ARRAYS="_ss_words _ss_find_paths _ss_git_opts"
+_SS_FRAME_VARS="_ss_after _ss_cmd_word_idx _ss_ek _ss_et _ss_eval_rest _ss_exec_cmd _ss_find_has_action _ss_fk2 _ss_flag _ss_ftok _ss_git_block _ss_git_linked _ss_git_subcmd _ss_gj _ss_gk _ss_gk2 _ss_gtok _ss_i _ss_j _ss_k _ss_line _ss_n _ss_next_i _ss_opaque _ss_saw_recursive _ss_stash_action _ss_tgt _ss_word _ss_xargs_cmd _ss_xeval _ss_xj2 _ss_xk _ss_xtok"
 _SDP_FRAME_VARS="_sdp_body _sdp_c _sdp_c2 _sdp_cj _sdp_depth _sdp_i _sdp_j _sdp_len _sdp_text"
-_SCT_FRAME_VARS="_sct_no_heredoc _sct_old_ifs _sct_segments _sct_text"
+_SCT_FRAME_VARS="_sct_no_heredoc _sct_old_ifs _sct_seg _sct_segments _sct_text"
 
 # tokenize_quoted_cca: a private, quote-aware tokenizer identical in logic
 # to tokenize_quoted, but writing to its OWN global array (_CCA_WORDS)
@@ -927,10 +931,12 @@ _scan_dollar_parens_in_word_body() {
 }
 
 scan_dollar_parens_in_word() {
+  local _fw_rc
   _frame_push "$_SDP_FRAME_VARS" ""
   _scan_dollar_parens_in_word_body "$@"
+  _fw_rc=$?
   _frame_pop "$_SDP_FRAME_VARS" ""
-  return 0
+  return "$_fw_rc"
 }
 
 # tokenize_quoted: quote-AWARE word splitting (unlike the old IFS-based
@@ -1385,10 +1391,12 @@ _scan_segment_body() {
 }
 
 scan_segment() {
-  _frame_push "$_SS_FRAME_VARS" "_ss_words"
+  local _fw_rc
+  _frame_push "$_SS_FRAME_VARS" "$_SS_FRAME_ARRAYS"
   _scan_segment_body "$@"
-  _frame_pop "$_SS_FRAME_VARS" "_ss_words"
-  return 0
+  _fw_rc=$?
+  _frame_pop "$_SS_FRAME_VARS" "$_SS_FRAME_ARRAYS"
+  return "$_fw_rc"
 }
 
 # Strip heredoc BODIES (everything between a <<WORD/<<-WORD/<<'WORD'/<<"WORD"
@@ -1492,10 +1500,12 @@ _scan_command_text_body() {
 }
 
 scan_command_text() {
+  local _fw_rc
   _frame_push "$_SCT_FRAME_VARS" ""
   _scan_command_text_body "$@"
+  _fw_rc=$?
   _frame_pop "$_SCT_FRAME_VARS" ""
-  return 0
+  return "$_fw_rc"
 }
 
 scan_command_text "$CMD"

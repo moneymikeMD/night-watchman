@@ -615,6 +615,41 @@ assert_exit "allows two harmless find -exec clauses" 0 "$GOT"
 GOT="$(run_guard "$FAKE_WORKTREE" "bash -c \"true\" rm -rf ./inside-dir")"
 assert_exit "allows 'bash -c \"true\" rm -rf <inside worktree>' (fix must not widen the policy)" 0 "$GOT"
 
+# --- 29. NWM-118: stderr oracle. run_guard discards stderr, so spurious bash
+# runtime errors (unbound variable, integer expression expected) were
+# invisible to every assertion above. ---------------------------------------
+
+run_guard_stderr() {
+  _cwd="$1"
+  _cmd="$2"
+  _payload="$(jq -cn --arg cmd "$_cmd" '{session_id:"test",hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:$cmd}}')"
+  # shellcheck disable=SC2069 # deliberate: capture stderr only, drop stdout
+  (cd "$_cwd" && printf '%s' "$_payload" | "$GUARD" 2>&1 >/dev/null)
+}
+
+RUNTIME_ERR_RE='unbound variable|integer expression expected|syntax error|command not found|line [0-9]+:'
+
+ERR="$(run_guard_stderr "$FAKE_WORKTREE" "echo hello")"
+if [ -z "$ERR" ]; then
+  pass "allowed 'echo hello' writes nothing to stderr (oracle: stderr empty)"
+else
+  fail "allowed 'echo hello' wrote to stderr: $ERR"
+fi
+
+ERR="$(run_guard_stderr "$FAKE_WORKTREE" "bash -c \"true\" echo hello")"
+if [ -z "$ERR" ]; then
+  pass "allowed nested 'bash -c \"true\" echo hello' writes nothing to stderr (oracle: stderr empty)"
+else
+  fail "allowed nested command wrote to stderr: $ERR"
+fi
+
+ERR="$(run_guard_stderr "$FAKE_WORKTREE" "bash -c \"true\" rm -rf $OUT")"
+if [ -n "$ERR" ] && ! printf '%s' "$ERR" | grep -Eq "$RUNTIME_ERR_RE"; then
+  pass "blocked nested command stderr is the block message only, no bash runtime errors (oracle: stderr regex)"
+else
+  fail "blocked nested command stderr empty or carries runtime errors: $ERR"
+fi
+
 echo
 echo "$N assertion(s), $((N - FAIL)) passed" >&2
 if [ "$FAIL" -ne 0 ]; then
