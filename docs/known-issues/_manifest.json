@@ -5,7 +5,7 @@
   "guard-fs-writes-sh-at-user-scope-blocks-git-stash-in-every-repo-s-main-worktree-not-just-this-plugin-s": "df312269f5aea31fbf7df4d6c6b567b7bb87729804d43a3d960c64a8d3f90d1a",
   "guard-fs-writes-sh-false-positives-on-redirect-looking-text-inside-quoted-strings": "8b0ddcfdf8388ea1f0f12078097e287bd2919cd3a3b0fd5a8ff456a33238d821",
   "guard-fs-writes-sh-quoted-ssh-scp-rsync-mosh-payload-mis-split-on-unescaped": "b6f2a4baa8793f0dfc400aac8377454d1f37bdb4ca033653d8fb0d4d621a4a6a",
-  "guard-fs-writes-sh-trailing-words-after-a-re-execution-context-in-the-same-segment-bypass-local-rules": "0fd88bf026f481a065d41c34f73d3d07a845a3fbb33a39c272aef3bc01d6066b",
+  "guard-fs-writes-sh-trailing-words-after-a-re-execution-context-in-the-same-segment-bypass-local-rules": "f866a14371daf75cb4bd44623a8bcc14ec6f78d758abf9a561faebed4e918d61",
   "herdr-ticket-start-selftest-sh-replays-hand-authored-worktree-create-and-worktree-list-responses-not-recorded-ones": "8ff52e9cb4a331105b4bd76f72e7592d59c37ffec2172685a78abb77c83d6b32",
   "issues-py-lint-accepts-a-comma-separated-single-line-touches-field-in-jira-mode-scope-then-reports-every-changed-file-undeclared": "d796cc9f24587baa70dd294e1c1101fa803a88647186868cf1bc2c3c3d9424b4",
   "issues-py-lint-source-jira-reports-a-cross-project-blocked-by-e-g-nwm-68-blocked-by-lab-227-as-does-not-exist": "82062c3de3652985a4782401208f5c94251e12db37d7298abc9f557342ccb2e0",
