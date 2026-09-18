@@ -13,6 +13,7 @@
   "known-issues-manifest-json-hashes-disagree-with-every-entry-file-so-the-force-mode-tamper-check-is-meaningless-directory-wide": "2282505b647e7705f243ea292bc22b4e4b333a6be35908ccf24c2acb69993e83",
   "land-branch-sh-lint-cmd-is-word-split-not-shell-evaluated": "04e4c4ea1eb976ab99928f5fcfc8511e30757d9f06154e3cb5cfc5a7cc2bfdeb",
   "nwm-workflow-previous-status-validator-on-completed-refuses-the-normal-in-progress-to-completed-path-it-counts-only-statuses-before-the-current-one": "03897e810fca84114138c788efba5aa6bb85b8a4baed1df5a3726bce01a45989",
+  "providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted": "acaa6af0a8d5c3f33513892ede2aad0333f9f453041dc289698aaaae23eea213",
   "release-sh-calls-the-tracker-fetch-verb-with-a-since-tag-but-tracker-fetch-takes-an-issue-key-changelog-always-degrades-to-the-placeholder-line": "591c97a7ae4a1189d297e8d1285b7c8767455f9f164834b6feef82fa53fc17c6",
   "script-analytics-py-selftest-fixtures-are-hand-typed-not-captured-transcripts": "13358d881ca0eb5e43255ebc4205feb1c2879df6cf51c05a8c8b816b75d2131d",
   "script-analytics-py-status-durations-exits-0-and-reports-0-new-when-the-tracker-wrapper-itself-fails": "7115ba27c40dd4eec117a226b6af328ddeaa28e3a8969225ce06702f41f7abbf",
