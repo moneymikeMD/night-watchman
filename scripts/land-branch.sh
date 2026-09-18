@@ -1084,6 +1084,51 @@ if [ "${HERDR_ENV:-}" = "1" ]; then
     elif ! command -v jq >/dev/null 2>&1; then
         echo "HERDR_ENV=1 but 'jq' is not on PATH — skipping worktree removal."
     else
+        # End the worker's Claude session cleanly BEFORE the workspace (and
+        # its pane) is torn down. `herdr worktree remove` kills the pane
+        # outright; Claude Code never gets to tell Remote Control it
+        # finished, so the session is left as a permanent "offline" entry
+        # (NWM-117). A clean `/exit` makes the entry disappear instead of
+        # going offline — verified live 2026-09-18, see
+        # docs/open-questions.md. herdr-ticket-start.sh always names the
+        # worker's agent after its branch, so the branch name is its own
+        # target; no live agent by that name means it already exited (or
+        # was never started this way) and there is nothing to do.
+        #
+        # `/exit` is sent as literal text (not a `send-keys` logical key —
+        # there is no such key), which opens Claude Code's slash-command
+        # picker; the picker needs a first Enter to accept the match and a
+        # second to submit it, matching what was observed live. A bounded
+        # poll of `agent get` then waits for the agent to disappear — a
+        # hung worker must never block landing, so exceeding the bound is
+        # logged and the workspace is removed anyway.
+        if herdr agent get "$BRANCH" >/dev/null 2>&1; then
+            AGENT_PANE=$(herdr agent get "$BRANCH" 2>/dev/null | jq -r '.result.agent.pane_id // empty' 2>/dev/null) || AGENT_PANE=""
+            if [ -z "$AGENT_PANE" ]; then
+                warn "found a live Herdr agent named '$BRANCH' but could not read its pane_id — skipping clean exit, removing its workspace anyway"
+            else
+                echo "Exiting the worker's Claude session on '$BRANCH' (pane $AGENT_PANE) before removing its workspace..."
+                herdr pane send-text "$AGENT_PANE" "/exit" >/dev/null 2>&1 || true
+                sleep 1
+                herdr agent send-keys "$BRANCH" enter >/dev/null 2>&1 || true
+                sleep 1
+                herdr agent send-keys "$BRANCH" enter >/dev/null 2>&1 || true
+                EXIT_BOUND_S="${LAND_BRANCH_EXIT_WAIT_S:-15}"
+                EXIT_WAITED_S=0
+                while [ "$EXIT_WAITED_S" -lt "$EXIT_BOUND_S" ] && herdr agent get "$BRANCH" >/dev/null 2>&1; do
+                    sleep 1
+                    EXIT_WAITED_S=$((EXIT_WAITED_S + 1))
+                done
+                if herdr agent get "$BRANCH" >/dev/null 2>&1; then
+                    warn "worker on '$BRANCH' did not exit its Claude session within ${EXIT_BOUND_S}s — removing its workspace anyway (Remote Control will show it as offline until pruned by hand)"
+                else
+                    echo "worker session on '$BRANCH' exited cleanly."
+                fi
+            fi
+        else
+            echo "no live Herdr agent named '$BRANCH' — nothing to exit."
+        fi
+
         # --cwd names the repo herdr resolves against, not the tree this
         # script happens to be running in — the integration worktree ($REPO
         # by this point) is a valid worktree of the same repo, but

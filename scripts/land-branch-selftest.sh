@@ -847,6 +847,140 @@ else
     ok "test19: only LAND_BRANCH_COAUTHOR set — landing succeeds, exactly that one trailer appears"
 fi
 
+# ---- HERDR_ENV cleanup: exit the worker's Claude session before removing
+# its workspace (NWM-117). A stub `herdr` on PATH stands in for the real
+# CLI: `agent get` succeeds while $STUB_AGENT_ALIVE/alive exists and fails
+# (agent gone) once it doesn't; each `agent send-keys ... enter` call
+# increments a counter and, on the second one, deletes the alive marker
+# (modeling the picker needing accept-then-submit, observed live
+# 2026-09-18 — see docs/open-questions.md) unless STUB_HERDR_NEVER_EXITS=1,
+# which leaves it in place so the bounded wait can be exercised. `worktree
+# list`/`worktree remove` are stubbed the same way regardless, so these
+# tests also prove the exit step runs BEFORE removal, not instead of it.
+install_stub_herdr_exit() {
+    local repo="$1"
+    mkdir -p "$repo/bin"
+    cat > "$repo/bin/herdr" <<'STUBEOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$STUB_HERDR_LOG"
+case "$1 $2" in
+    "agent get")
+        if [ -f "$STUB_AGENT_ALIVE" ]; then
+            printf '{"result":{"agent":{"pane_id":"p1"}}}\n'
+            exit 0
+        fi
+        echo "stub herdr: agent not found" >&2
+        exit 1
+        ;;
+    "pane send-text")
+        exit 0
+        ;;
+    "agent send-keys")
+        if [ "${STUB_HERDR_NEVER_EXITS:-0}" != 1 ] && [ -f "$STUB_AGENT_ALIVE" ]; then
+            COUNT_FILE="$(dirname "$STUB_AGENT_ALIVE")/sendkeys.count"
+            n=$(cat "$COUNT_FILE" 2>/dev/null || echo 0)
+            n=$((n + 1))
+            echo "$n" > "$COUNT_FILE"
+            [ "$n" -ge 2 ] && rm -f "$STUB_AGENT_ALIVE"
+        fi
+        exit 0
+        ;;
+    "worktree list")
+        printf '{"result":{"worktrees":[{"is_linked_worktree":true,"branch":"work","open_workspace_id":"ws1"}]}}\n'
+        ;;
+    "worktree remove")
+        exit 0
+        ;;
+    *)
+        echo "stub herdr: unexpected call: $*" >&2
+        exit 99
+        ;;
+esac
+STUBEOF
+    chmod +x "$repo/bin/herdr"
+}
+
+# ---- test 20: agent alive, exits within the bound -> clean-exit message
+# logged, THEN (not instead of) the workspace removal runs.
+
+REPO=$(fresh_repo t20 "$TICKET_OK")
+install_stub_herdr_exit "$REPO"
+: > "$REPO/bin/alive"
+STUB_HERDR_LOG="$WORK/t20.herdr.log"
+: > "$STUB_HERDR_LOG"
+set +e
+(cd "$REPO" && HERDR_ENV=1 PATH="$REPO/bin:$PATH" \
+    STUB_HERDR_LOG="$STUB_HERDR_LOG" STUB_AGENT_ALIVE="$REPO/bin/alive" \
+    ./scripts/land-branch.sh work PROJ-1) >"$WORK/t20.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -ne 0 ]; then
+    bad "test20 (herdr exit, happy path): land-branch.sh exited $RC:
+$(tail -15 "$WORK/t20.out")"
+elif ! grep -q "worker session on 'work' exited cleanly" "$WORK/t20.out"; then
+    bad "test20: no clean-exit confirmation logged:
+$(cat "$WORK/t20.out")"
+elif [ "$(grep -n "^agent get work$" "$STUB_HERDR_LOG" | head -1 | cut -d: -f1)" -gt "$(grep -n "^worktree remove" "$STUB_HERDR_LOG" | head -1 | cut -d: -f1)" ]; then
+    bad "test20: 'agent get' logged after 'worktree remove' — exit step did not run before removal:
+$(cat "$STUB_HERDR_LOG")"
+else
+    ok "test20: a live worker exits cleanly before its workspace is removed"
+fi
+
+# ---- test 21: no live agent by the branch name -> exit step is skipped
+# outright (no send-text/send-keys calls), removal proceeds unchanged.
+
+REPO=$(fresh_repo t21 "$TICKET_OK")
+install_stub_herdr_exit "$REPO"
+STUB_HERDR_LOG="$WORK/t21.herdr.log"
+: > "$STUB_HERDR_LOG"
+set +e
+(cd "$REPO" && HERDR_ENV=1 PATH="$REPO/bin:$PATH" \
+    STUB_HERDR_LOG="$STUB_HERDR_LOG" STUB_AGENT_ALIVE="$REPO/bin/alive" \
+    ./scripts/land-branch.sh work PROJ-1) >"$WORK/t21.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -ne 0 ]; then
+    bad "test21 (herdr exit, no live agent): land-branch.sh exited $RC:
+$(tail -15 "$WORK/t21.out")"
+elif ! grep -q "no live Herdr agent named 'work' — nothing to exit" "$WORK/t21.out"; then
+    bad "test21: missing the 'nothing to exit' message:
+$(cat "$WORK/t21.out")"
+elif grep -q "^pane send-text\|^agent send-keys" "$STUB_HERDR_LOG"; then
+    bad "test21: sent exit keys despite no live agent:
+$(cat "$STUB_HERDR_LOG")"
+else
+    ok "test21: no live agent by the branch name — exit step skipped, removal unaffected"
+fi
+
+# ---- test 22: a worker that never exits within the bound is logged and
+# the workspace is removed anyway — a hung worker must not block landing.
+
+REPO=$(fresh_repo t22 "$TICKET_OK")
+install_stub_herdr_exit "$REPO"
+: > "$REPO/bin/alive"
+STUB_HERDR_LOG="$WORK/t22.herdr.log"
+: > "$STUB_HERDR_LOG"
+set +e
+(cd "$REPO" && HERDR_ENV=1 PATH="$REPO/bin:$PATH" \
+    STUB_HERDR_LOG="$STUB_HERDR_LOG" STUB_AGENT_ALIVE="$REPO/bin/alive" \
+    STUB_HERDR_NEVER_EXITS=1 LAND_BRANCH_EXIT_WAIT_S=2 \
+    ./scripts/land-branch.sh work PROJ-1) >"$WORK/t22.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -ne 0 ]; then
+    bad "test22 (herdr exit, hung worker): land-branch.sh exited $RC:
+$(tail -15 "$WORK/t22.out")"
+elif ! grep -q "did not exit its Claude session within 2s — removing its workspace anyway" "$WORK/t22.out"; then
+    bad "test22: missing the bounded-wait warning:
+$(cat "$WORK/t22.out")"
+elif ! grep -q "^worktree remove" "$STUB_HERDR_LOG"; then
+    bad "test22: workspace was never removed after the hung worker's wait expired:
+$(cat "$STUB_HERDR_LOG")"
+else
+    ok "test22: a hung worker is logged, not left blocking the landing — its workspace is still removed"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]
