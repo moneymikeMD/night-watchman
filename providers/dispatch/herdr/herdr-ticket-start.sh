@@ -13,8 +13,23 @@
 # unattended agent processes back to back.
 #
 # Usage:
-#   herdr-ticket-start.sh <ticket-id> --jira-progress-status ID [--model sonnet|opus|haiku] [--wait|--no-wait] [--dry-run]
+#   herdr-ticket-start.sh <ticket-id> --jira-progress-status ID [--model sonnet|opus|haiku] [--timebox TEXT] [--forbidden TEXT]... [--wait|--no-wait] [--dry-run]
 #   herdr-ticket-start.sh --help
+#
+# BRIEF. Step 3 sends a complete brief rendered from templates/dispatch-brief.md
+# ($HERDR_BRIEF_TEMPLATE overrides): TRACKER, TIMEBOX, FORBIDDEN, REPORT and
+# STANDING, so no second prompt is needed for the initial brief. STANDING
+# lives only in the template, which the session-start skill points at; the
+# script must run from any checkout and cannot depend on the skill's path.
+# --timebox TEXT and --forbidden TEXT (repeatable) give the per-ticket lines;
+# defaults come from [dispatch.brief] `timebox` and `forbidden` in the
+# config. If either is empty the script dies naming it before any herdr or
+# tracker call. The TRACKER line carries the --jira-api path, the project key and
+# [dispatch.brief] `cloud_id` if set. --dry-run prints the full brief.
+#
+# REQUIRED INPUTS. Export ISSUES_JIRA_API (or pass --jira-api PATH) or the
+# script dies before doing anything. --jira-progress-status takes the STATUS
+# id of In Progress (e.g. 3), NOT the transition id (e.g. 21).
 #
 # LIFECYCLE. A ticket is In Progress from the moment it is dispatched. After
 # the brief hand-off returns (observed `working`, by default), the ticket is
@@ -193,6 +208,9 @@ EXECUTOR_HUMAN_ID="${HERDR_EXECUTOR_HUMAN_ID:-10021}"
 EXECUTOR_MIXED_ID="${HERDR_EXECUTOR_MIXED_ID:-10022}"
 JIRA_API="${ISSUES_JIRA_API:-}"
 PROGRESS_STATUS="${HERDR_JIRA_PROGRESS_STATUS:-}"
+BRIEF_TEMPLATE="${HERDR_BRIEF_TEMPLATE:-$HERE/../../../templates/dispatch-brief.md}"
+TIMEBOX=""
+FORBIDDEN=""
 
 # ------------------------------------------------------------------- parse
 
@@ -224,6 +242,16 @@ while [ $# -gt 0 ]; do
             PROGRESS_STATUS="$2"
             shift 2
             ;;
+        --timebox)
+            [ $# -ge 2 ] || die "--timebox needs text, e.g. \"3 hours\""
+            TIMEBOX="$2"
+            shift 2
+            ;;
+        --forbidden)
+            [ $# -ge 2 ] || die "--forbidden needs text"
+            FORBIDDEN="${FORBIDDEN:+$FORBIDDEN$'\n'}- $2"
+            shift 2
+            ;;
         --dry-run) DRY_RUN=1; shift ;;
         --wait) WAIT_MODE="full"; shift ;;
         --no-wait) WAIT_MODE="none"; shift ;;
@@ -242,7 +270,7 @@ case "$MODEL" in
     sonnet|opus|haiku) ;;
     *) die "--model must be one of sonnet, opus, haiku (got '$MODEL')" ;;
 esac
-[ -n "$PROGRESS_STATUS" ] || die "--jira-progress-status is required (or \$HERDR_JIRA_PROGRESS_STATUS) — the In Progress status id; no default exists across trackers"
+[ -n "$PROGRESS_STATUS" ] || die "--jira-progress-status is required (or \$HERDR_JIRA_PROGRESS_STATUS) — the STATUS id of In Progress (e.g. 3), not a transition id (e.g. 21); no default exists across trackers"
 case "$PROGRESS_STATUS" in
     *[!0-9]*) die "--jira-progress-status must be numeric (got '$PROGRESS_STATUS')" ;;
 esac
@@ -262,6 +290,33 @@ esac
 command -v herdr >/dev/null 2>&1 || stop2 "'herdr' is not on PATH"
 command -v jq >/dev/null 2>&1 || stop2 "'jq' is not on PATH"
 command -v git >/dev/null 2>&1 || stop2 "'git' is not on PATH"
+
+CFG_LIB="$HERE/../../lib/config.sh"
+CFG_PROJECT=""
+CFG_CLOUD_ID=""
+if [ -f "$CFG_LIB" ]; then
+    # shellcheck source=../../lib/config.sh
+    . "$CFG_LIB"
+    [ -n "$TIMEBOX" ] || TIMEBOX=$(nw_config_get dispatch.brief.timebox "" 2>/dev/null) || true
+    if [ -z "$FORBIDDEN" ]; then
+        CFG_FORBIDDEN=$(nw_config_get dispatch.brief.forbidden "" 2>/dev/null) || true
+        [ -z "$CFG_FORBIDDEN" ] || FORBIDDEN="- $CFG_FORBIDDEN"
+    fi
+    CFG_PROJECT=$(nw_config_get tracker.jira.project "" 2>/dev/null) || true
+    CFG_CLOUD_ID=$(nw_config_get dispatch.brief.cloud_id "" 2>/dev/null) || true
+fi
+[ -n "$TIMEBOX" ] || die "no TIMEBOX: pass --timebox TEXT or set [dispatch.brief] timebox — an incomplete brief is never sent"
+[ -n "$FORBIDDEN" ] || die "no FORBIDDEN: pass --forbidden TEXT (repeatable) or set [dispatch.brief] forbidden — an incomplete brief is never sent"
+TRACKER_LINE="Jira project ${CFG_PROJECT:-${TICKET_UPPER%%-*}}; API wrapper ${JIRA_API:-unset} (raw GET/POST /issue/$TICKET_UPPER...); status ids, not transition ids"
+[ -z "$CFG_CLOUD_ID" ] || TRACKER_LINE="$TRACKER_LINE; connector cloud id $CFG_CLOUD_ID"
+TEMPLATE_BODY=$(awk 'f{print; next} /^# /{f=1; print}' "$BRIEF_TEMPLATE" 2>/dev/null) || stop2 "cannot read brief template $BRIEF_TEMPLATE"
+[ -n "$TEMPLATE_BODY" ] || stop2 "brief template $BRIEF_TEMPLATE is missing or has no heading"
+PROMPT_TEXT=${TEMPLATE_BODY//@KEY@/$TICKET_UPPER}
+PROMPT_TEXT=${PROMPT_TEXT//@BRANCH@/$BRANCH}
+PROMPT_TEXT=${PROMPT_TEXT//@MODEL@/$MODEL}
+PROMPT_TEXT=${PROMPT_TEXT//@TRACKER@/$TRACKER_LINE}
+PROMPT_TEXT=${PROMPT_TEXT//@TIMEBOX@/$TIMEBOX}
+PROMPT_TEXT=${PROMPT_TEXT//@FORBIDDEN@/$FORBIDDEN}
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || stop2 "not inside a git repository"
 cd "$REPO"
@@ -387,7 +442,6 @@ $(cat "$JIRA_ERR" 2>/dev/null)"
 fi
 
 LABEL="$TICKET_UPPER $TITLE"
-PROMPT_TEXT="Load the session-start skill's 'Dispatching a wave through a worktree-dispatch tool' guidance for $TICKET_UPPER (see it in Jira) and work it to the ticket's verify block. Commit on this branch only."
 
 # PROMPT_ARGS / WAIT_SUFFIX — the extra herdr flags step 3 runs with
 # (PROMPT_ARGS, an array — used for the real call) and prints (WAIT_SUFFIX,
@@ -419,12 +473,15 @@ if [ "$DRY_RUN" = 1 ]; then
     echo "Plan for $TICKET_UPPER (model: $MODEL, branch: $BRANCH):"
     echo "  1. herdr worktree create --cwd \"$REPO\" --branch \"$BRANCH\" --label \"$LABEL\" --no-focus"
     echo "  2. herdr agent start \"$BRANCH\" --kind claude --pane <pane-from-step-1> -- --model \"$MODEL\""
-    echo "  3. herdr agent prompt \"$BRANCH\" \"$PROMPT_TEXT\"$WAIT_SUFFIX"
+    echo "  3. herdr agent prompt \"$BRANCH\" <brief below>$WAIT_SUFFIX"
     if [ -n "$TRANSITION_ID" ]; then
         echo "  4. transition $TICKET_UPPER '$STATUS_NAME' -> '$TRANSITION_TO': POST /issue/$TICKET_UPPER/transitions {\"transition\":{\"id\":\"$TRANSITION_ID\"}} (resolved from target status $PROGRESS_STATUS), then read back"
     else
         echo "  4. $TICKET_UPPER is already '$STATUS_NAME' (status $PROGRESS_STATUS) — no transition"
     fi
+    echo
+    echo "Brief:"
+    printf '%s\n' "$PROMPT_TEXT"
     echo
     echo "--dry-run: stopping before any herdr-mutating command or tracker write. Nothing was created or sent."
     exit 0

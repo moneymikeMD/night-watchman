@@ -56,6 +56,16 @@ vault = "Private"
 # wave's panes are opened in.
 workspace = "night-watchman"
 
+[dispatch.brief]
+# Defaults for the brief `dispatch start` sends as the agent's first prompt,
+# used when --timebox / --forbidden are not passed. start dies naming
+# whichever is still empty rather than send an incomplete brief.
+timebox = "3 hours"
+forbidden = "do not touch paths outside the ticket's touches"
+# Optional: the Atlassian connector cloud id, printed in the brief's tracker
+# line. Uncomment and fill in if agents reach Jira through the connector.
+# cloud_id = "00000000-0000-0000-0000-000000000000"
+
 [memory.memorygraph]
 # Every memory this repo stores is tagged with this, so a single global
 # graph shared across repos can still be recalled per project.
