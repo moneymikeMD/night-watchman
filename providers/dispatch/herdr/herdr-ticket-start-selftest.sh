@@ -43,6 +43,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 SUT_SRC="$HERE/herdr-ticket-start.sh"
 KIT_SRC="$HERE/lib/kit.sh"
 BRIEF_SRC="$HERE/../../../templates/dispatch-brief.md"
+CONFIG_SRC="$HERE/../../lib/config.sh"
+SUT_REL="providers/dispatch/herdr"
+[ -f "$CONFIG_SRC" ] || die "cannot find providers/lib/config.sh"
 [ -f "$BRIEF_SRC" ] || die "cannot find templates/dispatch-brief.md"
 [ -f "$SUT_SRC" ] || die "cannot find herdr-ticket-start.sh next to this selftest"
 [ -f "$KIT_SRC" ] || die "cannot find lib/kit.sh"
@@ -128,11 +131,12 @@ make_repo() {
     local d
     d=$(mktemp -d "${TMPDIR:-/tmp}/herdr-ticket-start-selftest.XXXXXX") || return 1
     SCRATCH_DIRS="$SCRATCH_DIRS $d"
-    mkdir -p "$d/lib" "$d/bin" "$d/.githooks-empty" || return 1
-    cp "$SUT_SRC" "$d/herdr-ticket-start.sh" || return 1
-    chmod +x "$d/herdr-ticket-start.sh" || return 1
-    cp "$KIT_SRC" "$d/lib/kit.sh" || return 1
-    cp "$BRIEF_SRC" "$d/dispatch-brief.md" || return 1
+    mkdir -p "$d/$SUT_REL/lib" "$d/providers/lib" "$d/templates" "$d/bin" "$d/.githooks-empty" || return 1
+    cp "$SUT_SRC" "$d/$SUT_REL/herdr-ticket-start.sh" || return 1
+    chmod +x "$d/$SUT_REL/herdr-ticket-start.sh" || return 1
+    cp "$KIT_SRC" "$d/$SUT_REL/lib/kit.sh" || return 1
+    cp "$CONFIG_SRC" "$d/providers/lib/config.sh" || return 1
+    cp "$BRIEF_SRC" "$d/templates/dispatch-brief.md" || return 1
     git -C "$d" init -q -b main || return 1
     git -C "$d" config core.hooksPath "$d/.githooks-empty" || return 1
     git -C "$d" config commit.gpgsign false || return 1
@@ -380,13 +384,13 @@ run_sut() {
     local brief_flags=(--timebox "3 hours" --forbidden "selftest ban")
     [ "${RUN_SUT_NO_BRIEF:-0}" = 1 ] && brief_flags=()
     set -- ${brief_flags[@]+"${brief_flags[@]}"} "$@"
-    export HERDR_BRIEF_TEMPLATE="$repo/dispatch-brief.md"
+    unset NW_CONFIG NW_ROOT
     if [ "${RUN_SUT_NO_PROGRESS:-0}" = 1 ]; then
-        ( cd "$repo" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
+        ( cd "$repo/$SUT_REL" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
             STUB_JIRA_LOG="${STUB_JIRA_LOG:-$repo/jira.log}" \
             ./herdr-ticket-start.sh "$ticket" --jira-api "$repo/bin/jira-api-stub.sh" "$@" 2>&1 )
     else
-        ( cd "$repo" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
+        ( cd "$repo/$SUT_REL" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
             STUB_JIRA_LOG="${STUB_JIRA_LOG:-$repo/jira.log}" \
             ./herdr-ticket-start.sh "$ticket" --jira-api "$repo/bin/jira-api-stub.sh" \
             --jira-progress-status "${RUN_SUT_PROGRESS:-3}" "$@" 2>&1 )
@@ -778,7 +782,7 @@ scenario_herdr_missing() {
     local repo rc
     repo=$(make_repo) || { echo "FAIL: F0 setup (make_repo)" >&2; FAIL=1; return; }
 
-    ( cd "$repo" && HERDR_ENV=1 PATH="/usr/bin:/bin" ./herdr-ticket-start.sh PROJ-950 --jira-api "$repo/bin/jira-api-stub.sh" --jira-progress-status 3 ) \
+    ( cd "$repo/$SUT_REL" && HERDR_ENV=1 PATH="/usr/bin:/bin" ./herdr-ticket-start.sh PROJ-950 --jira-api "$repo/bin/jira-api-stub.sh" --jira-progress-status 3 ) \
         >/dev/null 2>&1 && rc=0 || rc=$?
 
     assert_eq "F0 exit code is 2 (could not evaluate)" "2" "$rc"
@@ -1151,10 +1155,28 @@ scenario_brief_missing_field() {
         fi
         assert_eq "B2 $field missing exit code" "1" "$rc"
         assert_contains "B2 $field missing names the field" "$out" "no $(printf '%s' "$field" | tr '[:lower:]' '[:upper:]')"
+        assert_eq "B2 $field missing worktree list calls" "0" "$(call_count "$log" "worktree list")"
         assert_eq "B2 $field missing worktree create calls" "0" "$(call_count "$log" "worktree create")"
         assert_eq "B2 $field missing agent start calls" "0" "$(call_count "$log" "agent start")"
         assert_eq "B2 $field missing agent prompt calls" "0" "$(call_count "$log" "agent prompt")"
     done
+}
+
+# B5 — with no flags, [dispatch.brief] timebox/forbidden/cloud_id and
+# [tracker.jira] project come from the repo's .night-watchman/config.toml.
+scenario_brief_config_defaults() {
+    local repo out rc
+    repo=$(make_repo) || { echo "FAIL: B5 setup" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10020 "Scratch brief config ticket"
+    install_stub_herdr "$repo"
+    mkdir -p "$repo/.night-watchman"
+    printf '[tracker.jira]\nproject = "CFGP"\n[dispatch.brief]\ntimebox = "45 minutes"\nforbidden = "config ban"\ncloud_id = "cloud-123"\n' > "$repo/.night-watchman/config.toml"
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_NO_BRIEF=1 run_sut "$repo" PROJ-945 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "B5 exit code" "0" "$rc"
+    assert_contains "B5 config timebox" "$out" "45 minutes. On expiry"
+    assert_contains "B5 config forbidden" "$out" "- config ban"
+    assert_contains "B5 config project" "$out" "Jira project CFGP"
+    assert_contains "B5 config cloud id" "$out" "connector cloud id cloud-123"
 }
 
 # B4 — the missing-status refusal names the STATUS id, not the transition id.
@@ -1210,6 +1232,7 @@ scenario_brief_dry_run
 scenario_brief_sent
 scenario_brief_missing_field
 scenario_brief_status_hint
+scenario_brief_config_defaults
 
 if [ "$FAIL" = 1 ]; then
     echo "herdr-ticket-start-selftest.sh: FAILED" >&2

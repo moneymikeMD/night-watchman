@@ -492,6 +492,9 @@ for key in space root_page; do
 done
 eq "the template's publish.atlassian.project_name is the placeholder" "PROJ" "$(tpl_get publish.atlassian.project_name)"
 eq "the template's publish.atlassian.status is the documented default" "on_track" "$(tpl_get publish.atlassian.status)"
+eq "the template's dispatch.brief.timebox is the documented default" "3 hours" "$(tpl_get dispatch.brief.timebox)"
+eq "the template's dispatch.brief.forbidden is set" "do not touch paths outside the ticket's touches" "$(tpl_get dispatch.brief.forbidden)"
+eq "the template carries no dispatch.brief.cloud_id (commented-out example)" "" "$(tpl_get dispatch.brief.cloud_id)"
 eq "the template carries no publish host (it falls back to the tracker's)" "" "$(tpl_get publish.atlassian.host)"
 for key in publish.atlassian.project_feed publish.atlassian.feeds.PROJ-1; do
     eq "the template's $key is the all-zero placeholder ARI" \

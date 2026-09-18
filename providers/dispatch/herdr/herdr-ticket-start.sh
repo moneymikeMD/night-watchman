@@ -23,8 +23,8 @@
 # script must run from any checkout and cannot depend on the skill's path.
 # --timebox TEXT and --forbidden TEXT (repeatable) give the per-ticket lines;
 # defaults come from [dispatch.brief] `timebox` and `forbidden` in the
-# config. If either is empty the script dies naming it before any herdr
-# call. The TRACKER line carries the --jira-api path, the project key and
+# config. If either is empty the script dies naming it before any herdr or
+# tracker call. The TRACKER line carries the --jira-api path, the project key and
 # [dispatch.brief] `cloud_id` if set. --dry-run prints the full brief.
 #
 # REQUIRED INPUTS. Export ISSUES_JIRA_API (or pass --jira-api PATH) or the
@@ -291,6 +291,33 @@ command -v herdr >/dev/null 2>&1 || stop2 "'herdr' is not on PATH"
 command -v jq >/dev/null 2>&1 || stop2 "'jq' is not on PATH"
 command -v git >/dev/null 2>&1 || stop2 "'git' is not on PATH"
 
+CFG_LIB="$HERE/../../lib/config.sh"
+CFG_PROJECT=""
+CFG_CLOUD_ID=""
+if [ -f "$CFG_LIB" ]; then
+    # shellcheck source=../../lib/config.sh
+    . "$CFG_LIB"
+    [ -n "$TIMEBOX" ] || TIMEBOX=$(nw_config_get dispatch.brief.timebox "" 2>/dev/null) || true
+    if [ -z "$FORBIDDEN" ]; then
+        CFG_FORBIDDEN=$(nw_config_get dispatch.brief.forbidden "" 2>/dev/null) || true
+        [ -z "$CFG_FORBIDDEN" ] || FORBIDDEN="- $CFG_FORBIDDEN"
+    fi
+    CFG_PROJECT=$(nw_config_get tracker.jira.project "" 2>/dev/null) || true
+    CFG_CLOUD_ID=$(nw_config_get dispatch.brief.cloud_id "" 2>/dev/null) || true
+fi
+[ -n "$TIMEBOX" ] || die "no TIMEBOX: pass --timebox TEXT or set [dispatch.brief] timebox — an incomplete brief is never sent"
+[ -n "$FORBIDDEN" ] || die "no FORBIDDEN: pass --forbidden TEXT (repeatable) or set [dispatch.brief] forbidden — an incomplete brief is never sent"
+TRACKER_LINE="Jira project ${CFG_PROJECT:-${TICKET_UPPER%%-*}}; API wrapper ${JIRA_API:-unset} (raw GET/POST /issue/$TICKET_UPPER...); status ids, not transition ids"
+[ -z "$CFG_CLOUD_ID" ] || TRACKER_LINE="$TRACKER_LINE; connector cloud id $CFG_CLOUD_ID"
+TEMPLATE_BODY=$(awk 'f{print; next} /^# /{f=1; print}' "$BRIEF_TEMPLATE" 2>/dev/null) || stop2 "cannot read brief template $BRIEF_TEMPLATE"
+[ -n "$TEMPLATE_BODY" ] || stop2 "brief template $BRIEF_TEMPLATE is missing or has no heading"
+PROMPT_TEXT=${TEMPLATE_BODY//@KEY@/$TICKET_UPPER}
+PROMPT_TEXT=${PROMPT_TEXT//@BRANCH@/$BRANCH}
+PROMPT_TEXT=${PROMPT_TEXT//@MODEL@/$MODEL}
+PROMPT_TEXT=${PROMPT_TEXT//@TRACKER@/$TRACKER_LINE}
+PROMPT_TEXT=${PROMPT_TEXT//@TIMEBOX@/$TIMEBOX}
+PROMPT_TEXT=${PROMPT_TEXT//@FORBIDDEN@/$FORBIDDEN}
+
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || stop2 "not inside a git repository"
 cd "$REPO"
 
@@ -415,32 +442,6 @@ $(cat "$JIRA_ERR" 2>/dev/null)"
 fi
 
 LABEL="$TICKET_UPPER $TITLE"
-CFG_LIB="$HERE/../../lib/config.sh"
-CFG_PROJECT=""
-CFG_CLOUD_ID=""
-if [ -f "$CFG_LIB" ]; then
-    # shellcheck source=../../lib/config.sh
-    . "$CFG_LIB"
-    [ -n "$TIMEBOX" ] || TIMEBOX=$(nw_config_get dispatch.brief.timebox "" 2>/dev/null) || true
-    if [ -z "$FORBIDDEN" ]; then
-        CFG_FORBIDDEN=$(nw_config_get dispatch.brief.forbidden "" 2>/dev/null) || true
-        [ -z "$CFG_FORBIDDEN" ] || FORBIDDEN="- $CFG_FORBIDDEN"
-    fi
-    CFG_PROJECT=$(nw_config_get tracker.jira.project "" 2>/dev/null) || true
-    CFG_CLOUD_ID=$(nw_config_get dispatch.brief.cloud_id "" 2>/dev/null) || true
-fi
-[ -n "$TIMEBOX" ] || die "no TIMEBOX: pass --timebox TEXT or set [dispatch.brief] timebox — an incomplete brief is never sent"
-[ -n "$FORBIDDEN" ] || die "no FORBIDDEN: pass --forbidden TEXT (repeatable) or set [dispatch.brief] forbidden — an incomplete brief is never sent"
-TRACKER_LINE="Jira project ${CFG_PROJECT:-${TICKET_UPPER%%-*}}; API wrapper ${JIRA_API:-unset} (raw GET/POST /issue/$TICKET_UPPER...); status ids, not transition ids"
-[ -z "$CFG_CLOUD_ID" ] || TRACKER_LINE="$TRACKER_LINE; connector cloud id $CFG_CLOUD_ID"
-TEMPLATE_BODY=$(awk 'f{print; next} /^# /{f=1; print}' "$BRIEF_TEMPLATE" 2>/dev/null) || stop2 "cannot read brief template $BRIEF_TEMPLATE"
-[ -n "$TEMPLATE_BODY" ] || stop2 "brief template $BRIEF_TEMPLATE is missing or has no heading"
-PROMPT_TEXT=${TEMPLATE_BODY//@KEY@/$TICKET_UPPER}
-PROMPT_TEXT=${PROMPT_TEXT//@BRANCH@/$BRANCH}
-PROMPT_TEXT=${PROMPT_TEXT//@MODEL@/$MODEL}
-PROMPT_TEXT=${PROMPT_TEXT//@TRACKER@/$TRACKER_LINE}
-PROMPT_TEXT=${PROMPT_TEXT//@TIMEBOX@/$TIMEBOX}
-PROMPT_TEXT=${PROMPT_TEXT//@FORBIDDEN@/$FORBIDDEN}
 
 # PROMPT_ARGS / WAIT_SUFFIX — the extra herdr flags step 3 runs with
 # (PROMPT_ARGS, an array — used for the real call) and prints (WAIT_SUFFIX,
