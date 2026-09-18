@@ -60,6 +60,12 @@ jobs:
       - name: known-issues index is not drifted
         run: scripts/known-issue.sh lint
 
+  comment-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/comment-lint.py
+
   docs-site:
     # Mirrors website-deploy.yml's frozen install: catches a desynced
     # package.json/bun.lock before the deploy does.
