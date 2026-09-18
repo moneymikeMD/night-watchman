@@ -68,3 +68,26 @@ jobs:
 
       - name: known-issues index is not drifted
         run: scripts/known-issue.sh lint
+
+  docs-site:
+    # The docs site is the only part of this repo with third-party
+    # dependencies, and website-deploy.yml installs it with
+    # `bun install --frozen-lockfile` — which fails by design when
+    # package.json and bun.lock disagree. Running the same frozen install here
+    # means a dependency PR that desyncs the two fails BEFORE it reaches the
+    # deploy, rather than breaking the published site.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: frozen install (the lockfile must already agree with package.json)
+        working-directory: docs/preview/website
+        run: bun install --frozen-lockfile
+
+      - name: build
+        working-directory: docs/preview/website
+        run: bunx --bun astro build
