@@ -57,11 +57,11 @@ to?" in the repo's own history.
 
 ## Docs
 
-The full docs site lives at `docs/preview/website` and is not published
-yet, so browse it locally instead: `cd docs/preview/website && bun install
-&& bun run dev`. For everything else this README doesn't cover —
-decision logs, known issues, testing philosophy, session handoffs — start
-at [docs/README.md](docs/README.md).
+Read the full docs site at https://moneymikemd.github.io/night-watchman/.
+To work on the site itself, its source is `docs/preview/website`:
+`cd docs/preview/website && bun install && bun run dev`. For everything
+else this README doesn't cover — decision logs, known issues, testing
+philosophy, session handoffs — start at [docs/README.md](docs/README.md).
 
 ## Optional layers
 
