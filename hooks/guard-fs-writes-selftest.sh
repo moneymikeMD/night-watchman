@@ -599,6 +599,11 @@ assert_exit "blocks 'xargs bash -c \"true\" rm -rf <outside>'" 2 "$GOT"
 GOT="$(run_guard "$FAKE_WORKTREE" "echo \"\$(echo \"\$(true)\")\" rm -rf $OUT")"
 assert_exit "blocks nested \$( \$( ) ) inside a double-quoted word followed by rm -rf <outside>" 2 "$GOT"
 
+GOT="$(run_guard "$FAKE_WORKTREE" "find . -exec bash -c \"true\" rm -rf $OUT \\;")"
+assert_exit "blocks 'find -exec bash -c \"true\" rm -rf <outside>' — the -exec command's own trailing words" 2 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" "find . -exec sh -c \"x\" mv a $OUT/b \\;")"
+assert_exit "blocks 'find -exec sh -c \"x\" mv a <outside>/b'" 2 "$GOT"
+
 GOT="$(run_guard "$FAKE_WORKTREE" "bash -c \"true\" echo hello")"
 assert_exit "allows 'bash -c \"true\" echo hello' (harmless trailing command)" 0 "$GOT"
 GOT="$(run_guard "$FAKE_WORKTREE" "sh -c \"x\" ls -la")"
