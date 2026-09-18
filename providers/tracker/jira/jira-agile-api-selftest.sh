@@ -5,26 +5,8 @@
 # real credential, never a real board. JIRA_HOST is pointed at 127.0.0.1 as
 # belt and braces on top of the stub.
 #
-# Fixtures under fixtures/ are real bodies captured live against a real
-# Jira Cloud site (a throwaway scratch project, created and deleted, never
-# touching a real board) — see each fixture's header comment for the exact
-# command. The two synthetic bodies below (WEIRD_STATE_JSON,
-# ERROR_CREDSHAPE_JSON) are inline in this file, not under fixtures/, and
-# are labelled as synthetic: they test a defensive branch (a sprint state
-# Jira has never actually returned) and the redaction machinery itself,
-# neither of which a real capture can supply.
-#
-# What this file proves:
-#   1. --dry-run reaches no network (no request, no credential read)
-#   2. `write` refuses without --yes and without a terminal
-#   3. sprint-close's state-check branch: a 404 (sprint not found) and an
-#      unexpected state both exit non-zero with the right message
-#   4. a 4xx error body passes through redaction (error_body/redact_json)
-#   5. sprint-add-issue's argument handling
-#   6. sprint-update builds a partial body from only the flags given, and
-#      refuses with none
-#   7. sprint-delete's state-check branch: refuses on active/closed/unknown,
-#      proceeds on future, and skips the pre-flight GET under --dry-run
+# Fixtures under fixtures/ are real bodies captured live against a throwaway
+# scratch project. The two inline bodies below are labelled SYNTHETIC.
 #
 # Usage: ./jira-agile-api-selftest.sh
 
@@ -67,9 +49,8 @@ assert_nonzero() {
         FAIL=1
     fi
 }
-# assert_nonempty / assert_empty — a "no request was issued" assertion is
-# meaningless unless paired with a case proving a request CAN reach the
-# same stub.
+# A "no request was issued" assertion is meaningless unless paired with a
+# case proving a request CAN reach the same stub.
 assert_nonempty() {
     local desc="$1" f="$2"
     if [ -s "$f" ]; then
@@ -96,21 +77,14 @@ trap 'rm -rf "$TMPD"' EXIT
 STUBDIR="$TMPD/bin"
 mkdir -p "$STUBDIR"
 
-# --------------------------------------------------------------- fixtures
-#
 # Real captures (see each file's own header for the exact command that
 # produced it).
 SPRINT_FUTURE="$FIXDIR/sprint.future.txt"
 SPRINT_ACTIVE="$FIXDIR/sprint.active.txt"
 SPRINT_CLOSED="$FIXDIR/sprint.closed.txt"
-# Each fixture's header comment length varies (some cite one command line,
-# some cite two, some carry an "HTTP nnn" status line before the body) — the
-# strip point is computed from the actual file rather than a hardcoded line
-# count, so a future re-recording with a longer header can't silently start
-# the JSON body one line early or late.
+# The strip point is computed from the file, never a hardcoded line count,
+# so a re-recording with a different header cannot shift the JSON body.
 strip_fixture_header() {
-    # Drops comment lines and a lone "HTTP <code>" status line; a JSON body
-    # never matches either pattern, so no state machine is needed.
     awk '/^#/{next} /^HTTP [0-9]+$/{next} {print}' "$1"
 }
 ERROR_NOT_FOUND="$TMPD/error-not-found.json"
@@ -124,24 +98,19 @@ strip_fixture_header "$SPRINT_FUTURE" > "$SPRINT_FUTURE_BODY"
 SPRINT_CLOSED_BODY="$TMPD/sprint-closed-body.json"
 strip_fixture_header "$SPRINT_CLOSED" > "$SPRINT_CLOSED_BODY"
 
-# SYNTHETIC — Jira has never been observed returning this; it exercises
-# do_sprint_close's defensive `*)` branch, which a real capture cannot
-# supply because there is no real state value to trigger it with.
+# SYNTHETIC — no real state value can reach do_sprint_close's `*)` branch.
 WEIRD_STATE_JSON="$TMPD/sprint-weird-state.json"
 cat > "$WEIRD_STATE_JSON" <<'JSON'
 {"id":99,"state":"quantum","name":"synthetic-not-a-real-jira-state","originBoardId":10}
 JSON
 
-# SYNTHETIC — proves error_body's redact_json pass actually redacts a
-# credential-shaped key, independent of whether the real agile API has ever
-# been observed sending one (it hasn't, per the header note this selftest
-# also covers with ERROR_NOT_FOUND / CLOSE_FUTURE_REJECTED above).
+# SYNTHETIC — the real agile API has never been seen sending a
+# credential-shaped key, so redaction needs its own case.
 ERROR_CREDSHAPE_JSON="$TMPD/error-credshape.json"
 cat > "$ERROR_CREDSHAPE_JSON" <<'JSON'
 {"errorMessages":["bad request"],"apiToken":"SENTINEL-SHOULD-BE-REDACTED"}
 JSON
 
-# --------------------------------------------------------------- stub curl
 cat > "$STUBDIR/curl" <<'CURLEOF'
 #!/bin/bash
 printf '%s\n' "$*" >> "$ARGVLOG"
@@ -192,11 +161,8 @@ printf '%s' "${STUB_HTTP_CODE:-200}"
 CURLEOF
 chmod +x "$STUBDIR/curl"
 
-# --------------------------------------------------------------- run helper
-#
-# stdin is /dev/null: [ -t 0 ] must read false, so the no-terminal branch of
-# the write guard (the one under test in section 2) is reachable rather than
-# blocking on a prompt.
+# stdin is /dev/null so [ -t 0 ] reads false and the write guard's
+# no-terminal branch is reachable rather than blocking on a prompt.
 run() {
     local name="$1"; shift
     local rc=0
@@ -217,22 +183,14 @@ run() {
     LAST_ERR=$(cat "$errf")
 }
 
-# =================================================================
-# 0. baseline — the happy path reaches the stub, so every "no request"
-#    assertion below is meaningful.
-# =================================================================
+# 0. baseline: the happy path reaches the stub, so every "no request" case means something
 STUB_BODY_FILE="$SPRINT_ACTIVE_BODY" run base0 sprint 5
 assert_eq "0: sprint view exits 0" "0" "$LAST_RC"
 assert_nonempty "0: sprint view actually issued a request" "$LAST_REQLOG"
 check "0: request goes to 127.0.0.1" "$(cat "$LAST_REQLOG")" "https://127.0.0.1/rest/agile/1.0/sprint/5"
 check "0: prints the active state" "$LAST_OUT" "State:     active"
 
-# =================================================================
-# 1. --dry-run reaches no network at all: no request, no credential read.
-#    Covers both a plain read-style dry-run flag combo (--dry-run write)
-#    and sprint-close's own pre-flight GET, which must be skipped entirely
-#    under --dry-run (do_sprint_close's `if [ "$DRY_RUN" != "1" ]` guard).
-# =================================================================
+# 1. --dry-run reaches no network at all: no request, no credential read
 run dry1 --dry-run write POST /sprint '{"name":"x","originBoardId":10}'
 assert_eq "1a: --dry-run write exits 0" "0" "$LAST_RC"
 assert_empty "1a: --dry-run write sends no request" "$LAST_REQLOG"
@@ -254,10 +212,7 @@ run dry5 --dry-run sprint-delete 5
 assert_eq "1e: --dry-run sprint-delete exits 0" "0" "$LAST_RC"
 assert_empty "1e: --dry-run sprint-delete never runs the pre-flight state GET" "$LAST_REQLOG"
 
-# =================================================================
-# 2. write refuses without --yes and without a terminal (run's stdin is
-#    /dev/null, so have_terminal is false here).
-# =================================================================
+# 2. write refuses without --yes and without a terminal
 run noyes1 write POST /sprint '{"name":"x","originBoardId":10}'
 assert_nonzero "2a: write with no --yes and no terminal is refused" "$LAST_RC"
 assert_empty "2a: refused write sends no request" "$LAST_REQLOG"
@@ -271,14 +226,7 @@ STUB_HTTP_CODE=201 run yes1 --yes write POST /sprint '{"name":"x","originBoardId
 assert_eq "2c: --yes clears the same guard (positive control)" "0" "$LAST_RC"
 assert_nonempty "2c: --yes actually sends the request" "$LAST_REQLOG"
 
-# =================================================================
-# 3. sprint-close's state-check branch: a 404 (sprint not found) and each
-#    terminal/defensive state give a non-zero exit and the right message.
-#    Also exercises the die-inside-pipe reliance on `set -o pipefail` (see
-#    the call site's comment in jira-agile-api.sh): a non-2xx from the
-#    pre-flight GET must still make sprint-close exit non-zero even though
-#    it sits inside `api ... | jq` inside a command substitution.
-# =================================================================
+# 3. sprint-close's state check: a 404 and each terminal state exit non-zero
 STUB_HTTP_CODE=404 STUB_BODY_FILE="$ERROR_NOT_FOUND" run close404 sprint-close 999999999
 assert_nonzero "3a: sprint-close on a 404 (sprint not found) exits non-zero" "$LAST_RC"
 assert_nonempty "3a: the pre-flight GET actually ran" "$LAST_REQLOG"
@@ -301,13 +249,7 @@ STUB_HTTP_CODE=400 STUB_BODY_FILE="$CLOSE_FUTURE_REJECTED" run closefuturedirect
 assert_nonzero "3e: Jira's own rejection of a direct future->closed write exits non-zero" "$LAST_RC"
 check "3e: the real Jira error body is what's shown" "$LAST_ERR" "You must specify a start date"
 
-# =================================================================
-# 4. a 4xx error body is redacted before printing. ERROR_CREDSHAPE_JSON is
-#    synthetic (see its definition above); the two real captures
-#    (ERROR_NOT_FOUND, CLOSE_FUTURE_REJECTED) prove the shapes actually
-#    seen live carry nothing redactable — this case proves the redaction
-#    path still fires when something redactable IS present.
-# =================================================================
+# 4. a 4xx error body is redacted before printing
 STUB_HTTP_CODE=400 STUB_BODY_FILE="$ERROR_CREDSHAPE_JSON" run credshape raw GET /sprint/1
 assert_nonzero "4a: the credential-shaped error body still exits non-zero" "$LAST_RC"
 check_not "4a: the credential-shaped field is redacted out of the error output" "$LAST_ERR" "SENTINEL-SHOULD-BE-REDACTED"
@@ -316,10 +258,7 @@ STUB_HTTP_CODE=404 STUB_BODY_FILE="$ERROR_NOT_FOUND" run realerr raw GET /sprint
 assert_nonzero "4b: the real captured 404 body still exits non-zero" "$LAST_RC"
 check "4b: the real error message passes through" "$LAST_ERR" "We could not find the sprint"
 
-# =================================================================
-# 5. sprint-add-issue's argument handling — needs at least one issue key,
-#    and batches every key given into one request rather than looping.
-# =================================================================
+# 5. sprint-add-issue needs at least one key and batches them into one request
 run addissue0 sprint-add-issue 7
 assert_nonzero "5a: sprint-add-issue with no issue keys is refused" "$LAST_RC"
 check "5a: message names what's missing" "$LAST_ERR" "needs a sprint id and at least one issue key"
@@ -331,10 +270,7 @@ check "5b: both keys land in the single POST body" "$(cat "$LAST_REQLOG")" '"PRO
 check "5b: both keys land in the single POST body" "$(cat "$LAST_REQLOG")" '"PROJ-2"'
 assert_eq "5b: exactly one request was sent for the batch" "1" "$(grep -c '^POST	' "$LAST_REQLOG")"
 
-# =================================================================
-# 6. sprint-update: a partial body built only from the flags given, and a
-#    refusal when none are given at all.
-# =================================================================
+# 6. sprint-update builds a partial body from only the flags given
 run update0 sprint-update 7
 assert_nonzero "6a: sprint-update with no flags is refused" "$LAST_RC"
 check "6a: message names what's missing" "$LAST_ERR" "needs at least one of --name, --goal, --start, --end"
@@ -352,10 +288,7 @@ check "6c: name lands in the body" "$(cat "$LAST_REQLOG")" '"name": "Renamed"'
 check "6c: startDate lands in the body" "$(cat "$LAST_REQLOG")" '"startDate": "2026-09-13T00:00:00.000Z"'
 check "6c: endDate lands in the body" "$(cat "$LAST_REQLOG")" '"endDate": "2026-09-20T00:00:00.000Z"'
 
-# =================================================================
-# 7. sprint-delete's state-check branch — mirrors sprint-close's section 3
-#    but the polarity is reversed: 'future' proceeds, active/closed refuse.
-# =================================================================
+# 7. sprint-delete's state check: 'future' proceeds, active/closed refuse
 STUB_HTTP_CODE=200 STUB_BODY_FILE="$SPRINT_FUTURE_BODY" run delfuture --yes sprint-delete 5
 assert_eq "7a: sprint-delete on a 'future' sprint succeeds" "0" "$LAST_RC"
 assert_eq "7a: exactly two requests (state GET, then DELETE)" "2" "$(wc -l < "$LAST_REQLOG" | tr -d ' ')"

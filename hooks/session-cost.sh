@@ -29,7 +29,6 @@ PLUGIN_ROOT="$(cd "$HERE/.." && pwd)"
 
 warn() { echo "session-cost.sh: $1" >&2; }
 
-# Never lets a failure below this point stop the session from ending.
 trap 'exit 0' EXIT
 
 command -v jq >/dev/null 2>&1 || { warn "jq not found on PATH — skipping"; exit 0; }
@@ -66,9 +65,6 @@ if [ "$SCAN_STATUS" -ne 0 ] || [ -z "$SCAN_JSON" ]; then
     exit 0
 fi
 
-# Fold the per-(session,model) rows into total cost/turns and a model-mix
-# string, and print the three as tab-separated fields on one line — the
-# only interface between the scan JSON and the rest of this bash script.
 SUMMARY="$(python3 - "$SCAN_JSON" <<'PYEOF'
 import json
 import sys
@@ -111,7 +107,6 @@ COST="$(echo "$SUMMARY" | cut -f1)"
 TURNS="$(echo "$SUMMARY" | cut -f2)"
 MODEL_MIX="$(echo "$SUMMARY" | cut -f3)"
 
-# Step 2: append to the project's cost ledger, if one is configured.
 LEDGER="${NW_COST_LEDGER:-$CWD/docs/cost-ledger.tsv}"
 LEDGER_SCRIPT="$PLUGIN_ROOT/scripts/claude-cost.py"
 if [ -f "$LEDGER" ] && [ -f "$LEDGER_SCRIPT" ]; then
@@ -127,14 +122,8 @@ if [ -f "$LEDGER" ] && [ -f "$LEDGER_SCRIPT" ]; then
     fi
 fi
 
-# Step 3: write the untracked state file the outcome comment reads.
-# State lives at the repo's MAIN worktree, never a linked one: a
-# .night-watchman/ written inside a dispatched worktree used to trip
-# land-branch's dirty-tree preflight (handoff 2026-09-14). git lists the
-# main worktree first; fall back to cwd outside a repo.
-# Only when cwd is itself a worktree top (a dispatched worktree, or the
-# main checkout); a plain subdirectory of some repo keeps cwd, so a
-# scratch tree nested inside a real repo never writes into that repo.
+# State goes to the repo's MAIN worktree: a .night-watchman/ written inside a
+# dispatched worktree trips land-branch's dirty-tree preflight.
 ROOT=""
 if [ "$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$CWD" 2>/dev/null && pwd -P)" ]; then
     ROOT="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"

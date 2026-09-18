@@ -143,9 +143,7 @@ triage_path = os.path.join(sub_dir, "agent-%s.jsonl" % triage_id)
 w(triage_path, [assistant("2026-09-13T10:06:00Z", "t1", 5, [{"type": "text", "text": "n/a"}])])
 PYEOF
 
-# =============================================================================
 # extract: full-session scan
-# =============================================================================
 
 run extract --projects-dir "$PROJECTS_DIR" --events "$EVENTS" >/dev/null
 if [ -s "$EVENTS" ]; then
@@ -155,10 +153,8 @@ else
 fi
 
 N_EVENTS=$(wc -l < "$EVENTS" | tr -d ' ')
-# author + rework + lint/selftest(1) + review = 4 events, PLUS the same
-# Bash selftest call also producing its own `invoke` event (a
-# *-selftest.sh path is not excluded from invoke detection the way
-# scripts/lint.sh is) = 5; triage contributes 0.
+# author + rework + lint/selftest + review = 4, plus that same Bash call's own
+# `invoke` event = 5; triage contributes 0.
 if [ "$N_EVENTS" = "5" ]; then
   ok "extract: exactly 5 events (author, rework, selftest, review, selftest's own invoke); triage skipped"
 else
@@ -246,9 +242,7 @@ else
   bad "extract: findings heuristics assertion failed"
 fi
 
-# =============================================================================
 # extract: idempotent re-run, --quiet
-# =============================================================================
 
 OUT2="$(run extract --projects-dir "$PROJECTS_DIR" --events "$EVENTS" --quiet)"
 if [ -z "$OUT2" ]; then
@@ -263,9 +257,7 @@ else
   bad "extract: idempotent re-run should not have grown the events file ($N_EVENTS -> $N_EVENTS2)"
 fi
 
-# =============================================================================
 # extract: --agent-id targets one subagent only
-# =============================================================================
 
 AGENT_EVENTS="$WORK/agent-only.jsonl"
 run extract --projects-dir "$PROJECTS_DIR" --events "$AGENT_EVENTS" --agent-id review1 >/dev/null
@@ -279,9 +271,7 @@ else
   bad "extract: --agent-id targeting assertion failed"
 fi
 
-# =============================================================================
 # extract: an unknown --agent-id is a loud refusal
-# =============================================================================
 
 if run extract --projects-dir "$PROJECTS_DIR" --events "$WORK/nope.jsonl" --agent-id does-not-exist \
     >/dev/null 2>"$WORK/err"; then
@@ -294,9 +284,7 @@ else
   fi
 fi
 
-# =============================================================================
 # extract: --agent-id and --session are mutually exclusive
-# =============================================================================
 
 if run extract --projects-dir "$PROJECTS_DIR" --events "$WORK/nope2.jsonl" \
     --agent-id author1 --session sess1 >/dev/null 2>"$WORK/err"; then
@@ -309,9 +297,7 @@ else
   fi
 fi
 
-# =============================================================================
 # extract: a missing --projects-dir is a loud refusal
-# =============================================================================
 
 if run extract --projects-dir "$WORK/does-not-exist" --events "$WORK/nope3.jsonl" \
     >/dev/null 2>"$WORK/err"; then
@@ -324,9 +310,7 @@ else
   fi
 fi
 
-# =============================================================================
 # record: accepted event, ticket/note validation
-# =============================================================================
 
 run record --events "$EVENTS" --script scripts/script-analytics.py \
   --event accepted --outcome pass --ticket PROJ-42 --note "owner accepted it" >/dev/null
@@ -374,9 +358,7 @@ else
   fi
 fi
 
-# =============================================================================
 # report: rounds/rework/findings/usd surface for the ported script
-# =============================================================================
 
 REPORT_OUT="$(run report --events "$EVENTS" --format tsv)"
 if printf '%s\n' "$REPORT_OUT" | awk -F'\t' '$1 == "scripts/script-analytics.py" { print }' | grep -qE $'^scripts/script-analytics.py\t2\t1\t0\t0\t0\t0\t1\t1\t0\t2\t0'; then
@@ -393,10 +375,8 @@ fi
 
 SLUGDIR="$PROJECTS_DIR/-fixture-repo"
 
-# =============================================================================
 # invoke events: main-thread scan, lint.sh exclusion, non-author/reviewer
 # subagents, and false-positive guards (grep/wc targets, a heredoc body)
-# =============================================================================
 
 SESS_INV="sess-invoke"
 SESS_INV_DIR="$SLUGDIR/$SESS_INV"
@@ -467,10 +447,8 @@ else
   ok "invoke: a grep TARGET path and a heredoc BODY path never produce invoke events"
 fi
 
-# =============================================================================
 # owner_wait events: AskUserQuestion and a configured mcp__spokenly__*
 # trigger both start a wait, ending at the next "type":"user" line
-# =============================================================================
 
 SESS_WAIT="sess-wait"
 mkdir -p "$SLUGDIR/$SESS_WAIT"
@@ -505,10 +483,8 @@ else
   bad "owner_wait: trigger/duration assertion failed (got: $WAIT_CONTENT)"
 fi
 
-# =============================================================================
 # path normalization: a bare basename resolves to its current
 # repo-relative location, both via `record` and via `backfill-script-paths`
-# =============================================================================
 
 NORM_EVENTS="$WORK/events-norm.jsonl"
 run record --events "$NORM_EVENTS" --script claude-cost.py \
@@ -558,10 +534,8 @@ else
   bad "backfill-script-paths: in-place rewrite assertion failed"
 fi
 
-# =============================================================================
 # report --usage: selftest-fixture exclusion, authoring-session/agent-type/
 # selftest-cause exclusions, and the keep/flag/retire? threshold precedence
-# =============================================================================
 
 USAGE_EVENTS="$WORK/events-usage.jsonl"
 cat > "$USAGE_EVENTS" <<'EOF'
@@ -607,14 +581,11 @@ else
   bad "report --usage: owner_wait per-ticket row unexpected (got: $USAGE_OUT)"
 fi
 
-# =============================================================================
 # Per-ticket cost table in `report --usage`
-# =============================================================================
 
-# Two tickets: NWM-100 carries an author (0.001) + review (0.0005) pair in
-# different sessions, NWM-200 a single author (0.002); plus one `invoke`
-# event with ticket "-" that must NOT appear in the per-ticket table at all
-# (invoke events never carry a ticket).
+# NWM-100 carries an author (0.001) + review (0.0005) pair in different
+# sessions, NWM-200 a single author (0.002), plus one `invoke` event with
+# ticket "-" that must NOT appear in the per-ticket table at all.
 TICKETCOST_EVENTS="$WORK/events-ticketcost.jsonl"
 cat > "$TICKETCOST_EVENTS" <<'EOF'
 {"ts": "2026-09-10T00:00:00Z", "script": "scripts/foo.sh", "scripts": ["scripts/foo.sh"], "event": "author", "cause": "-", "outcome": "-", "round": 1, "session": "sess-a", "agent_id": "a1", "agent_type": "script-author", "model": "claude-sonnet-5", "turns": 1, "tokens": 1, "usd": 0.001, "duration_s": 1, "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0}, "ticket": "NWM-100", "source": "transcript", "key": "tc-author", "note": "-"}
@@ -662,18 +633,11 @@ else
   ok "per-ticket cost: the invoke event's ticket '-' never produces a row"
 fi
 
-# =============================================================================
-# --usage's per-script columns (not just row
-# presence) are windowed by --since/--until; the two new wave-summary
-# lines (owner_wait_s, tickets_per_owner_hour) print only when a window
-# is given, so unwindowed output stays byte-identical to before this
-# ticket; window rework_ratio keeps printing unconditionally either way.
-# =============================================================================
+# --usage's per-script COLUMNS are windowed by --since/--until, and
+# owner_wait_s / tickets_per_owner_hour print only when a window is given.
 
-# Lifetime invocations pinned at exactly 10 (8 outside the test window, 2
-# inside) so `flag` is deterministically "keep" via the >=10 precedence
-# rule in BOTH calls, regardless of wall-clock "now" — no --until needed
-# for either call, unlike the elapsed-day boundary fixtures above.
+# Lifetime invocations pinned at exactly 10 (8 outside the window, 2 inside)
+# so `flag` is deterministically "keep" regardless of wall-clock "now".
 WINDOWSPLIT_EVENTS="$WORK/events-windowsplit.jsonl"
 cat > "$WINDOWSPLIT_EVENTS" <<'EOF'
 {"ts": "2020-01-01T00:00:00Z", "script": "scripts/windowsplit.sh", "scripts": ["scripts/windowsplit.sh"], "event": "author", "cause": "-", "outcome": "-", "round": 1, "session": "ws-auth", "agent_id": "ws-a", "agent_type": "script-author", "model": "claude-sonnet-5", "turns": 1, "tokens": 1, "usd": 0.01, "duration_s": 1, "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0}, "ticket": "-", "source": "transcript", "key": "ws-author", "note": "-"}
@@ -722,21 +686,18 @@ WINDOWSPLIT_WINDOWED=$(run report --events "$WINDOWSPLIT_EVENTS" --usage \
     --since 2023-01-01T00:00:00Z --until 2024-01-01T00:00:00Z --format tsv) \
   || { echo "report --usage on the windowsplit fixture (windowed) failed unexpectedly:" >&2; echo "$WINDOWSPLIT_WINDOWED" >&2; exit 1; }
 
-# invocations=2 (only the 2 in-window invokes counted, smaller than the
-# lifetime 10), author_usd=0.0000 (the author event itself is outside the
-# window), rework_ratio='-' (no windowed author cost to divide by),
-# flag=keep (still lifetime >=10, unmoved by the window).
+# invocations=2 (in-window only, vs lifetime 10), author_usd=0.0000 (author
+# is outside the window), rework_ratio='-' (nothing to divide by),
+# flag=keep (lifetime >=10, unmoved by the window).
 if printf '%s\n' "$WINDOWSPLIT_WINDOWED" | grep -qE $'^scripts/windowsplit\\.sh\t2\t2\t2\t0\t2023-06-01T00:00:00Z\t2023-06-02T00:00:00Z\t1\t0\t0\t3\\.0\t0\\.0000\t-\tkeep$'; then
   ok "windowsplit.sh windowed: columns are windowed (invocations=2, author_usd=0.0000, rework_ratio=-) while flag stays lifetime (keep)"
 else
   bad "windowsplit.sh windowed row unexpected — columns must be windowed, not just row presence (got: $WINDOWSPLIT_WINDOWED)"
 fi
 
-# One author+lint pair (a real rework_ratio), one owner_wait event, one
-# accepted/pass event, all inside the window, so all three wave-summary
-# figures come out as real numbers: rework_ratio = 0.0005/0.001 = 0.50,
-# owner_wait_s = 1800.0 (30 minutes), tickets_per_owner_hour = 1 ticket /
-# 0.5 owner-attended hours = 2.00.
+# All three wave-summary figures come out as real numbers:
+# rework_ratio = 0.0005/0.001 = 0.50, owner_wait_s = 1800.0,
+# tickets_per_owner_hour = 1 / 0.5 = 2.00.
 WAVELINE_EVENTS="$WORK/events-waveline.jsonl"
 cat > "$WAVELINE_EVENTS" <<'EOF'
 {"ts": "2026-09-13T22:10:00Z", "script": "scripts/waveline.sh", "scripts": ["scripts/waveline.sh"], "event": "author", "cause": "-", "outcome": "-", "round": 1, "session": "wl-auth", "agent_id": "wl-a", "agent_type": "script-author", "model": "claude-sonnet-5", "turns": 1, "tokens": 1, "usd": 0.001, "duration_s": 1, "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0}, "ticket": "NWM-900", "source": "transcript", "key": "wl-author", "note": "-"}
@@ -767,12 +728,9 @@ else
   bad "waveline: window tickets_per_owner_hour wrong (got: $WAVELINE_OUT)"
 fi
 
-# Real sprint shape: one owner_wait event entirely BEFORE the window (must
-# NOT count, proving no off-by-one lets a pre-window wait leak in), one
-# accepted/pass ticket INSIDE the window. Correct result (see
-# docs/cost.md "Wave summary line"): owner_wait_s=0.0 and
-# tickets_per_owner_hour='-' (0 owner-attended hours — undividable, not an
-# error) — not a bug to "fix".
+# One owner_wait entirely BEFORE the window (must NOT count), one accepted
+# ticket inside it. Correct result: owner_wait_s=0.0 and
+# tickets_per_owner_hour='-' (undividable, not an error) — not a bug to fix.
 ZEROWAIT_EVENTS="$WORK/events-zerowait.jsonl"
 cat > "$ZEROWAIT_EVENTS" <<'EOF'
 {"ts": "2026-09-13T19:47:39Z", "script": "-", "scripts": [], "event": "owner_wait", "cause": "-", "outcome": "-", "round": "-", "session": "zw-main", "agent_id": "-", "agent_type": "main", "model": "-", "turns": 0, "tokens": 0, "usd": 0.0, "duration_s": 602.661, "findings": {"critical": 0, "high": 0, "medium": 0, "low": 0}, "ticket": "NWM-065", "source": "transcript", "key": "zw-ownerwait-before-window", "note": "askuser"}
@@ -801,28 +759,14 @@ else
   bad "zerowait: owner_wait summary total row wrong (got: $ZEROWAIT_OUT)"
 fi
 
-# =============================================================================
 # status-durations
-# =============================================================================
 
 JIRA_API_REAL="$HERE/../providers/tracker/jira/jira-api.sh"
 
-# A fake jira-api.sh stub (never the real API — GET-only, offline, no
-# credential resolution) that answers exactly the two `raw GET` calls
-# status-durations makes for ticket NWM-500: the changelog (two status
-# transitions) and the ticket's `created` field. Timestamps are given in
-# Jira's real colon-less-offset shape ("+0000") on purpose (source review
-# round 2 HIGH: this is exactly the shape that crashes datetime.fromisoformat
-# under this repo's declared Python 3.9 floor before parse_jira_ts
-# normalises it). Durations below are computed by hand, independently of
-# the script under test:
-#   Open:         created (2026-09-01T00:00:00Z) -> first transition
-#                 (2026-09-02T00:00:00Z) = 86400s, outcome=closed
-#   In Progress:  first transition -> second transition
-#                 (2026-09-02T00:00:00Z -> 2026-09-04T12:00:00Z) = 216000s,
-#                 outcome=closed
-#   Done:         second transition -> --until (2026-09-05T00:00:00Z)
-#                 = 43200s, outcome=open (still the current status)
+# Offline GET-only fake jira-api.sh for NWM-500, using Jira's colon-less
+# "+0000" offset on purpose. Expected, computed by hand: Open 09-01 -> 09-02
+# = 86400s closed / In Progress 09-02 -> 09-04T12 = 216000s closed / Done
+# 09-04T12 -> --until 09-05 = 43200s open.
 FAKE_JIRA="$WORK/fake-jira-api.sh"
 cat > "$FAKE_JIRA" <<'EOF'
 #!/bin/bash
@@ -872,10 +816,8 @@ else
   bad "status-durations: Done row unexpected (got: $STATUSDUR_OUT)"
 fi
 
-# Idempotency: re-running against the same (empty) events file after a real
-# (non-dry-run) append must add 0 new/0 updated the second time — the
-# closed rows are immutable and the open row is unchanged (same --until,
-# same transitions).
+# Idempotency: a second run must add 0 new / 0 updated — closed rows are
+# immutable and the open row is unchanged (same --until, same transitions).
 run status-durations --events "$STATUSDUR_EVENTS" \
     NWM-500 --jira-api "$FAKE_JIRA" --until 2026-09-05T00:00:00Z >/dev/null \
     || { echo "status-durations (real append) failed unexpectedly:" >&2; exit 1; }
@@ -888,11 +830,9 @@ else
   bad "status-durations: idempotent re-run unexpected (got: $STATUSDUR_REEXTRACT)"
 fi
 
-# source review round 2, HIGH: open-status reconciliation. Same ticket, a
-# LATER --until (still no new transition): the "Done" row's duration_s
-# must be REWRITTEN IN PLACE (86400s more: 2026-09-06 minus
-# 2026-09-04T12:00:00Z = 129600s), not skipped as already-present, and the
-# two CLOSED rows must remain byte-identical (never rewritten).
+# Open-status reconciliation: with a LATER --until and no new transition, the
+# "Done" row's duration_s must be REWRITTEN IN PLACE (129600s), not skipped,
+# and the two CLOSED rows must remain byte-identical.
 LATER_OUT=$(run status-durations --events "$STATUSDUR_EVENTS" \
     NWM-500 --jira-api "$FAKE_JIRA" --until 2026-09-06T00:00:00Z) \
     || { echo "status-durations (later --until) failed unexpectedly:" >&2; exit 1; }
@@ -915,11 +855,8 @@ else
   bad "status-durations: a closed row was unexpectedly rewritten (got: $LATER_CONTENT)"
 fi
 
-# The ticket transitions again ("Done" -> "Closed"). A fresh fake
-# jira-api.sh returns the THIRD transition; re-running must CORRECT the
-# now-stale "Done" row (its real end is the new transition's timestamp,
-# 2026-09-07T00:00:00Z: 2026-09-04T12:00:00Z -> 2026-09-07T00:00:00Z =
-# 216000s, now outcome=closed) and APPEND a new "Closed" open row.
+# The ticket transitions again ("Done" -> "Closed"). Re-running must CORRECT
+# the now-stale "Done" row (216000s, outcome=closed) and APPEND a "Closed" one.
 FAKE_JIRA_V2="$WORK/fake-jira-api-v2.sh"
 cat > "$FAKE_JIRA_V2" <<'EOF'
 #!/bin/bash
@@ -965,11 +902,8 @@ else
   bad "status-durations: new Closed row unexpected (got: $TRANSITIONED_CONTENT)"
 fi
 
-# source review round 2, HIGH: out-of-order changelog entries. The SAME two
-# transitions, fed in REVERSE (newest-first) order — before the fix this
-# produced a negative duration and a duplicated status under two different
-# keys. fetch_status_changelog now sorts by parsed timestamp before
-# walking, so the result must be IDENTICAL to the forward-order case.
+# Out-of-order changelog entries: the SAME two transitions fed newest-first
+# must give a result IDENTICAL to the forward-order case.
 FAKE_JIRA_REVERSED="$WORK/fake-jira-api-reversed.sh"
 cat > "$FAKE_JIRA_REVERSED" <<'EOF'
 #!/bin/bash
@@ -1008,7 +942,7 @@ else
   bad "status-durations: reversed-input In Progress row unexpected (got: $REVERSED_OUT)"
 fi
 
-# source review round 2, MEDIUM: --until earlier than the last transition
+# --until earlier than the last transition
 # must be refused for that row (warned, skipped), never a negative duration.
 UNTILEARLY_OUT=$(run status-durations --events "$WORK/events-untilearly.jsonl" \
     NWM-500 --jira-api "$FAKE_JIRA" --until 2026-09-03T00:00:00Z --dry-run 2>&1) \
@@ -1024,7 +958,7 @@ else
   ok "status-durations: no negative duration_s is ever written when --until precedes the last transition"
 fi
 
-# source review round 2, MEDIUM: pagination guard fires on total>len(values)
+# Pagination guard fires on total>len(values)
 # even with no isLast key at all.
 PAGED_JIRA="$WORK/fake-jira-api-paged.sh"
 cat > "$PAGED_JIRA" <<'EOF'
@@ -1053,10 +987,9 @@ else
   bad "status-durations: pagination guard did not fire (got: $PAGED_OUT)"
 fi
 
-# source review round 2, MEDIUM: one bad ticket does not abort the rest.
-# NWM-504's changelog carries a garbage, unparseable timestamp; NWM-500 is
-# a known-good ticket in the SAME invocation. The run must still succeed
-# (exit 0), still emit NWM-500's events, and name NWM-504 as skipped.
+# One bad ticket does not abort the rest: NWM-504 has an unparseable
+# timestamp, NWM-500 is good, and the same run must exit 0, emit NWM-500's
+# events, and name NWM-504 as skipped.
 BADTS_JIRA="$WORK/fake-jira-api-badts.sh"
 cat > "$BADTS_JIRA" <<'EOF'
 #!/bin/bash
@@ -1094,23 +1027,10 @@ else
   bad "status-durations: NWM-500 events missing from a mixed-ticket run (got: $BADTS_OUT)"
 fi
 
-# =============================================================================
-# Real recorded fixture replay against PROJ-63's own changelog
-# (providers/tracker/jira/fixtures/raw.changelog.PROJ-63.txt and
-# raw.issue-created.PROJ-63.txt — real, recorded output, not hand-authored;
-# see those files' own provenance header). Only ONE of PROJ-63's six
-# changelog entries carries field=="status" (the rest are executor/labels/
-# touches/verify/appends/description/Sprint/Link/parent-association field
-# changes) — proving the field=="status" filter is load-bearing against a
-# real multi-field changelog, not just a stub's assumption. Computed by
-# hand, independently of the script under test:
-#   created:              2026-09-14T07:45:11.813-0400 = 2026-09-14T11:45:11.813Z
-#   To Do -> Completed:   2026-09-14T08:08:46.781-0400 = 2026-09-14T12:08:46.781Z
-#   To Do:       created -> first transition = 1414.968s, outcome=closed
-#   Completed:   first transition -> --until (pinned 2026-09-15T00:00:00Z,
-#                not "now", so the number is deterministic) = 42673.219s,
-#                outcome=open (PROJ-63 was already Completed at capture time,
-#                but this run pins --until past that regardless)
+# Recorded-fixture replay: only ONE of PROJ-63's six changelog entries carries
+# field=="status", proving that filter is load-bearing. Expected, by hand, with
+# --until pinned to 2026-09-15 so both stay deterministic: To Do 1414.968s
+# closed (created 11:45:11.813Z) / Completed 42673.219s open (12:08:46.781Z).
 FIXTURES_DIR="$HERE/../providers/tracker/jira/fixtures"
 CHANGELOG_FIXTURE="$FIXTURES_DIR/raw.changelog.PROJ-63.txt"
 CREATED_FIXTURE="$FIXTURES_DIR/raw.issue-created.PROJ-63.txt"
@@ -1164,7 +1084,7 @@ else
   bad "real PROJ-63 fixture: Completed row unexpected (got: $REAL_FIXTURE_OUT)"
 fi
 
-# source review round 2, MEDIUM: --ticket format is anchored, not just
+# --ticket format is anchored, not just
 # prefix-matched.
 ANCHORED_ERR=$(run status-durations --events "$WORK/events-anchored.jsonl" \
     "NWM-500/comment?maxResults=1" --jira-api "$FAKE_JIRA" 2>&1 >/dev/null) && ANCHORED_STATUS=0 || ANCHORED_STATUS=$?
@@ -1232,10 +1152,8 @@ else
   bad "status-durations: malformed-ticket error missing expected text (got: $BADTICKET_ERR)"
 fi
 
-# source review round 2, HIGH: report's default table excludes
-# status_duration. A status_duration-only events file must NOT produce a
-# bogus `script: -` row in `report`'s main (non-usage) table — the same
-# exclusion `invoke` already gets.
+# A status_duration-only events file must NOT produce a bogus `script: -` row
+# in `report`'s main table — the same exclusion `invoke` already gets.
 STATUSONLY_REPORT=$(run report --events "$STATUSDUR_EVENTS" --format tsv) \
     || { echo "report on a status_duration-only events file failed unexpectedly:" >&2; echo "$STATUSONLY_REPORT" >&2; exit 1; }
 if printf '%s\n' "$STATUSONLY_REPORT" | grep -qE $'^-\t'; then
@@ -1244,7 +1162,7 @@ else
   ok "status-durations: a status_duration-only events file produces no 'script: -' row"
 fi
 
-# source review round 2, MEDIUM: jira-api.sh stderr is redacted before
+# Jira-api.sh stderr is redacted before
 # landing in a warning.
 REDACT_JIRA="$WORK/fake-jira-api-redact.sh"
 cat > "$REDACT_JIRA" <<'EOF'
@@ -1275,11 +1193,9 @@ else
   ok "status-durations: the long token never reaches stdout/stderr unredacted"
 fi
 
-# NW_DRY_RUN=1 must reach the REAL jira-api.sh as
-# --dry-run (this script's own convention, matching provider.sh) — no
-# credential resolved, the exact request printed to stderr, exit 0. Real
-# jira-api.sh, not a fake stub, with a throwaway $NW_JIRA_HOST so no
-# config file or real credential is needed.
+# NW_DRY_RUN=1 must reach the REAL jira-api.sh as --dry-run: no credential
+# resolved, the request printed to stderr, exit 0. A throwaway $NW_JIRA_HOST
+# means no config file or real credential is needed.
 DRYRUN_ERR=$(NW_DRY_RUN=1 NW_JIRA_HOST=selftest.invalid \
     run status-durations --events "$WORK/events-nwdryrun.jsonl" \
     NWM-1 --jira-api "$JIRA_API_REAL" 2>&1) && DRYRUN_STATUS=0 || DRYRUN_STATUS=$?

@@ -10,16 +10,14 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-# Set before sourcing: wizard.sh defaults ENV_FILE to .env in its own
-# ENV_FILE="${ENV_FILE:-.env}" line, and that default wins if not already
-# set by the time it runs — writing into the invoker's cwd instead of this
-# quarantined example file.
+# Must be set BEFORE sourcing: wizard.sh's own ENV_FILE default wins if this
+# is unset by then, writing into the invoker's cwd instead of here.
 ENV_FILE="${ENV_FILE:-$HERE/wizard-example.env}"
 
 # shellcheck source=../scripts/lib/wizard.sh
 . "${WIZARD_LIB:-$HERE/../scripts/lib/wizard.sh}"
 
-# shellcheck disable=SC2034  # read by wizard.sh's banner()/stage(), invisible to a plain (non -x) shellcheck run
+# shellcheck disable=SC2034  # read by wizard.sh's banner()/stage()
 TOTAL_STAGES=1
 
 banner "Example provider setup"

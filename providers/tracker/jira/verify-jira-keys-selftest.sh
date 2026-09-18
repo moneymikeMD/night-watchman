@@ -2,17 +2,7 @@
 #
 # Selftest for providers/tracker/jira/verify-jira-keys.sh.
 # Nothing here reaches a real network: a stub `curl` sits on PATH first
-# for every assertion (the same technique jira-api-selftest.sh uses).
-#
-# What is asserted:
-#   1  Every local title matches its stubbed remote summary: exits 0,
-#      prints "N/N exact matches".
-#   2  One remote title differs: exits 1, the mismatch is named, the
-#      match count reflects only the tickets that DID match.
-#   3  A fetch that fails outright (a stubbed non-2xx) is reported as a
-#      MISS, not a script crash, still counts against the total, and
-#      exits 2 — a distinct code from a pure title mismatch (1), since a
-#      fetch failure says nothing about whether the title is even right.
+# for every assertion.
 #
 # Usage: providers/tracker/jira/verify-jira-keys-selftest.sh
 
@@ -50,8 +40,7 @@ mkdir -p "$WORK/bin"
 
 unset NW_CONFIG NW_ROOT NW_TRACKER NW_SECRETS NW_DISPATCH NW_MEMORY
 
-# STUB_TITLES: newline-separated "KEY<TAB>title" the stub answers with; a
-# key not listed there gets a 404.
+# STUB_TITLES: newline-separated "KEY<TAB>title"; an unlisted key 404s.
 titles_file="$WORK/titles.tsv"
 
 cat > "$WORK/bin/curl" <<CURLEOF

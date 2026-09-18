@@ -3,21 +3,16 @@
 # verify-jira-keys.sh — for every local ticket, fetch the Jira issue at
 # PROJECT-<numeric id> (the mapping jira-import.sh's create order
 # establishes — see its header) and confirm the issue's summary equals the
-# local ticket's title. Prints one line per mismatch or fetch failure, a
-# final "N/M exact matches" summary, and exits 0 only when every ticket
-# matched. Exits 1 for a pure title mismatch, 2 when any ticket could not
-# be fetched at all — the two are different classes of "not verified" (a
-# fetch failure says nothing about whether the title is right, a mismatch
-# says the title is definitely wrong) and a caller scripting around this
-# should be able to tell them apart. Ported from the source project's
-# verify-jira-keys.sh, de-identified ("verify-jira-keys.sh --project LAB
-# -> 148/148 exact matches", 2026-09-09).
+# local ticket's title. Prints one line per mismatch or fetch failure and a
+# final "N/M exact matches" summary.
 #
-# Fetches go through the `tracker` provider seam's `fetch` verb
-# (providers/lib/provider.sh run tracker fetch KEY — see
-# providers/README.md), not jira-api.sh directly: fetch is one of the
-# four verbs every tracker implementation must offer, so this script works
-# unchanged if a repo's tracker is ever something other than jira.
+# Fetches go through the `tracker` provider seam's `fetch` verb, not
+# jira-api.sh directly, so this works unchanged against a non-jira tracker.
+#
+# Exit status:
+#   0   every ticket matched
+#   1   a title mismatch (the title is definitely wrong)
+#   2   a ticket could not be fetched (says nothing about the title)
 #
 # Usage:
 #   verify-jira-keys.sh --project KEY DIR [--schema issues|dotissues]

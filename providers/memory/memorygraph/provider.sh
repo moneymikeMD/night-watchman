@@ -2,8 +2,7 @@
 #
 # provider.sh — memorygraph's implementation of the `memory` provider kind
 # (verbs: store, recall — see ../../README.md for the contract). Dispatch
-# only; the actual work is in the sibling scripts, each named after the
-# verb it implements and independently runnable for its own selftest.
+# only; the work is in the sibling script named after each verb.
 #
 # bash 3.2 compatible (no associative arrays, no `${var^^}`).
 

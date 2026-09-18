@@ -1,31 +1,23 @@
 #!/bin/bash
 #
-# Selftest for land-branch.sh's jira mode.
-# Unlike file mode (land-branch-selftest.sh), jira mode talks to an external
-# dependency — a jira-api.sh-shaped wrapper (--jira-api / $ISSUES_JIRA_API).
-# This plugin ships a default one, providers/tracker/jira/jira-api.sh
-# but this selftest deliberately does not point at it: it
-# supplies a small, stateful mock (jira_mock.py) that implements exactly the
-# calls land-branch.sh makes, keeping this selftest independent of the real
-# wrapper's HTTP/credential plumbing:
+# Selftest for land-branch.sh's jira mode. Deliberately does NOT point at the
+# shipped providers/tracker/jira/jira-api.sh: a small stateful mock
+# (jira_mock.py) implements exactly the calls land-branch.sh makes, keeping
+# this independent of the real wrapper's HTTP/credential plumbing:
 #
 #   raw GET <path>                    -> issue status / transitions list
 #   --yes write POST <path> <json>    -> apply a transition
 #   --yes comment <key> -             -> post a comment (text on stdin)
 #
-# The mock replays RECORDED shapes, never authored ones: the transitions
-# list is providers/tracker/jira/fixtures/issue.transitions.live.json (so
-# transition ids 21/61/81 map to status ids 3/10012/10014 as they do live),
-# and a refused transition prints the recorded HTTP 400 body from
-# issue.transition.rules-rejected.txt. It also models the
-# previous-status validator as measured live: Completed is refused unless
-# In Progress (3) is among the statuses the issue has EXITED.
+# The mock replays RECORDED shapes, never authored ones, from
+# providers/tracker/jira/fixtures/. It models the previous-status validator
+# as measured live: Completed is refused unless In Progress (3) is among the
+# statuses the issue has EXITED.
 #
-# State lives in a JSON file OUTSIDE each scratch repo ($WORK/<name>.jira-
-# state.json — a repo file would trip the dirty-tree preflight): status_id,
-# exited[], comments[], and posts[] (one entry per accepted transition POST:
-# the transition id plus origin/main's SHA at that moment, which is how the
-# tests assert "before the merge" and "after the push").
+# State lives OUTSIDE each scratch repo ($WORK/<name>.jira-state.json — a repo
+# file would trip the dirty-tree preflight). posts[] records each accepted
+# transition with origin/main's SHA at that moment, which is how the tests
+# assert "before the merge" and "after the push".
 #
 # Usage: scripts/land-branch-jira-selftest.sh [path-to-land-branch.sh]
 # Defaults to the sibling scripts/land-branch.sh.
@@ -157,12 +149,9 @@ PYEOF
 chmod +x "$JIRA_MOCK"
 
 # fresh_jira_repo NAME STATUS_ID EXITED_CSV — a throwaway git repo under
-# $WORK/NAME with local-only config and a bare "origin" at $WORK/NAME.git it
-# has already pushed main to (a landing's effect is only ever visible by
-# reading the bare origin back). A 'work' branch with one commit is left
-# ready to land, and the mock state is seeded with the given status and the
-# comma-separated list of statuses the issue has already exited. Prints the
-# working repo's path.
+# $WORK/NAME with local-only config, a bare "origin" at $WORK/NAME.git, a
+# 'work' branch ready to land, and mock state seeded to STATUS_ID with
+# EXITED_CSV already exited. Prints the working repo's path.
 fresh_jira_repo() {
     local d="$WORK/$1"
     rm -rf "$d" "$d.git" "$d-land" "$d-land.lock"

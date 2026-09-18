@@ -1,15 +1,13 @@
 #!/bin/bash
 #
 # providers/secrets/op/provider.sh — secrets provider backed by 1Password,
-# via the `op` CLI. This is the built-in default for the `secrets` kind
-# (see providers/README.md).
+# via the `op` CLI. The built-in default for the `secrets` kind.
 #
 # verb: read REF
 #
 # REF (a dotted lowercase name, e.g. `jira.token`) resolves to an item and
-# field through the committed config, never through argv or the reference
-# itself — the op:// URI is built here, so a ref never doubles as the
-# 1Password coordinate an operator has to keep in sync by hand:
+# field through the committed config, never through argv. The op:// URI is
+# built here, so a ref never doubles as a 1Password coordinate:
 #
 #   [secrets.op.jira.token]
 #   item  = "..."            # required

@@ -6,27 +6,17 @@
 # release process built on top of that.
 #
 # TICKET OUTCOMES. Ticket completions since the last release tag are read
-# through this repo's provider seam (see providers/README.md): the
-# default path is `providers/lib/provider.sh run tracker fetch <since>`,
-# where <since> is the most recent `vX.Y.Z` tag (empty string if there is
-# none yet). No `tracker/jira` implementation is installed yet (that is
-# a tracker/jira implementation) — `nw_run` currently reports "not installed" every time, so the
-# default path always fails until that ticket lands. This script does not
-# die on that: a failed or empty fetch degrades to a single placeholder
-# changelog line rather than blocking a release that has nothing else
-# wrong with it. `--tracker-fetch PATH` (or $RELEASE_TRACKER_FETCH)
-# overrides the default with a caller-supplied executable, same
-# precedence style as the rest of this repo's provider selection
-# (explicit flag > env var > default provider seam) and the same shape
-# land-branch.sh's --jira-api models: an executable that this script
-# calls itself, print-to-stdout, no daemon.
+# through this repo's provider seam (see providers/README.md): the default
+# path is `providers/lib/provider.sh run tracker fetch <since>`, where
+# <since> is the most recent `vX.Y.Z` tag. A failed or empty fetch degrades
+# to a single placeholder changelog line rather than blocking the release.
+# `--tracker-fetch PATH` (or $RELEASE_TRACKER_FETCH) overrides the default
+# with a caller-supplied executable; flag > env var > provider seam.
 #
-# The override executable (or the tracker/jira implementation, once
-# shipped) is called as `<cmd> <since-tag>` and must print a JSON
-# array of `{"key":..., "summary":..., "outcome":...}` to stdout. Any
-# outcome text containing a line starting with `cost:` (this repo's
-# dogfood convention — see docs/cost.md) has that line surfaced under its
-# ticket's bullet; the line is not otherwise parsed or validated.
+# That executable is called as `<cmd> <since-tag>` and must print a JSON
+# array of `{"key":..., "summary":..., "outcome":...}` to stdout. An outcome
+# line starting with `cost:` (see docs/cost.md) is surfaced under its
+# ticket's bullet; it is not otherwise parsed or validated.
 #
 # Usage:
 #   release.sh <major|minor|patch> [--dry-run] [--tracker-fetch PATH]
@@ -66,14 +56,12 @@ set -euo pipefail
 . "$(cd "$(dirname "$0")" && pwd)/lib/kit.sh"
 
 # stop2 — a precondition could not be met, BEFORE any mutating command has
-# run. Same message shape as kit.sh's die(), different exit code — this
-# script's own convention (see the header's Exit codes section).
+# run. Same message shape as kit.sh's die(), exit 2 (see Exit codes above).
 stop2() { echo "Error: $*" >&2; exit 2; }
 
-# pipe_ok — no-op. Documents a pipeline whose non-zero exit means "found
-# nothing", an expected outcome a later check is responsible for reporting
-# — not a real failure `set -o pipefail` should be allowed to kill the
-# script over before that check runs.
+# pipe_ok — no-op marking a pipeline whose non-zero exit means "found
+# nothing", which `pipefail` would otherwise kill the script over before the
+# later check responsible for reporting it runs.
 pipe_ok() { return 0; }
 
 TRACKER_FETCH_OVERRIDE=""
@@ -99,18 +87,13 @@ done
 
 need git jq
 
-# ---------------------------------------------------------------- preflight
 
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || stop2 "not inside a git repository"
 cd "$REPO_ROOT"
 
-# A real run commits plugin.json/marketplace.json/CHANGELOG.md alone, and
-# an unrelated dirty file would either get swept into that commit (if
-# staged elsewhere) or make the pre/post-run tree comparison meaningless —
-# so this is required before ANY write. --dry-run makes no write at all,
-# so it is exempt: the ticket's own verify condition is "prints version +
-# changelog + tag and leaves the tree unchanged", which a dry run does
-# regardless of what else is sitting uncommitted.
+# A real run commits plugin.json/marketplace.json/CHANGELOG.md alone, so an
+# unrelated dirty file would be swept in. --dry-run writes nothing, so it is
+# exempt.
 if [ "$DRY_RUN" != 1 ]; then
     STATUS_LINES=$(git status --porcelain 2>/dev/null) || stop2 "git status failed"
     [ -z "$STATUS_LINES" ] || stop2 "working tree has uncommitted changes — commit or stash them before releasing:
@@ -132,7 +115,6 @@ MARKETPLACE_MATCHES=$(jq '[.plugins[]? | select(.name=="night-watchman")] | leng
 [ "$MARKETPLACE_MATCHES" = "1" ] \
     || stop2 "expected exactly one 'night-watchman' entry in $MARKETPLACE_JSON's plugins[], found $MARKETPLACE_MATCHES"
 
-# ------------------------------------------------------------- compute semver
 
 OLDIFS="$IFS"
 IFS='.'
@@ -158,7 +140,6 @@ TAG="v$NEW_VERSION"
 
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1 && stop2 "tag '$TAG' already exists"
 
-# ---------------------------------------------------------- resolve tracker
 
 LAST_TAG=$(git describe --tags --abbrev=0 --match 'v[0-9]*.[0-9]*.[0-9]*' 2>/dev/null) || LAST_TAG=""
 
@@ -226,7 +207,6 @@ if [ -z "$TICKET_LINES" ]; then
     fi
 fi
 
-# --------------------------------------------------------- build the section
 
 TODAY=$(date +%F)
 NEWSEC_FILE=$(tmpfile) || stop2 "could not create a temp file for the changelog section"
@@ -246,7 +226,6 @@ if [ "$DRY_RUN" = 1 ]; then
     exit 0
 fi
 
-# --------------------------------------------------------------- write files
 
 CHANGELOG_EXISTED=1
 [ -f "$CHANGELOG" ] || CHANGELOG_EXISTED=0
@@ -287,12 +266,9 @@ jq --arg v "$NEW_VERSION" '
     || stop2 "could not update night-watchman's .version in $MARKETPLACE_JSON"
 [ -s "$NEW_MARKETPLACE_FILE" ] || stop2 "updating $MARKETPLACE_JSON produced an empty file"
 
-# rollback_files — restore plugin.json/marketplace.json/CHANGELOG.md to
-# their pre-run content. Safe because the preflight above already
-# guaranteed a clean working tree before any of these three were touched,
-# so `git checkout --` on the two that pre-existed always has something to
-# restore to, and CHANGELOG.md (which may be new) is simply removed rather
-# than checked out when this run created it.
+# rollback_files — restore plugin.json/marketplace.json/CHANGELOG.md to their
+# pre-run content. Relies on the clean-tree preflight above; a CHANGELOG.md
+# this run created is removed rather than checked out.
 rollback_files() {
     git checkout -- "$PLUGIN_JSON" "$MARKETPLACE_JSON" 2>/dev/null \
         || warn "could not restore plugin.json/marketplace.json to their pre-release content — check by hand"
@@ -318,7 +294,6 @@ if ! mv "$NEW_CHANGELOG_FILE" "$CHANGELOG"; then
     die "could not write $CHANGELOG — reverted"
 fi
 
-# -------------------------------------------------------------------- commit
 
 COMMIT_MSG="release: $TAG
 

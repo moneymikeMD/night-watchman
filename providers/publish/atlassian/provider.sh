@@ -17,14 +17,13 @@
 # and nothing is written — a published brief is never overwritten.
 #
 # post-headline posts "<text> <url>" to a project status feed, the whole
-# summary capped at 236 characters (<text> is shortened with "…" when it
-# does not fit; <url> is never cut). <project-ref> is one of:
+# summary capped at 236 characters (<text> is shortened with an ellipsis
+# when it does not fit; <url> is never cut). <project-ref> is one of:
 #   default                           [publish.atlassian] project_feed
 #   an epic/ticket key (e.g. PROJ-12) [publish.atlassian.feeds] PROJ-12
 #   ari:cloud:townsquare:...          used as given
-# Prints the confirmation line from townsquare.sh. A rejected post exits
-# 1; callers publishing to several feeds are expected to note the failure
-# and carry on with the next one (fail soft per feed).
+# A rejected post exits 1; callers publishing to several feeds are expected
+# to note the failure and carry on with the next (fail soft per feed).
 #
 # Config (.night-watchman/config.toml):
 #   [publish.atlassian]
@@ -66,8 +65,7 @@ if [ "${1:-}" = "--dry-run" ]; then
     DRY_RUN=1
     shift
 fi
-# The clients read NW_DRY_RUN themselves; export it so no call below can
-# forget the flag.
+# Exported, not passed per call, so no call below can forget the flag.
 if [ "$DRY_RUN" = "1" ]; then export NW_DRY_RUN=1; fi
 
 verb="${1:-}"

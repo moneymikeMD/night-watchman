@@ -9,18 +9,9 @@
 # would be added — without touching the working tree. Nothing is deleted,
 # no branch is created, until --yes is passed.
 #
-# Scope, deliberately: this script auto-handles the script file, its
-# selftest, and its docs/scripts.md table row (if this project keeps one —
-# night-watchman's own scripts.mdx reference page is GENERATED from
-# scripts/*.sh headers by gen-reference-docs.sh, so deleting the script
-# file is what removes it from that page; docs/scripts.md here is only a
-# hand-kept "## Retired" changelog, not a source table). Prose references
-# in agents/, skills/, CLAUDE.md, or other docs/ files are LISTED for
-# manual follow-up, never auto-edited: a text match on a script name
-# inside prose can land in an unrelated sentence, and this script has no
-# way to tell "the reference to delete" from "an example that happens to
-# share the name". librarian has Edit tools for that; this script does
-# not attempt to replace it.
+# Scope: this script auto-handles the script file, its selftest, and its
+# docs/scripts.md table row. Prose references in agents/, skills/, CLAUDE.md
+# or other docs/ files are LISTED for manual follow-up, never auto-edited.
 #
 # Usage:
 #   script-retire.sh --events FILE [--since ISO] [--until ISO] [--dry-run]
@@ -36,9 +27,8 @@
 #   complete/push. Requires --ticket. Refuses on a dirty working tree
 #   (this only ever branches from a clean tree).
 #
-# A script whose report --usage flag is anything other than "retire?"
-# (keep, flag, -) never appears as a candidate — this script only ever
-# acts on what the oracle itself flagged, never on a name passed by hand.
+# A script whose report --usage flag is anything other than "retire?" never
+# appears as a candidate; this script never acts on a name passed by hand.
 #
 # Exit codes: 0 = ran (dry-run always; --yes only if every candidate
 # retired cleanly), 1 = bad usage or a candidate failed to retire.
@@ -50,9 +40,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 case "${1:-}" in -h|--help) show_help ;; esac
 
-# The repo to retire FROM is wherever the caller's cwd is, not wherever
-# this script physically lives — a selftest fixture repo invokes this
-# script by path from outside itself. Always run this from a repo root.
+# The repo to retire FROM is the caller's cwd, not where this script lives —
+# a selftest fixture repo invokes it by path from outside itself.
 REPO_ROOT="$(pwd)"
 
 PYTHON="${PYTHON:-python3}"
@@ -97,9 +86,8 @@ usage_args=(report --events "$EVENTS" --usage --format tsv)
 
 USAGE_TSV="$("$PYTHON" "$SCRIPT_ANALYTICS" "${usage_args[@]}")"
 
-# Rows: header line, N data lines, blank line, footer/owner_wait sections
-# after that. Column 1 = script, last column = flag — only the per-script
-# table's rows have >=14 columns, so later sections never match.
+# Column 1 = script, last column = flag. Only the per-script table's rows
+# have >=14 columns, so the footer/owner_wait sections never match.
 CANDIDATES="$(printf '%s\n' "$USAGE_TSV" | awk -F'\t' 'NR>1 && NF>=14 && $NF=="retire?" {print $1}')"
 
 if [ -z "$CANDIDATES" ]; then
@@ -140,10 +128,8 @@ while IFS= read -r script; do
         2>/dev/null | grep -v -F "$SCRIPTS_MD" || true)"
 
     today="$(date -u +%Y-%m-%d)"
-    # A markdown table row looks like "N:| name.sh | purpose text |" — pull
-    # just the purpose column (field 3 of a "|"-split row) when the row is
-    # table-shaped; fall back to the raw line otherwise (some entries are
-    # prose, not a table row).
+    # Pull the purpose column (field 3 of a "|"-split row) when the row is
+    # table-shaped; some entries are prose, so fall back to the raw line.
     purpose_raw="$(printf '%s\n' "$doc_rows" | head -1 | sed 's/^[0-9]*://')"
     if printf '%s' "$purpose_raw" | grep -q '|.*|.*|'; then
         purpose="$(printf '%s' "$purpose_raw" | awk -F'|' '{gsub(/^ +| +$/,"",$3); print $3}')"
@@ -184,8 +170,8 @@ while IFS= read -r script; do
             sed -i.bak "${ln}d" "$SCRIPTS_MD" && rm -f "$SCRIPTS_MD.bak"
         done
     fi
-    # "## Retired" is always docs/scripts.md's last section, so a new
-    # entry is simply appended at EOF.
+    # "## Retired" is always docs/scripts.md's last section, so appending at
+    # EOF lands inside it.
     mkdir -p "$(dirname "$SCRIPTS_MD")"
     if [ ! -f "$SCRIPTS_MD" ]; then
         printf '# scripts.md\n\nScripts retired under the usage/adoption rule. Not a\nreference — see the generated Scripts page for scripts still in use.\nEntries list name, date retired, one-line purpose, and reason.\n\n## Retired\n\n' > "$SCRIPTS_MD"

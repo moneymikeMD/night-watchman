@@ -6,17 +6,11 @@
 # project, this makes the key Jira assigns land at the same number as the
 # local id: local ticket id NNN -> Jira issue PROJECT-NNN. jira-backfill.sh
 # and verify-jira-keys.sh both assume this holds; neither keeps or needs a
-# separate id->key map. Ported from the source project's jira-import.sh,
-# de-identified ("jira-import.sh is the redo path", 2026-09-09).
+# separate id->key map.
 #
-# Every create goes through the `tracker` provider seam's `create` verb
-# (providers/lib/provider.sh run tracker create PROJECT ISSUETYPE SUMMARY —
-# see providers/README.md), not jira-api.sh directly: create is one of the
-# four verbs every tracker implementation must offer, so this script works
-# unchanged if a repo's tracker is ever something other than jira. Every
-# issue is created with type "Task" (the type tickets-protocol tickets
-# already use elsewhere in this repo); this script only asks for the
-# `create` verb's three arguments, never Jira-specific fields.
+# Every create goes through the `tracker` provider seam's `create` verb,
+# not jira-api.sh directly, so this works unchanged against a non-jira
+# tracker. Every issue is created with type "Task".
 #
 # Usage:
 #   jira-import.sh --project KEY DIR [--schema issues|dotissues]
@@ -34,26 +28,19 @@
 #                (NW_DRY_RUN=1): prints the request each create WOULD
 #                issue, resolves no credential, creates nothing.
 #
-# A create failure (network, auth, a 4xx) stops the run immediately — see
-# providers/tracker/jira/jira-api.sh: a non-2xx response dies non-zero on
-# every path. Re-run with --resume <i>, where <i> is the position that
-# failed, to continue. Do NOT re-run from the start: the tickets already
-# created would be created a SECOND time under new keys, and every id/key
-# correspondence after that point breaks for both jira-backfill.sh and
-# verify-jira-keys.sh.
+# A create failure stops the run immediately. Re-run with --resume <i>,
+# where <i> is the position that failed. Do NOT re-run from the start: the
+# tickets already created would be created a SECOND time under new keys,
+# breaking every id/key correspondence after that point.
 #
-# --resume trusts the CALLER's claim that positions 1..N-1 were already
-# created — with nothing to check that against, a directory edited between
-# runs (a ticket added, removed, or reordered upstream of the failure)
-# would --resume against the WRONG position and silently create duplicates
-# or skip real tickets (script-reviewer round on 71e649c). Every non-dry
-# run therefore writes a manifest — the ordered list of ids it used — next
-# to the tickets directory (default: DIR/.jira-import-manifest.PROJECT.
-# json; --manifest PATH overrides). A --resume run requires that manifest
-# to exist and its first N-1 ids to match the CURRENT ordering exactly, or
-# it dies naming the first position that no longer matches, before
-# creating anything. --dry-run touches no manifest (see --dry-run above:
-# it resolves no credential and has no side effect at all).
+# Every non-dry run writes a manifest — the ordered list of ids it used —
+# next to the tickets directory (default:
+# DIR/.jira-import-manifest.PROJECT.json; --manifest PATH overrides). A
+# --resume run requires that manifest's first N-1 ids to match the CURRENT
+# ordering exactly, or it dies naming the first position that no longer
+# matches, before creating anything: a directory edited between runs would
+# otherwise resume against the wrong position and silently create
+# duplicates or skip real tickets. --dry-run touches no manifest.
 #
 # bash 3.2 compatible (no associative arrays, no `${var^^}`).
 

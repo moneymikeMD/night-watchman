@@ -1,84 +1,19 @@
 #!/bin/bash
 #
 # Selftest for jira-space-create.sh. Runs entirely against a fake
-# `jira-api.sh`-shaped stub script and a fake `jira-workflow-apply.sh`-
-# shaped stub script (never the real wrapper, never a real workflow-apply
-# run, never a real Jira site or credential) that replay fixtures captured
-# under fixtures/space-*.txt. `--jira-api`/`--workflow-apply` point
-# straight at those stubs, so there is no `curl` at all in this file's own
-# process tree; `NW_JIRA_HOST=127.0.0.1` is exported anyway, belt and
-# braces, in case a future edit ever calls the real jira-api.sh by
-# accident.
+# `jira-api.sh`-shaped stub and a fake `jira-workflow-apply.sh`-shaped stub
+# — never the real wrappers, never a real Jira site or credential. There is
+# no `curl` in this file's process tree at all; NW_JIRA_HOST=127.0.0.1 is
+# exported anyway, belt and braces.
 #
-# FIXTURE PROVENANCE — READ THIS: every fixtures/space-*.txt file is
-# AUTHORED, not captured live. This fixture was built with no live Jira host
-# reachable (the orchestrator runs that spike separately, per this
-# project's own "live spike first for API-facing scripts" rule — see
-# memorygraph). Each fixture's own header says so and names which Jira
-# Cloud REST v3 documented shape it is drawn from. This is a KNOWN
+# FIXTURE PROVENANCE: most fixtures/space-*.txt files are AUTHORED from the
+# documented Jira Cloud REST v3 shapes, not captured live — a KNOWN
 # DEVIATION from this project's "fixtures are recorded, never authored"
-# rule (skills/shell-scripting/SKILL.md) — flagged here rather than
-# silently shipped as if it were the real thing. Before this script is
-# trusted at the same level as providers/tracker/jira/jira-workflow-apply.sh (whose
-# fixtures ARE real, from a real SPK4/NWM/ZZPROBE spike), re-run the
-# recipe against one throwaway project and re-record every fixtures/
-# space-*.txt file from what Jira Cloud actually returns.
-#
-# What this file proves:
-#   1. --dry-run: every planned request goes through `jira-api.sh
-#      --dry-run` (or is announced without ever invoking the wrapper, for
-#      step 3 — see jira-space-create.sh's own header on why); the stub
-#      NEVER sees a write call without --dry-run also present in the same
-#      invocation.
-#   2. KEY/Name argument validation refusals — no wrapper call at all.
-#   3. No --yes and no terminal: refused with the distinct exit code 3.
-#   4. A Business/next-gen project readback (style != "classic", no Epic
-#      issue type) is refused BEFORE creating any status, field or screen
-#      entry — a lesson learned live.
-#   5. Happy path against an ALREADY-EXISTING classic project: five of six
-#      target fields already present (idempotent no-op), "executor"
-#      created; two of three executor options already present (idempotent
-#      no-op), two created; five of six fields already on the project's
-#      one screen (idempotent no-op), "executor" added; the final
-#      customfield-id table names all six fields.
-#   6. A custom field that already exists under the WRONG schema type is
-#      refused, naming the mismatch, before any write.
-#   7. THE ZZSPIKE REGRESSION — a real 404 on the initial project GET (the
-#      "not found" branch case 5's already-existing project never
-#      exercises) leads to a real POST /project with the right key/name/
-#      lead in the body, then the post-create readback, all the way
-#      through to "bootstrap complete". Found live: `rc=$?` placed AFTER
-#      the closing `fi` of an `if ...; then ...; fi` with no `else` reads
-#      the if-COMPOUND's own exit status (0, once execution falls through
-#      to after `fi`) rather than the real command's — every 404 used to
-#      look like an unparseable error and the run died before ever
-#      creating anything.
-#   8. A GET /project/<KEY> failure that is NOT a 404 is still a hard die
-#      ("refusing to guess whether it exists"), never a false "not found"
-#      that would attempt to create a project that already exists.
-#   9. An already-on-screen field is an idempotent no-op (derived variant
-#      of a real tab-fields fixture — see its own comment above section
-#      5, and section 5's own note on why the real ZZSPIKE capture alone
-#      cannot exercise this branch).
-#  10. THE ZZSPIKE RUN 4 REGRESSION — a fully idempotent rerun (nothing
-#      to create/add anywhere) issues ZERO writes, and its own output no
-#      longer false-matches `grep 'creating'` the way the old "...not
-#      creating." wording did on a real, genuinely idempotent run.
-#  11. SCRIPT-REVIEWER HIGH — a malformed /screens/<id>/tabs response is a
-#      hard die naming the screen, not a silently-skipped screen that
-#      still reaches "bootstrap complete".
-#  12. SCRIPT-REVIEWER MEDIUM — a custom field name matching MORE THAN ONE
-#      field (Jira does not enforce unique names) is a hard die naming
-#      every colliding id, not a silent first-match.
-#
-# THE SCREEN-SCHEME CHAIN (section 5's fixtures): RECORDED LIVE against
-# ZZSPIKE, run 2, 2026-09-12 (read-only calls only) — the ZZSPIKE
-# regression this same live loop found (GET /screenscheme/<id> does not
-# exist; see jira-space-create.sh's own header) meant the step-5 chain's
-# fixtures used to be authored guesses same as the rest of
-# fixtures/space-*.txt; they are now the one part of this recipe that IS
-# real. Everything else under fixtures/space-*.txt remains authored — see
-# FIXTURE PROVENANCE above.
+# rule, flagged rather than shipped as if it were real. Only the
+# screen-scheme chain (ZZSPIKE run 2) and the searchability probe pair are
+# real; each fixture's own header says which it is. Re-record the rest
+# against a throwaway project before trusting this at the same level as
+# jira-workflow-apply.sh.
 #
 # Usage: ./jira-space-create-selftest.sh
 
@@ -140,7 +75,6 @@ strip_fixture_header() {
     awk '/^#/{next} /^HTTP [0-9]+$/{next} {print}' "$1"
 }
 
-# --------------------------------------------------------------- fixtures
 PROJECT_CLASSIC="$TMPD/project-classic.json"
 strip_fixture_header "$FIXDIR/space-project-classic.txt" > "$PROJECT_CLASSIC"
 PROJECT_BUSINESS="$TMPD/project-business.json"
@@ -155,11 +89,8 @@ FIELDS_AFTER_EXECUTOR="$TMPD/fields-after-executor.json"
 strip_fixture_header "$FIXDIR/space-fields-after-executor-create.txt" > "$FIELDS_AFTER_EXECUTOR"
 FIELDS_WRONGTYPE="$TMPD/fields-wrongtype.json"
 strip_fixture_header "$FIXDIR/space-fields-wrongtype.txt" > "$FIELDS_WRONGTYPE"
-# DERIVED (not its own fixture file) from the real fields-existing
-# capture: "touches" duplicated under a SECOND id — Jira does not
-# enforce unique custom field names, so this is a real shape the site
-# can produce, exercised here without waiting for a live site to
-# actually have one.
+# DERIVED from the real fields-existing capture: "touches" duplicated
+# under a second id. Jira does not enforce unique custom field names.
 FIELDS_DUPLICATE_NAME="$TMPD/fields-duplicate-name.json"
 jq '. + [{"id": "customfield_19998", "name": "touches", "custom": true, "schema": {"type": "string", "custom": "com.atlassian.jira.plugin.system.customfieldtypes:textarea"}}]' \
     "$FIELDS_EXISTING" > "$FIELDS_DUPLICATE_NAME"
@@ -169,12 +100,8 @@ FIELD_CONTEXT="$TMPD/field-context.json"
 strip_fixture_header "$FIXDIR/space-field-context.txt" > "$FIELD_CONTEXT"
 FIELD_OPTIONS_PARTIAL="$TMPD/field-options-partial.json"
 strip_fixture_header "$FIXDIR/space-field-options-partial.txt" > "$FIELD_OPTIONS_PARTIAL"
-# ITSS_PROJECT/ITSS_MAPPING/SCREENSCHEME/SCREENS_TABS_*/TAB_FIELDS_* below
-# are all RECORDED LIVE (ZZSPIKE run 2, read-only, 2026-09-12) — the one
-# part of this recipe that was NOT authored, unlike the rest of
-# fixtures/space-*.txt (see this file's own FIXTURE PROVENANCE note
-# above). PROJECT_CLASSIC's own .id ("10017") was set to match this same
-# real project, so the whole chain is internally consistent.
+# The screen-scheme chain below is RECORDED LIVE (ZZSPIKE run 2,
+# read-only). PROJECT_CLASSIC's .id matches that same real project.
 ITSS_PROJECT="$TMPD/itss-project.json"
 strip_fixture_header "$FIXDIR/space-itss-project.txt" > "$ITSS_PROJECT"
 ITSS_MAPPING="$TMPD/itss-mapping.json"
@@ -187,11 +114,8 @@ SCREENS_TABS_10050="$TMPD/screens-tabs-10050.json"
 strip_fixture_header "$FIXDIR/space-screens-tabs-10050.txt" > "$SCREENS_TABS_10050"
 SCREENS_TABS_10051="$TMPD/screens-tabs-10051.json"
 strip_fixture_header "$FIXDIR/space-screens-tabs-10051.txt" > "$SCREENS_TABS_10051"
-# SYNTHETIC — not a real capture, deliberately malformed (a bare object,
-# not the array /screens/<id>/tabs always returns) — exercises
-# add_fields_to_screens' own `tab_ids=$(... jq ...) || die` guard: a jq
-# parse failure here must stop the run, not silently make that screen's
-# tab loop run zero times.
+# SYNTHETIC — deliberately malformed (a bare object, not the array
+# /screens/<id>/tabs always returns).
 SCREENS_TABS_10049_MALFORMED="$TMPD/screens-tabs-10049-malformed.json"
 echo '{"this is not": "an array of tabs"}' > "$SCREENS_TABS_10049_MALFORMED"
 TAB_FIELDS_10052="$TMPD/tab-fields-10052.json"
@@ -200,32 +124,21 @@ TAB_FIELDS_10053="$TMPD/tab-fields-10053.json"
 strip_fixture_header "$FIXDIR/space-tab-fields-10053.txt" > "$TAB_FIELDS_10053"
 TAB_FIELDS_10054="$TMPD/tab-fields-10054.json"
 strip_fixture_header "$FIXDIR/space-tab-fields-10054.txt" > "$TAB_FIELDS_10054"
-# Searchability probe — RECORDED LIVE 2026-09-14 against project
-# NWM itself (a throwaway textarea field, created and deleted for the
-# capture — see each fixture's own header for the full chain).
+# Searchability probe — RECORDED LIVE against NWM with a throwaway
+# textarea field, created and deleted for the capture.
 SEARCH_JQL_NOT_SEARCHABLE="$TMPD/search-jql-not-searchable.json"
 strip_fixture_header "$FIXDIR/space-search-jql-not-searchable.txt" > "$SEARCH_JQL_NOT_SEARCHABLE"
 SEARCH_JQL_SEARCHABLE="$TMPD/search-jql-searchable.json"
 strip_fixture_header "$FIXDIR/space-search-jql-searchable.txt" > "$SEARCH_JQL_SEARCHABLE"
-# DERIVED (not its own recorded fixture) from the REAL tab-fields-10052
-# capture: "touches" (customfield_10043) added as if it were already on
-# that one tab, so the idempotent-skip path on an ALREADY-PRESENT screen
-# field has coverage too — the real capture (see space-tab-fields-
-# 10052.txt's own header) happened to show every target field absent, so
-# this is the only way to exercise that branch honestly labelled as
-# derived, not itself a live observation.
+# DERIVED from the real tab-fields-10052 capture with "touches" added:
+# that capture showed every target field absent, so the skip branch has
+# no other way to be exercised.
 TAB_FIELDS_10052_WITH_TOUCHES="$TMPD/tab-fields-10052-with-touches.json"
 jq '. + [{"id": "customfield_10043", "name": "touches"}]' "$TAB_FIELDS_10052" > "$TAB_FIELDS_10052_WITH_TOUCHES"
 
-# ALL SIX target fields already present, DERIVED from each real
-# tab-fields-* capture the same way — used only for the fully-idempotent
-# rerun test (10, the ZZSPIKE run 4 regression: a real re-run with
-# nothing left to do). Real ZZSPIKE run 4 was never itself this file's
-# source (a fully-idempotent second run makes zero writes and so
-# produces no NEW response bodies to capture beyond what run 2/3 already
-# gave — the fixtures below ARE run 2/3's own real bodies, just each with
-# the six fields this recipe would have added by the time a real rerun
-# happens).
+# DERIVED from each real tab-fields-* capture with all six fields added,
+# for the fully-idempotent rerun case. A real rerun writes nothing and so
+# produces no new bodies to capture.
 ALL_SIX_FIELDS='{"id": "customfield_10043", "name": "touches"}
 {"id": "customfield_10044", "name": "executor"}
 {"id": "customfield_10045", "name": "verify"}
@@ -240,17 +153,12 @@ jq --argjson add "$ALL_SIX_FIELDS_JSON" '. + $add' "$TAB_FIELDS_10053" > "$TAB_F
 TAB_FIELDS_10054_ALL="$TMPD/tab-fields-10054-all.json"
 jq --argjson add "$ALL_SIX_FIELDS_JSON" '. + $add' "$TAB_FIELDS_10054" > "$TAB_FIELDS_10054_ALL"
 
-# All three executor options already present, DERIVED from the real
-# partial capture the same way.
+# DERIVED from the real partial capture, all three options present.
 FIELD_OPTIONS_FULL="$TMPD/field-options-full.json"
 jq '.values += [{"id": "10301", "value": "human"}, {"id": "10302", "value": "mixed"}]' "$FIELD_OPTIONS_PARTIAL" > "$FIELD_OPTIONS_FULL"
 
-# --------------------------------------------------------------- workflow-apply stub
-#
-# workflow_apply_stub PATH RC — a jira-workflow-apply.sh-shaped stub that
-# only ever needs to record that it was called with the right args and
-# report success/failure; its OWN internal correctness is
-# jira-workflow-apply-selftest.sh's job, not this file's.
+# workflow_apply_stub PATH RC — records that it was called with the right
+# args and reports success/failure. Its own correctness is its selftest's job.
 WFCALLLOG=""
 make_workflow_apply_stub() {
     local path="$1" rc="${2:-0}"
@@ -263,15 +171,9 @@ STUBEOF
     chmod +x "$path"
 }
 
-# --------------------------------------------------------------- jira-api stub
-#
-# make_jira_api_stub PATH — dispatches on the request's own METHOD/PATH
-# (after stripping --show-secrets/--yes/--dry-run, in any order — same
-# convention as jira-workflow-apply-selftest.sh). Logs the RAW (unstripped)
-# argv first, so a test can tell whether --dry-run accompanied a call.
-# Refuses (exit 97) any request this scenario did not expect, so an
-# accidental extra call fails loudly rather than silently returning
-# nothing.
+# make_jira_api_stub PATH — dispatches on METHOD/PATH after stripping the
+# global flags in any order, logging the RAW argv first so a test can see
+# whether --dry-run came with a call. Exits 97 on any unexpected request.
 CALLLOG=""
 make_jira_api_stub() {
     local path="$1"
@@ -303,10 +205,8 @@ case "\$1 \$2" in
             /project/ZZSPACE) cat "$PROJECT_CLASSIC" ;;
             /project/ZZBIZ) cat "$PROJECT_BUSINESS" ;;
             /project/ZZNEW)
-                # 1st call: the soft existence check, a real 404 shape
-                # (rc=1, stderr line "jira-api: HTTP 404 GET <path>").
-                # 2nd call: the post-create readback. See section 7 in
-                # this file's own header for the bug this exercises.
+                # 1st call: the soft existence check, a real 404 shape.
+                # 2nd call: the post-create readback.
                 n=\$(cat "$zznew_counter"); n=\$((n + 1)); echo "\$n" > "$zznew_counter"
                 if [ "\$n" = "1" ]; then
                     echo "not found" >&2
@@ -336,13 +236,9 @@ case "\$1 \$2" in
                 ;;
             "/issuetypescreenscheme/project?projectId=10017") cat "$ITSS_PROJECT" ;;
             "/issuetypescreenscheme/mapping?issueTypeScreenSchemeId=10017") cat "$ITSS_MAPPING" ;;
-            # ONLY the repeated-id query form is ever answered — the
-            # comma-joined form (id=10049,10050,10051) falls through to
-            # the wildcard refusal below, same as any other call this
-            # scenario did not expect. That IS the "assert the comma-form
-            # is never used" guard: if jira-space-create.sh ever sent it,
-            # this stub could not serve it and the whole run would die
-            # with "STUB: no fixture", not silently succeed.
+            # ONLY the repeated-id form is answered; the comma-joined
+            # form falls through to the refusal below. That IS the guard
+            # that the comma form is never sent.
             "/screenscheme?id=10049&id=10050&id=10051") cat "$SCREENSCHEME" ;;
             /screens/10049/tabs)
                 if [ -n "\${SCREENS_TABS_10049_OVERRIDE:-}" ]; then cat "\$SCREENS_TABS_10049_OVERRIDE"; else cat "$SCREENS_TABS_10049"; fi
@@ -359,13 +255,9 @@ case "\$1 \$2" in
                 if [ -n "\${TAB_FIELDS_10054_OVERRIDE:-}" ]; then cat "\$TAB_FIELDS_10054_OVERRIDE"; else cat "$TAB_FIELDS_10054"; fi
                 ;;
             /search/jql\?jql=*)
-                # ensure_field_searchable's own probe. \$FORCE_UNSEARCHABLE
-                # (space-separated field names) names fields whose FIRST
-                # probe this run must answer "not searchable" (HTTP 400) —
-                # every later probe for that same name (the re-probe after
-                # the PUT this scenario expects) answers 200. Any name not
-                # listed is searchable from its first probe: no PUT, no
-                # extra write to assert against.
+                # \$FORCE_UNSEARCHABLE (space-separated names) makes the
+                # FIRST probe for each answer 400; later probes answer 200.
+                # An unlisted name is searchable from the start: no PUT.
                 qs="\$3"
                 forced=0
                 for want in \${ALWAYS_UNSEARCHABLE:-}; do
@@ -425,11 +317,7 @@ run() {
     LAST_ERR=$(cat "$errf")
 }
 
-# =================================================================
-# 1. --dry-run: every planned request goes through the stub WITH
-#    --dry-run, or (step 3) is announced without ever invoking any
-#    wrapper at all. The stub never sees a write call missing --dry-run.
-# =================================================================
+# 1. --dry-run: the stub never sees a write call without --dry-run alongside it
 WRAP_DRY="$TMPD/wrap-dry.sh"
 make_jira_api_stub "$WRAP_DRY"
 run dryrun ZZSPACE "ZZ Space" --dry-run --jira-api "$WRAP_DRY"
@@ -446,9 +334,7 @@ DRYCALLLOG="$TMPD/$(basename "$WRAP_DRY").calllog"
 assert_nonempty "1: the stub was actually reached for the parts this script does call directly" "$DRYCALLLOG"
 check_not "1: no call reached the stub without --dry-run present in the SAME invocation" "$(awk '!/--dry-run/' "$DRYCALLLOG")" "write POST"
 
-# =================================================================
 # 2. Argument validation — no wrapper call at all.
-# =================================================================
 run badkeylower zz1 "Test" --dry-run --jira-api "$WRAP_DRY"
 assert_nonzero "2a: a lowercase KEY is refused" "$LAST_RC"
 check "2a: names the problem" "$LAST_ERR" "uppercase letter"
@@ -468,9 +354,7 @@ check "2d: names the problem" "$LAST_ERR" "Name is required"
 run nokeyname
 assert_nonzero "2e: no arguments at all is refused" "$LAST_RC"
 
-# =================================================================
 # 3. No --yes and no terminal: refused with the distinct exit code 3.
-# =================================================================
 WRAP_NOYES="$TMPD/wrap-noyes.sh"
 make_jira_api_stub "$WRAP_NOYES"
 run noyes ZZSPACE "ZZ Space" --jira-api "$WRAP_NOYES"
@@ -478,10 +362,7 @@ assert_eq "3: no --yes, no terminal exits the distinct code 3" "3" "$LAST_RC"
 check "3: names why" "$LAST_ERR" "no --yes and no terminal"
 assert_eq "3: never reached the wrapper at all (refused before any network call)" "" "$(cat "$TMPD/$(basename "$WRAP_NOYES").calllog")"
 
-# =================================================================
-# 4. A Business/next-gen project readback is refused before creating any
-#    status, field or screen entry — a lesson learned live.
-# =================================================================
+# 4. a Business/next-gen project readback is refused before any status, field or screen
 WRAP_BIZ="$TMPD/wrap-biz.sh"
 make_jira_api_stub "$WRAP_BIZ"
 WF_BIZ="$TMPD/wf-biz.sh"
@@ -495,17 +376,7 @@ BIZLOG="$TMPD/$(basename "$WRAP_BIZ").calllog"
 check_not "4: never reached POST /project (no create attempted against an existing project)" "$(cat "$BIZLOG")" "write POST /project"
 assert_eq "4: jira-workflow-apply.sh was never invoked" "" "$(cat "$TMPD/$(basename "$WF_BIZ").calllog" 2>/dev/null || true)"
 
-# =================================================================
-# 5. Happy path, project ALREADY EXISTS (classic): idempotent no-ops
-#    where fixtures already carry the field/option, real create/add calls
-#    where they do not, and the final table names all six fields with
-#    real (fixture) ids. The screen-scheme chain here (steps 5's project/
-#    mapping/screenscheme/tabs/fields calls) replays the REAL ZZSPIKE run
-#    2 capture — three distinct screens (default/Bug/Epic), one tab each,
-#    none of the six target fields present on any of them yet, so all
-#    six get added to all three (18 adds) — see this file's own header,
-#    section 5, and space-tab-fields-1005{2,3,4}.txt's own headers.
-# =================================================================
+# 5. happy path against an existing classic project: no-ops where the fixture has it
 WRAP_HAPPY="$TMPD/wrap-happy.sh"
 make_jira_api_stub "$WRAP_HAPPY"
 WF_HAPPY="$TMPD/wf-happy.sh"
@@ -532,18 +403,11 @@ check "5: the final table names touches" "$LAST_OUT" "customfield_10043"
 check "5: the final table names executor's real (fixture) id" "$LAST_OUT" "customfield_10044"
 check "5: the final table names defer_until" "$LAST_OUT" "customfield_10048"
 check "5: bootstrap-complete banner shown" "$LAST_OUT" "bootstrap complete"
-# ZZSPIKE run 3 cosmetic bug: the table printed a LITERAL backslash-t
-# between columns ("customfield_10043\ttouches\t...") because a
-# double-quoted string's \t is not an escape — only printf's is. column
-# -t (this repo's own `table` helper) turns real tabs into aligned
-# spaces, so a literal "\t" surviving into the output can only mean the
-# row was built with the string-interpolation bug, not a real tab.
+# `table` turns real tabs into aligned spaces, so a literal backslash-t
+# in the output can only mean the string-interpolation bug. That shipped.
 check_not "5: no literal backslash-t leaked into the final table (real tabs, column-aligned like the header)" "$LAST_OUT" '\t'
 
-# =================================================================
-# 6. A field that already exists under the WRONG schema type is refused,
-#    naming the mismatch, before any write.
-# =================================================================
+# 6. a field already existing under the wrong schema type is refused before any write
 WRAP_WRONGTYPE="$TMPD/wrap-wrongtype.sh"
 make_jira_api_stub "$WRAP_WRONGTYPE"
 FIELDS_FIXTURE="$FIELDS_WRONGTYPE"
@@ -558,19 +422,7 @@ check "6: names the mismatch" "$LAST_ERR" "not the expected"
 WRONGTYPELOG="$TMPD/$(basename "$WRAP_WRONGTYPE").calllog"
 check_not "6: never issued a write for the mismatched field" "$(cat "$WRONGTYPELOG")" "write POST /field "
 
-# =================================================================
-# 7. The 404-then-create path (ZZSPIKE regression). This is the case the
-#    happy path (5) does NOT cover — 5's project already exists, so it
-#    never exercises jira_get_soft's real "not found" branch at all.
-#    Found live: `rc=$?` placed AFTER the `if existing=$(...); then ...;
-#    fi` block (no `else`) reads the IF-COMPOUND's own exit status once
-#    execution falls through past `fi` — 0, because the untaken `then`
-#    branch is what "the compound succeeded" means here — never
-#    jira_get_soft's real 1 for a 404. So a real 404 used to hit the
-#    "unexpected error" die below unconditionally, and no project was
-#    ever created. Fixed: `existing=$(...); rc=$?` on ONE line, then
-#    branch on $rc explicitly.
-# =================================================================
+# 7. the 404-then-create path, the branch case 5's already-existing project never hits
 WRAP_CREATE="$TMPD/wrap-create.sh"
 make_jira_api_stub "$WRAP_CREATE"
 WF_CREATE="$TMPD/wf-create.sh"
@@ -591,11 +443,7 @@ check "7: the create body carries the given --lead accountId" "$CREATEBODY" '"le
 check_not "7: --lead given means /myself was never called" "$(cat "$CREATELOG")" "raw GET /myself"
 check "7: the post-create readback ran (project readback proceeded past create)" "$LAST_OUT" "bootstrap complete"
 
-# =================================================================
-# 8. A GET /project/<KEY> failure that is NOT a 404 (a real transport or
-#    server error) still dies with the "refusing to guess" message, and
-#    never attempts a create.
-# =================================================================
+# 8. a non-404 GET /project failure still dies rather than attempting a create
 WRAP_ERR="$TMPD/wrap-err.sh"
 make_jira_api_stub "$WRAP_ERR"
 WF_ERR="$TMPD/wf-err.sh"
@@ -608,16 +456,7 @@ ERRLOG="$TMPD/$(basename "$WRAP_ERR").calllog"
 check_not "8: no POST /project was attempted after a non-404 error" "$(cat "$ERRLOG")" "write POST /project "
 assert_eq "8: jira-workflow-apply.sh was never invoked" "" "$(cat "$TMPD/$(basename "$WF_ERR").calllog" 2>/dev/null || true)"
 
-# =================================================================
-# 9. An already-on-screen field is an idempotent no-op. The REAL ZZSPIKE
-#    capture happened to show every target field absent everywhere (see
-#    section 5), so this uses ONE derived variant of the real
-#    tab-fields-10052 fixture (touches added, as if a previous run had
-#    already placed it there — see TAB_FIELDS_10052_WITH_TOUCHES's own
-#    comment above) to prove the skip branch actually skips, not just
-#    that it happens to never trigger in the one state this repo has
-#    seen live.
-# =================================================================
+# 9. an already-on-screen field is an idempotent no-op
 WRAP_SCREENSKIP="$TMPD/wrap-screenskip.sh"
 make_jira_api_stub "$WRAP_SCREENSKIP"
 WF_SCREENSKIP="$TMPD/wf-screenskip.sh"
@@ -632,19 +471,7 @@ SCREENSKIPLOG="$TMPD/$(basename "$WRAP_SCREENSKIP").calllog"
 check_not "9: no write was issued to add touches to screen 10049's own tab" "$(cat "$SCREENSKIPLOG")" '/screens/10049/tabs/10052/fields {"fieldId":"customfield_10043"}'
 check "9: touches was still added to the OTHER two screens (only 10049 already had it)" "$LAST_OUT" "field 'touches' absent from screen 10050 / tab 'Field Tab' — adding"
 
-# =================================================================
-# 10. THE ZZSPIKE RUN 4 REGRESSION — a fully idempotent rerun (project
-#     already exists, all six fields already present with the right
-#     schema type, all three executor options already present, all six
-#     fields already on all three screens) makes ZERO write calls at
-#     all, AND a grep for "creating" against the run's own output finds
-#     ZERO matches. Found live: ZZSPIKE run 4 (genuinely zero POSTs) still
-#     matched `grep 'creating'` once, from "...verifying, not creating." —
-#     a caller scripting "did this rerun actually create anything?" as
-#     grep 'creating' got a false positive on a project that already
-#     existed. Fixed wording ("no create needed") deliberately does not
-#     contain the substring "creating" anywhere.
-# =================================================================
+# 10. a fully idempotent rerun issues zero writes and never prints "creating"
 WRAP_IDEMPOTENT="$TMPD/wrap-idempotent.sh"
 make_jira_api_stub "$WRAP_IDEMPOTENT"
 WF_IDEMPOTENT="$TMPD/wf-idempotent.sh"
@@ -664,15 +491,7 @@ assert_eq "10: grep 'creating' against the run's own output finds ZERO matches (
 check "10: the accurate wording is used instead" "$LAST_OUT" "already exists — verifying, no create needed."
 check "10: bootstrap-complete banner still shown" "$LAST_OUT" "bootstrap complete"
 
-# =================================================================
-# 11. SCRIPT-REVIEWER HIGH — a malformed /screens/<id>/tabs response (not
-#     the array Jira always actually returns) must be a hard die, not a
-#     silently-skipped screen. Before the fix, `done <<EOF /
-#     $(jq ... .[].id)` embedded the parse directly in the heredoc word,
-#     where a jq failure's exit status is discarded — the loop for that
-#     screen would just run zero times and the script would print
-#     "bootstrap complete" having skipped it.
-# =================================================================
+# 11. a malformed /screens/<id>/tabs response is a hard die, not a skipped screen
 WRAP_BADTABS="$TMPD/wrap-badtabs.sh"
 make_jira_api_stub "$WRAP_BADTABS"
 WF_BADTABS="$TMPD/wf-badtabs.sh"
@@ -685,12 +504,7 @@ assert_nonzero "11: a malformed /screens/<id>/tabs response is a hard die" "$LAS
 check "11: names the screen it failed on" "$LAST_ERR" "could not parse tab ids for screen 10049"
 check_not "11: never reaches \"bootstrap complete\" having silently skipped the screen" "$LAST_OUT" "bootstrap complete"
 
-# =================================================================
-# 12. SCRIPT-REVIEWER MEDIUM — a custom field name that matches MORE THAN
-#     ONE field (Jira does not enforce unique custom field names) is a
-#     hard die naming every colliding id, not a silent "pick the first
-#     match".
-# =================================================================
+# 12. a custom field name matching more than one field dies naming every id
 WRAP_DUPFIELD="$TMPD/wrap-dupfield.sh"
 make_jira_api_stub "$WRAP_DUPFIELD"
 WF_DUPFIELD="$TMPD/wf-dupfield.sh"
@@ -705,23 +519,7 @@ check "12: names both colliding ids" "$LAST_ERR" "customfield_10043, customfield
 DUPFIELDLOG="$TMPD/$(basename "$WRAP_DUPFIELD").calllog"
 check_not "12: never issued a write for the ambiguous field" "$(cat "$DUPFIELDLOG")" "write POST /field "
 
-# =================================================================
-# 13. A field probed unsearchable (HTTP 400) gets repaired with
-#     PUT /field/<id> {searcherKey: <textsearcher, from
-#     FIELD_SEARCHER_KEYS>} and a passing re-probe; a field that answers
-#     searchable from its first probe issues no PUT at all. The stub's 400/
-#     200 bodies come from fixtures/space-search-jql-not-searchable.txt
-#     and fixtures/space-search-jql-searchable.txt — RECORDED LIVE
-#     2026-09-14 against project NWM itself (a throwaway textarea field,
-#     created and deleted for the capture; see each fixture's own header
-#     and space-search-jql-field-create.txt/space-search-jql-searcherkey-
-#     put.txt for the rest of the chain). Unlike the rest of this file's
-#     fixtures (see FIXTURE PROVENANCE above), these four ARE real: the
-#     real 400 body carries no "not searchable" text at all — that wording
-#     is the Automation UI's, a different surface — which is exactly why
-#     probe_field_searchable() treats any HTTP 400 on this probe as the
-#     signal, not a body-text match.
-# =================================================================
+# 13. a field probed unsearchable is repaired with PUT searcherKey and re-probed
 WRAP_UNSEARCH="$TMPD/wrap-unsearch.sh"
 make_jira_api_stub "$WRAP_UNSEARCH"
 WF_UNSEARCH="$TMPD/wf-unsearch.sh"

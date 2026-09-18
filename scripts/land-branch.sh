@@ -3,70 +3,25 @@
 # Land a finished ticket branch onto the target branch (default: main),
 # complete its ticket, and clean up.
 #
-# This script exists because of two defects produced, once, by doing this
-# sequence by hand: (1) a ticket's `outcome` field was edited AFTER the
-# ticket file had already been moved to its completed location, so the move
-# staged the OLD (empty-outcome) content — several tickets reached
-# "completed" with an empty outcome; (2) a merge conflict sat inside a shell
-# `if` block in a way that `set -e` did not catch, so a broken merge with
-# literal conflict markers was pushed to a shared remote. This script is the
-# fix: it edits a completing ticket BEFORE moving it (so the move stages
-# current content), re-`git add`s the moved path explicitly and asserts
-# nothing is left unstaged, and it stops hard, by construction, on the first
-# failure rather than continuing down an unguarded branch.
-#
 # TRACKER. Two backends, selected by --tracker / LAND_BRANCH_TRACKER
 # (default: file — this plugin ships with zero external accounts required):
 #
-#   file    the to-issues skill's directory convention: a ticket is a
-#           markdown file that moves between <issues-dir>/{open,in-progress,
-#           awaiting-deployment,completed,cancelled}/. Before the merge, a
-#           ticket in in-progress/ is moved to awaiting-deployment/ (updated
-#           bumped) as its own commit; after the merge and lint, completing
-#           it edits its frontmatter (outcome, updated) BEFORE `git mv`ing it
-#           to completed/, then commits that move as its own commit, ticket
-#           id first in the subject. One commit per move; the edit-before-move
-#           ordering is what the header above exists to enforce. All commits
-#           reach origin in the one push.
+#   file    a ticket is a markdown file that moves between <issues-dir>/
+#           {open,in-progress,awaiting-deployment,completed,cancelled}/.
+#           One commit per move; a completing ticket is edited BEFORE it is
+#           moved, so the move stages current content.
 #
-#   jira    an external tracker reached through a caller-supplied API
-#           wrapper (--jira-api PATH / ISSUES_JIRA_API, matching the
-#           to-issues skill's own convention) shaped like: `<wrapper> raw GET
-#           <path>`, `<wrapper> --yes write POST <path> <json>`, and
-#           `<wrapper> --yes comment <key> -` (text on stdin). This plugin
-#           ships a default at providers/tracker/jira/jira-api.sh; a project
-#           may point --jira-api at that or bring its own. Every transition
-#           is resolved BY TARGET STATUS, never by a configured transition
-#           id: the issue's live transitions list is fetched and the one
-#           transition whose `to.id` equals the target status id is used;
-#           zero or more than one such transition is refused rather than
-#           guessed. Three status ids are needed, none with a default (every
-#           tracker's workflow ids differ): --jira-progress-status,
-#           --jira-awaiting-status and --jira-done-status. Every transition
-#           is READ BACK and asserted to be in the target status — a 2xx is
-#           not evidence the state actually moved. The outcome is posted as
-#           a comment only after the Completed read-back confirms.
+#   jira    a caller-supplied API wrapper (--jira-api PATH / ISSUES_JIRA_API)
+#           called as `<wrapper> raw GET <path>`, `<wrapper> --yes write POST
+#           <path> <json>`, and `<wrapper> --yes comment <key> -` (text on
+#           stdin). A default ships at providers/tracker/jira/jira-api.sh.
+#           Every transition is resolved BY TARGET STATUS and READ BACK
+#           afterwards; zero or more than one match is refused, never guessed.
 #
-# LIFECYCLE. A ticket is In Progress from dispatch, Awaiting Deployment
-# before landing, Completed after landing; this script drives the last two
-# moves. Jira mode: before the merge, an In Progress issue is moved to
-# Awaiting Deployment (skipped if already there; any other status is
-# refused, because the lifecycle was skipped upstream); after the push, it
-# is moved to Completed and the outcome is posted. File mode mirrors this
-# with directory moves (in-progress/ -> awaiting-deployment/ before the
-# merge, -> completed/ after lint); a ticket in open/ or cancelled/ is
-# refused. --no-complete runs only the first move. A stop after the
-# Awaiting Deployment move leaves the jira issue there (the message says
-# so) and a re-run skips that move; file mode's move commit is local to the
-# integration worktree until the push, so a stop discards it.
-#
-# Every failure between the merge and the push goes through die_reset (or
-# stop2_reset for a "could not evaluate" case) so a half-landed branch is
-# never left on $TARGET_BRANCH. After the push the landing stands and is
-# never reverted: a failed `git push` (fix the push by hand), a failed jira
-# Completed transition (exit 1; the issue stays Awaiting Deployment,
-# complete it by hand and say so in the ticket), and a failed outcome
-# comment after a confirmed Completed (warned; add it by hand).
+# LIFECYCLE. In Progress from dispatch, Awaiting Deployment before landing,
+# Completed after landing; this script drives the last two moves, and
+# --no-complete runs only the first. A file-mode ticket in open/ or
+# cancelled/, or a jira issue in any other status, is refused.
 #
 # Usage:
 #   land-branch.sh <branch> <ticket-id> [--dry-run]
@@ -78,98 +33,48 @@
 #   land-branch.sh <branch> <ticket-id> --no-complete [--dry-run] [--note "text"] [--tracker file|jira] ...
 #   land-branch.sh --help
 #
-# INTEGRATION WORKTREE. The merge, lint, completion and push no longer run
-# in the tree this script was invoked from — they run in a dedicated
-# worktree this script owns and keeps across runs:
-# `<parent-of-the-repo's-main-worktree>/<repo-basename>-land` (e.g.
-# `~/code/foo` -> `~/code/foo-land`). Derived from `git worktree list
-# --porcelain`'s FIRST entry (git always lists the main worktree first),
-# never from `$PWD` — so this works identically whether invoked from the
-# main checkout, a Herdr worktree, or an agent's own isolated worktree.
-#
-# First use: `git worktree add --detach <path> <target-branch>` off the main
-# worktree (--detach because <target-branch> is very likely already checked
-# out THERE). Later uses: the worktree is verified to be a real, registered
-# worktree of this repo, then `git fetch origin` + `git reset --hard
-# origin/<target-branch>` + `git clean -fd` — every run starts it from
-# exactly what origin has, discarding any prior local commits or untracked
-# debris it left behind. A dirty integration worktree (any uncommitted
-# change) is refused loudly BEFORE that reset, UNLESS `--reset-land` is
-# passed, which discards it on purpose and says so.
-#
-# A second land-branch.sh run against the same repo while one is already
-# using the integration worktree is refused loudly too — an mkdir-based lock
-# (`<worktree>.lock`, holder pid/start time inside it) serializes the
-# fetch/reset/merge/lint/push window; a lock whose holder pid is no longer
-# running is reclaimed automatically.
-#
-# The invoking tree (wherever the script was actually run from) is never
-# mutated — no merge, no reset, no stash, no commit, nothing — and is read
-# for git state only to check <branch>'s own worktree (sometimes the
-# invoking tree itself) for uncommitted changes. Its own dirty/clean state
-# and current branch are irrelevant: TARGET_BRANCH no longer needs to be
-# checked out anywhere, and the old "must be run from <target-branch> with a
-# clean tree" preflight is gone in full, because the merge no longer happens
-# there.
-#
-# Because the merge lands in the integration worktree and is pushed from
-# there, the main worktree is NOT fast-forwarded automatically after a
-# successful push. The final summary instead prints the one-line
-# `git -C <main-worktree> pull --ff-only` the caller may run by hand.
-#
-# `--reset-land` only ever touches the integration worktree.
+# INTEGRATION WORKTREE. The merge, lint, completion and push run in
+# `<parent-of-the-main-worktree>/<repo-basename>-land` (e.g. `~/code/foo` ->
+# `~/code/foo-land`), never in the invoking tree, which is never mutated.
+# Every run resets it to origin/<target-branch>, discarding prior local
+# commits and untracked debris; a dirty one is refused unless --reset-land is
+# passed, and a concurrent run is refused by a lock at `<worktree>.lock`.
+# The main worktree is NOT fast-forwarded after a successful push — the final
+# summary prints the `git -C <main-worktree> pull --ff-only` to run by hand.
 #
 # Exit codes:
 #   0   landed cleanly
 #   1   a step failed AFTER the merge succeeded (lint, or completing). The
-#       merge is reverted (`git reset --hard ORIG_HEAD`) before this exit,
-#       every time, so $TARGET_BRANCH is exactly as it was before the run —
-#       except a failed `git push`, which is NOT reverted (the landing is
-#       complete locally; the message says so).
+#       merge is reverted before this exit — except a failed `git push`,
+#       which is NOT reverted (the landing is complete locally).
 #   2   could not evaluate / stopped early — bad input, a dirty tree, a
-#       missing ticket, a git command that itself failed while checking a
-#       precondition, or a merge conflict. Nothing was mutated before this
-#       exit (the two checks right after the merge that could still trigger
-#       it also revert first).
+#       missing ticket, a git precondition check that itself failed, or a
+#       merge conflict. Nothing was mutated before this exit.
 #
 # Env overrides (all have a `--flag` equivalent; the flag wins):
-#   TARGET_BRANCH               branch to land onto (default: main). No
-#                                worktree needs this branch checked out
-#                                anywhere — the integration worktree is reset
-#                                to origin/$TARGET_BRANCH itself, every run.
-#   LAND_BRANCH_TRACKER          file (default) | jira.
-#   ISSUES_DIR                   file mode's tickets directory (default: issues).
-#   ISSUES_JIRA_API               jira mode's API wrapper path.
-#   LAND_BRANCH_JIRA_PROGRESS_STATUS  jira mode's In Progress status id.
-#                                Required in jira mode; no default.
-#   LAND_BRANCH_JIRA_AWAITING_STATUS  jira mode's Awaiting Deployment status
-#                                id. Required in jira mode; no default.
-#   LAND_BRANCH_JIRA_DONE_STATUS  jira mode's Completed status id. Required in
-#                                jira mode unless --no-complete; no default
-#                                (every tracker's workflow ids differ).
-#   LAND_BRANCH_LINT_CMD          command to run on the merged tree before
-#                                completing (default: ./scripts/lint.sh if
-#                                present and executable, else skipped with a
-#                                warning — a consuming project need not have
-#                                one at that path).
-#   --reset-land                 (flag, not an env var) discards uncommitted
-#                                changes in the integration worktree
-#                                (`git reset --hard` + `git clean -fd`)
-#                                before syncing it — for the one case the
-#                                dirty-worktree guard refuses on its own.
-#                                Never touches the invoking tree.
-#   LAND_BRANCH_COAUTHOR          optional. "Name <email>" appended as a
-#                                Co-Authored-By trailer on any completion or
-#                                note commit. Unset means no such trailer —
-#                                commits default to the owner alone.
-#   LAND_BRANCH_SESSION           optional, same as LAND_BRANCH_COAUTHOR:
-#                                a Claude-Session trailer when set, no
-#                                trailer when unset.
+#   TARGET_BRANCH                     branch to land onto (default: main).
+#   LAND_BRANCH_TRACKER               file (default) | jira.
+#   ISSUES_DIR                        file mode's tickets dir (default: issues).
+#   ISSUES_JIRA_API                   jira mode's API wrapper path.
+#   LAND_BRANCH_JIRA_PROGRESS_STATUS  In Progress status id. Required in jira
+#                                     mode; no default.
+#   LAND_BRANCH_JIRA_AWAITING_STATUS  Awaiting Deployment status id. Required
+#                                     in jira mode; no default.
+#   LAND_BRANCH_JIRA_DONE_STATUS      Completed status id. Required in jira
+#                                     mode unless --no-complete; no default.
+#   LAND_BRANCH_LINT_CMD              command run on the merged tree before
+#                                     completing (default: ./scripts/lint.sh
+#                                     if present, else skipped with a warning).
+#   LAND_BRANCH_COAUTHOR              optional "Name <email>" for a
+#                                     Co-Authored-By trailer; unset means none.
+#   LAND_BRANCH_SESSION               optional, same shape, for a
+#                                     Claude-Session trailer.
+#   --reset-land                      (flag only) discards uncommitted changes
+#                                     in the integration worktree before
+#                                     syncing. Never touches the invoking tree.
 #
-# Optional layer: if HERDR_ENV=1 and the `herdr` CLI is on PATH, a
-# successful landing also removes the herdr worktree workspace matching this
-# branch (matched by branch name, never by sidebar position) and is a no-op
-# otherwise — see the plugin's optional-layers doc.
+# Optional layer: with HERDR_ENV=1 and `herdr` on PATH, a successful landing
+# also removes the herdr worktree workspace matching this branch by name.
 
 set -euo pipefail
 # shellcheck source=lib/kit.sh
@@ -183,21 +88,17 @@ JIRA_DONE_STATUS="${LAND_BRANCH_JIRA_DONE_STATUS:-}"
 JIRA_AWAITING_STATUS="${LAND_BRANCH_JIRA_AWAITING_STATUS:-}"
 JIRA_PROGRESS_STATUS="${LAND_BRANCH_JIRA_PROGRESS_STATUS:-}"
 LINT_CMD="${LAND_BRANCH_LINT_CMD:-}"
-# Set once the jira issue has been moved to Awaiting Deployment, so every
-# later stop says the issue stays there.
+# Set once the jira issue reaches Awaiting Deployment, so every later stop
+# says the issue stays there.
 LIFECYCLE_NOTE=""
 
 # stop2 — a precondition could not be met, BEFORE any mutating command has
-# run. Same message shape as kit.sh's die(), different exit code. Releases
-# the integration-worktree lock first (a no-op if never acquired) — stop2
-# runs both before and after the lock is taken.
+# run. Releases the integration-worktree lock first; a no-op if never held.
 stop2() { release_land_lock; echo "Error: $*${LIFECYCLE_NOTE:+
 $LIFECYCLE_NOTE}" >&2; exit 2; }
 
-# stop2_reset / die_reset — same as stop2/die, but for a failure that
-# happens AFTER the merge: reset first, every time, so an unresolved
-# assertion or a hard failure never leaves the merge commit sitting on
-# $TARGET_BRANCH.
+# stop2_reset / die_reset — as stop2/die, but for a failure AFTER the merge:
+# reset first, every time, so the merge commit never sits on $TARGET_BRANCH.
 stop2_reset() {
     release_land_lock
     git reset --hard ORIG_HEAD >/dev/null 2>&1 \
@@ -214,18 +115,9 @@ die_reset() {
 $LIFECYCLE_NOTE}"
 }
 
-# ------------------------------------------------------------ integration lock
-#
-# The integration worktree is shared by every land-branch.sh run against
-# this repo, with no serialisation of its own — two concurrent landings
-# would fetch/reset/merge/lint/push in the same directory at once. An
-# mkdir-based lock at "<worktree>.lock" (mkdir is atomic even cross-process,
-# and needs no external tool — macOS ships no flock(1)) serialises the whole
-# integration-worktree window. this repo's kit.sh has no generic on-exit
-# hook, so every controlled exit path (stop2/stop2_reset/die_reset above,
-# the push-failure die()s, and the final success exit) calls
-# release_land_lock explicitly. An uncontrolled crash/SIGINT is not covered
-# by that — the stale-pid reclaim below is the safety net for it.
+# The lock serialises the shared integration worktree. kit.sh has no generic
+# on-exit hook, so every controlled exit path calls release_land_lock
+# explicitly; an uncontrolled crash is covered only by the stale-pid reclaim.
 
 LAND_LOCK_DIR=""
 LAND_LOCK_ACQUIRED=0
@@ -240,22 +132,9 @@ release_land_lock() {
         || warn "could not remove lock file '$LAND_LOCK_DIR' — remove it by hand once no land-branch.sh run is actually using it"
 }
 
-# acquire_land_lock <land-worktree-lock-file> — never waits: either wins the
-# lock immediately or refuses loudly (stop2) naming the current holder's pid
-# and start time. A holder with no live pid is reclaimed: the stale lock is
-# removed and the attempt retried, capped so a permissions problem can't
-# loop forever.
-#
-# The lock is a single file, won by `ln` (atomic: it fails with the target
-# already existing unless this call created it). Content (pid + start time)
-# is written to a private temp file FIRST, then `ln`ed into place — so by
-# the time any other process can see the lock file exist, its content is
-# already complete. A two-step "mkdir the lock, then separately write a
-# holder file inside it" was tried first and rejected: a second process
-# racing the gap between the winner's mkdir and its holder-file write would
-# see an empty/missing holder, read that as "stale", and reclaim a lock
-# another process had already won — this `ln`-with-pre-written-content
-# construction has no such window.
+# acquire_land_lock <land-worktree-lock-file> — never waits: wins the lock, or
+# refuses loudly (stop2) naming the holder's pid and start time. A holder with
+# no live pid is reclaimed and the attempt retried, capped.
 acquire_land_lock() {
     local dir="$1" attempt=0 tmp holder_pid holder_started
     LAND_LOCK_DIR="$dir"
@@ -286,7 +165,6 @@ acquire_land_lock() {
     stop2 "could not acquire the integration worktree lock '$dir' after $attempt attempts — repeatedly lost the race, or could not create/remove it (permissions?)"
 }
 
-# ------------------------------------------------------------------- parse
 
 BRANCH=""
 TICKET_ID=""
@@ -380,9 +258,8 @@ if [ "$TRACKER" = jira ]; then
     [ -x "$JIRA_API" ] || stop2 "jira API wrapper is missing or not executable: $JIRA_API"
 fi
 
-# shellcheck disable=SC2086  # word splitting is the point: POSITIONAL is a
-# newline-joined list of bare args (branch, ticket id), neither of which is
-# ever expected to contain whitespace.
+# shellcheck disable=SC2086  # deliberate word splitting: POSITIONAL is a
+# newline-joined list of bare args (branch, ticket id)
 set -- $POSITIONAL
 [ $# -eq 2 ] || stop2 "expected <branch> <ticket-id>, got $# positional argument(s) (see --help)"
 BRANCH="$1"
@@ -395,7 +272,6 @@ esac
 
 need git
 
-# ---------------------------------------------------------------- preflight
 
 INVOKING_REPO=$(git rev-parse --show-toplevel 2>/dev/null) || stop2 "not inside a git repository"
 cd "$INVOKING_REPO"
@@ -403,14 +279,9 @@ cd "$INVOKING_REPO"
 git rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null \
     || stop2 "branch '$BRANCH' does not exist"
 
-# 1. Resolve the main worktree and the integration worktree (read-only —
-# `git worktree list --porcelain`'s first entry is always the main
-# worktree). Refs are shared repo-wide, so every read below works
-# identically regardless of which worktree this script was invoked from.
-#
-# Review finding: 'git worktree list' swallowing a real failure
-# into "" is indistinguishable from "no worktrees" — stop2 ("could not
-# evaluate"), not a guessed pass.
+# `git worktree list --porcelain`'s first entry is always the main worktree.
+# A real failure swallowed into "" is indistinguishable from "no worktrees",
+# so it is a stop2, never a guessed pass.
 if ! WT_PORCELAIN=$(git worktree list --porcelain 2>&1); then
     stop2 "could not evaluate 'git worktree list': $WT_PORCELAIN"
 fi
@@ -420,11 +291,8 @@ LAND_WORKTREE="$(dirname "$MAIN_WORKTREE")/$(basename "$MAIN_WORKTREE")-land"
 LAND_EXISTS=0
 printf '%s\n' "$WT_PORCELAIN" | grep -qxF "worktree $LAND_WORKTREE" && LAND_EXISTS=1
 
-# <branch>'s own worktree (if any — this is the shape a Herdr wave leaves
-# it in, and sometimes the invoking tree itself), fully committed. Reuses
-# $WT_PORCELAIN from above — same repo, so it already has every worktree's
-# branch, not just the main one. Same "could not evaluate" treatment as
-# above, not a guessed pass.
+# <branch>'s own worktree, if any, must be fully committed. Reuses
+# $WT_PORCELAIN: same repo, so it already lists every worktree's branch.
 BRANCH_WT=$(printf '%s\n' "$WT_PORCELAIN" | awk -v b="refs/heads/$BRANCH" '
     /^worktree / { path=$0; sub(/^worktree /,"",path) }
     /^branch /   { br=$0; sub(/^branch /,"",br); if (br==b) print path }
@@ -436,14 +304,9 @@ if [ -n "$BRANCH_WT" ]; then
     [ -z "$WT_STATUS" ] || stop2 "branch '$BRANCH' worktree at '$BRANCH_WT' has uncommitted changes — commit or stash them first"
 fi
 
-# 1c. Resolve the ticket's current location/status against $TARGET_BRANCH's
-# own content — read via `git show`/`git cat-file`, not the working tree,
-# since the invoking tree's checkout may not (and need not) be on
-# $TARGET_BRANCH at all. Both modes: a read-only check, before the merge, so
-# a missing ticket is a stop2 with nothing mutated. This is a preview only —
-# the merge below lands on top of the integration worktree's freshly synced
-# origin/$TARGET_BRANCH, and the same resolution runs again, authoritatively,
-# against that post-merge tree further down.
+# Resolve the ticket against $TARGET_BRANCH's content via `git show`, not the
+# working tree, which need not be on $TARGET_BRANCH at all. A preview only:
+# the same resolution runs again, authoritatively, against the post-merge tree.
 TICKET_FILE=""
 TICKET_STAGE=""
 ALREADY_DONE=0
@@ -473,14 +336,12 @@ if [ "$TRACKER" = file ]; then
         completed) [ "$ALREADY_DONE" = 1 ] || stop2 "$TICKET_FILE is already in completed/ — nothing to leave open with --no-complete" ;;
         *) stop2 "$TICKET_FILE is in $TICKET_STAGE/, not in-progress/ or awaiting-deployment/ — the lifecycle was skipped upstream (a dispatched ticket is in-progress). Nothing mutated. Move it by hand, say so in the ticket, then re-run" ;;
     esac
-    # Both fields must already exist inside the frontmatter block for the
-    # completion rewrite to edit in place. A missing field is refused here,
-    # before the merge (stop2, nothing mutated) — appending it after the
-    # merge would land past the closing '---', into the ticket body, which
-    # is not frontmatter at all and issues.py would never read it back.
+    # Both fields must already exist in the frontmatter block for the rewrite
+    # to edit in place: appending one later would land past the closing '---',
+    # in the body, where issues.py would never read it back.
     if [ "$NO_COMPLETE" != 1 ] && [ "$ALREADY_DONE" != 1 ]; then
-        # awk reads to EOF (no early exit): exiting at the second '---'
-        # SIGPIPEs git show on a large ticket and pipefail kills the run (141).
+        # awk reads to EOF: exiting at the second '---' SIGPIPEs git show on a
+        # large ticket and pipefail turns that into exit 141.
         FM_TOP=$(git show "$TARGET_BRANCH:$TICKET_FILE" 2>/dev/null | awk '/^---$/{c++} c<2 {print}')
         printf '%s\n' "$FM_TOP" | grep -q '^outcome:' \
             || stop2 "$TICKET_FILE has no 'outcome:' field in its frontmatter to rewrite"
@@ -579,12 +440,8 @@ if [ "$NO_COMPLETE" != 1 ]; then
     [ -n "$OUTCOME_TEXT" ] || OUTCOME_TEXT="Completed $(date +%F). Landed branch '$BRANCH' via land-branch.sh."
 fi
 
-# Trailers are opt-in: each var present appends its own trailer line;
-# unset means no trailer for that var, not a refusal (owner decision
-# 2026-09-15 — commits are attributed to the owner alone by default).
-# TRAILER_BLOCK carries its own leading blank line so callers can just
-# append "$TRAILER_BLOCK" after the commit body with no extra punctuation;
-# when both vars are unset it collapses to the empty string.
+# Trailers are opt-in: unset means no trailer, not a refusal. TRAILER_BLOCK
+# carries its own leading blank line and collapses to "" when both are unset.
 TRAILER_BLOCK=""
 [ -n "${LAND_BRANCH_COAUTHOR:-}" ] && TRAILER_BLOCK="$TRAILER_BLOCK
 Co-Authored-By: $LAND_BRANCH_COAUTHOR"
@@ -597,8 +454,7 @@ MERGE_MSG="$TICKET_ID: merge branch '$BRANCH' into $TARGET_BRANCH
 
 Landed via land-branch.sh."
 
-# Report the integration worktree's path and current state (read-only — no
-# worktree add/fetch/reset runs here, dry-run or not).
+# Read-only: no worktree add/fetch/reset runs here, dry-run or not.
 if [ "$LAND_EXISTS" = 1 ]; then
     if ! LAND_PLAN_STATUS=$(git -C "$LAND_WORKTREE" status --porcelain 2>&1); then
         LAND_STATE_DESC="exists, but its status could not be checked: $LAND_PLAN_STATUS"
@@ -666,8 +522,6 @@ if [ "$DRY_RUN" = 1 ]; then
     exit 0
 fi
 
-# --------------------------------------------------- integration worktree
-#
 # Everything from here through the push runs inside $LAND_WORKTREE, never in
 # $INVOKING_REPO — see the header's INTEGRATION WORKTREE section.
 
@@ -675,11 +529,8 @@ echo
 echo "Acquiring the integration worktree lock..."
 acquire_land_lock "$LAND_WORKTREE.lock"
 
-# Recomputed fresh, under the lock: $LAND_EXISTS above was read during
-# preflight (for the --dry-run plan), before this run necessarily held the
-# lock — another run could have created (or removed) the integration
-# worktree in between. Everything from here on is serialised by the lock, so
-# this re-read is authoritative for the rest of the script.
+# Recomputed under the lock: the preflight read happened before this run held
+# it, so another run could have created or removed the worktree in between.
 if ! WT_PORCELAIN=$(git worktree list --porcelain 2>&1); then
     stop2 "could not re-evaluate 'git worktree list' after acquiring the lock: $WT_PORCELAIN"
 fi
@@ -702,11 +553,8 @@ elif [ ! -e "$LAND_WORKTREE/.git" ]; then
         || stop2 "could not recreate integration worktree '$LAND_WORKTREE': $ADD_OUT"
 fi
 
-# Refuse a dirty integration worktree before it is ever reset — discarding
-# uncommitted work silently is the exact failure mode this guard exists to
-# prevent, and the reset immediately below would otherwise do exactly that
-# to ANY uncommitted change, with no way to tell it was ever there.
-# --reset-land clears it on purpose.
+# Refuse a dirty integration worktree BEFORE the reset below, which would
+# otherwise discard any uncommitted change silently. --reset-land opts in.
 LAND_STATUS_PRE=$(git -C "$LAND_WORKTREE" status --porcelain 2>&1) \
     || stop2 "could not check integration worktree '$LAND_WORKTREE' status: $LAND_STATUS_PRE"
 if [ -n "$LAND_STATUS_PRE" ]; then
@@ -733,11 +581,8 @@ git -C "$LAND_WORKTREE" clean -fd >/dev/null 2>&1 \
 REPO="$LAND_WORKTREE"
 cd "$REPO"
 
-# ------------------------------------------- lifecycle: awaiting deployment
-#
 # Before the merge — see the header's LIFECYCLE section. Nothing is merged
-# yet, so no stop here needs a reset; file mode's move commit is local to
-# this worktree and discarded by the reset below or the next run's sync.
+# yet, so no stop here needs a reset.
 
 if [ "$TRACKER" = jira ]; then
     if [ -n "$JIRA_AWAIT_TID" ]; then
@@ -796,7 +641,6 @@ $AWAIT_LEFTOVER"
     fi
 fi
 
-# -------------------------------------------------------------------- merge
 
 echo
 echo "Merging '$BRANCH' into '$TARGET_BRANCH'..."
@@ -822,14 +666,9 @@ fi
 $STILL_UNMERGED"
 echo "merged clean."
 
-# A worker may legitimately move its own ticket file as part of its branch
-# (e.g. a mixed-executor ticket parking itself in awaiting-deployment/ to
-# wait on a human step) — that move lands as part of THIS merge, so
-# $TICKET_FILE/$TICKET_STAGE, resolved in 1c against the PRE-merge tree, can
-# now point at a path the merge just deleted. Re-resolve against the
-# post-merge tree before touching the ticket file at all. (Review findings:
-# land-branch used to refuse and revert a clean merge here because the
-# pre-merge path no longer existed.)
+# A worker may move its own ticket file as part of its branch, so the
+# pre-merge $TICKET_FILE can point at a path this merge just deleted.
+# Re-resolve against the post-merge tree before touching the ticket at all.
 if [ "$TRACKER" = file ]; then
     TICKET_FILE=""
     TICKET_STAGE=""
@@ -856,7 +695,6 @@ if [ "$TRACKER" = file ]; then
     fi
 fi
 
-# -------------------------------------------------------------------- lint
 
 EFFECTIVE_LINT="$LINT_CMD"
 [ -n "$EFFECTIVE_LINT" ] || { [ -x ./scripts/lint.sh ] && EFFECTIVE_LINT=./scripts/lint.sh; }
@@ -871,7 +709,6 @@ else
     warn "no lint command configured (--lint-cmd / \$LAND_BRANCH_LINT_CMD) and no executable ./scripts/lint.sh found — skipping"
 fi
 
-# ---------------------------------------------------------------- complete
 
 if [ "$TRACKER" = file ]; then
     if [ "$NO_COMPLETE" = 1 ]; then
@@ -891,15 +728,9 @@ $NOTE_TEXT
         DEST="$ISSUES_DIR/completed/$TICKET_ID.md"
         mkdir -p "$ISSUES_DIR/completed" || die_reset "could not create $ISSUES_DIR/completed — merge reverted, nothing pushed"
 
-        # Edit BEFORE the move — the ordering the header comment exists for.
-        # `outcome:` is rewritten as a YAML block scalar (`outcome: |`) so a
-        # multi-line outcome survives intact, matching the to-issues skill's
-        # ticket-template.md shape — a single-line sed substitution (the
-        # original attempt at this) silently truncates a multi-line outcome
-        # at its first newline. Ported from the last pre-removal revision of
-        # this script (recovered via git history) and adapted to a
-        # configurable ISSUES_DIR and to drop the tracker dual-write this
-        # plugin's file mode does not do.
+        # Edit BEFORE the move. `outcome:` is rewritten as a YAML block scalar
+        # (`outcome: |`) so a multi-line outcome survives intact; a single-line
+        # sed substitution truncates it at the first newline.
         UPDATED_TODAY=$(date +%F)
         OUTCOME_INDENTED=$(tmpfile) || die_reset "could not create temp file — merge reverted, nothing pushed"
         while IFS= read -r l || [ -n "$l" ]; do
@@ -913,14 +744,9 @@ EOF
             BEGIN { fm = 0; outcome_done = 0; updated_done = 0; skipping = 0 }
             {
                 if (skipping == 1) {
-                    # A YAML block scalar body line is either indented (2
-                    # spaces here, the convention this script writes) or
-                    # blank — a blank line inside the block does NOT end it.
-                    # Checking only /^  / stopped skipping at the first blank
-                    # line in an EXISTING multi-line outcome, so every stale
-                    # line after that blank fell through as ordinary
-                    # frontmatter and got kept verbatim in the rewritten
-                    # ticket.
+                    # A block-scalar body line is either indented or BLANK — a
+                    # blank line inside the block does not end it, so checking
+                    # only /^  / leaks stale lines into the rewritten ticket.
                     if ($0 ~ /^  /) { next }
                     if ($0 == "") { next }
                     skipping = 0
@@ -942,63 +768,44 @@ EOF
                 print
             }
             END {
-                # A ticket with no updated: field still completes — outcome
-                # is the field the frontmatter contract actually requires.
+                # A ticket with no updated: field still completes; outcome is
+                # the only field the frontmatter contract requires.
                 exit(outcome_done ? 0 : 1)
             }
         ' "$TICKET_FILE" > "$NEW_TICKET" \
             || die_reset "could not find 'outcome:' inside $TICKET_FILE's frontmatter — merge reverted, nothing pushed"
         [ -s "$NEW_TICKET" ] || die_reset "rewriting $TICKET_FILE produced an empty file — merge reverted, nothing pushed"
 
-        # mv, not a truncating write, and restore the original file's mode —
-        # content correctness matters more than the bit, but there is no
-        # reason to lose it either.
+        # mv, not a truncating write, and restore the original file's mode.
         ORIG_MODE=$(stat -f '%Lp' "$TICKET_FILE" 2>/dev/null) || ORIG_MODE=$(stat -c '%a' "$TICKET_FILE" 2>/dev/null) || ORIG_MODE=""
         mv "$NEW_TICKET" "$TICKET_FILE" || die_reset "could not overwrite $TICKET_FILE — merge reverted, nothing pushed"
         [ -n "$ORIG_MODE" ] && { chmod "$ORIG_MODE" "$TICKET_FILE" 2>/dev/null || true; }
 
         git mv "$TICKET_FILE" "$DEST" || die_reset "git mv $TICKET_FILE -> $DEST failed — merge reverted, nothing pushed"
-        # This is the step the header's defect #1 was missing: git add the
-        # moved path explicitly even though git mv already staged it, then
-        # ASSERT it — don't just trust the convention.
+        # git add the moved path explicitly even though git mv already staged
+        # it, then ASSERT it rather than trusting the convention.
         git add -- "$DEST" || die_reset "could not stage $DEST — merge reverted, nothing pushed"
-        # Assertion, not trust: every line under $ISSUES_DIR must be fully
-        # staged (porcelain's 2nd column blank) — a non-blank 2nd column is
-        # an unstaged working-tree change git status --porcelain would also
-        # report for an ordinary staged rename (1st column R, 2nd blank),
-        # which is the expected, fine case and must not trip this check.
+        # Every line under $ISSUES_DIR must be fully staged (porcelain's 2nd
+        # column blank); a staged rename is 'R ' and must not trip this.
         LEFTOVER=$(git status --porcelain -- "$ISSUES_DIR" 2>/dev/null | awk 'substr($0,2,1) != " "') || LEFTOVER=""
         [ -z "$LEFTOVER" ] || die_reset "unstaged changes remain under $ISSUES_DIR after staging the move — merge reverted, nothing pushed:
 $LEFTOVER"
-        # And the staged blob must actually carry the outcome we just wrote —
-        # not stale pre-edit content, which is exactly what defect #1 shipped.
-        # grep -c reads all input: grep -q would exit on the first match and
-        # SIGPIPE git show on a ticket larger than the pipe buffer, and
-        # pipefail would turn that into a false assertion failure.
+        # The staged blob must carry the outcome just written, not stale
+        # pre-edit content. grep -c reads all input: grep -q exits on the first
+        # match and SIGPIPEs git show on a ticket larger than the pipe buffer.
         git show ":$DEST" 2>/dev/null | grep -c '^outcome: |$' >/dev/null \
             || die_reset "assertion failed: staged '$DEST' does not carry the outcome block — merge reverted, nothing pushed"
 
-        # No pathspec: `git mv` stages a rename as two index entries (the
-        # deletion of the old path and the addition at $DEST), and a
-        # pathspec-limited `git commit -- "$DEST"` only commits the add side
-        # — the deletion of $TICKET_FILE stays staged afterward, and the
-        # NEXT run's dirty-tree preflight then refuses on a staged 'D
-        # <old-path>' this run silently left behind. Preflight (1a) already
-        # guaranteed a clean tree before the merge, and nothing between the
-        # merge and here stages anything but this move, so an unscoped
-        # commit is exactly as narrow in practice and does not leave a
-        # dangling half of the rename.
+        # No pathspec: `git mv` stages a rename as two index entries, and a
+        # pathspec-limited commit takes only the add side, leaving a staged
+        # 'D <old-path>' the next run's dirty-tree preflight refuses on.
         git commit -m "$TICKET_ID: complete
 
 $OUTCOME_TEXT$TRAILER_BLOCK" \
             || die_reset "could not commit the ticket completion — merge reverted, nothing pushed"
 
-        # Post-commit assertion, reading HEAD rather than the index: the
-        # pre-commit checks above (LEFTOVER, the outcome-block grep) only
-        # ever inspected staged state, which cannot see a commit that staged
-        # correctly but was then made with a pathspec narrow enough to drop
-        # half of it — that is exactly the class of bug the pathspec fix
-        # above closes, and this is the check that would have caught it.
+        # Reads HEAD, not the index: the pre-commit checks inspect staged state
+        # only, which cannot see a commit that dropped half of the rename.
         git cat-file -e "HEAD:$DEST" 2>/dev/null \
             || die_reset "HEAD does not contain $DEST after the completion commit — merge reverted, nothing pushed"
         if git cat-file -e "HEAD:$TICKET_FILE" 2>/dev/null; then
@@ -1026,7 +833,6 @@ $NOTE_TEXT" \
     fi
 fi
 
-# --------------------------------------------------------------------- push
 
 REMOTES=$(git remote 2>/dev/null) || REMOTES=""
 if [ -n "$REMOTES" ]; then
@@ -1048,8 +854,6 @@ else
     echo "no remote configured — skipping push."
 fi
 
-# ------------------------------------------------ lifecycle: completed (jira)
-#
 # After the push — the push is the deploy. The landing stands whatever
 # happens here; a failure is reported and exits 1 at the end, never reset.
 
@@ -1076,7 +880,6 @@ if [ "$TRACKER" = jira ] && [ "$NO_COMPLETE" != 1 ]; then
     fi
 fi
 
-# --------------------------------------------------------------- herdr + branch
 
 if [ "${HERDR_ENV:-}" = "1" ]; then
     if ! command -v herdr >/dev/null 2>&1; then
@@ -1084,24 +887,10 @@ if [ "${HERDR_ENV:-}" = "1" ]; then
     elif ! command -v jq >/dev/null 2>&1; then
         echo "HERDR_ENV=1 but 'jq' is not on PATH — skipping worktree removal."
     else
-        # End the worker's Claude session cleanly BEFORE the workspace (and
-        # its pane) is torn down. `herdr worktree remove` kills the pane
-        # outright; Claude Code never gets to tell Remote Control it
-        # finished, so the session is left as a permanent "offline" entry
-        # (NWM-117). A clean `/exit` makes the entry disappear instead of
-        # going offline — verified live 2026-09-18, see
-        # docs/open-questions.md. herdr-ticket-start.sh always names the
-        # worker's agent after its branch, so the branch name is its own
-        # target; no live agent by that name means it already exited (or
-        # was never started this way) and there is nothing to do.
-        #
-        # `/exit` is sent as literal text (not a `send-keys` logical key —
-        # there is no such key), which opens Claude Code's slash-command
-        # picker; the picker needs a first Enter to accept the match and a
-        # second to submit it, matching what was observed live. A bounded
-        # poll of `agent get` then waits for the agent to disappear — a
-        # hung worker must never block landing, so exceeding the bound is
-        # logged and the workspace is removed anyway.
+        # End the session BEFORE the pane is torn down: `herdr worktree remove`
+        # kills it outright, leaving a permanent "offline" entry (NWM-117).
+        # `/exit` is literal text, so the slash-command picker needs two Enters;
+        # exceeding the poll bound removes the workspace anyway.
         if herdr agent get "$BRANCH" >/dev/null 2>&1; then
             AGENT_PANE=$(herdr agent get "$BRANCH" 2>/dev/null | jq -r '.result.agent.pane_id // empty' 2>/dev/null) || AGENT_PANE=""
             if [ -z "$AGENT_PANE" ]; then
@@ -1129,10 +918,8 @@ if [ "${HERDR_ENV:-}" = "1" ]; then
             echo "no live Herdr agent named '$BRANCH' — nothing to exit."
         fi
 
-        # --cwd names the repo herdr resolves against, not the tree this
-        # script happens to be running in — the integration worktree ($REPO
-        # by this point) is a valid worktree of the same repo, but
-        # $MAIN_WORKTREE is what herdr knows this repo as.
+        # --cwd names the repo herdr resolves against: $MAIN_WORKTREE is what
+        # herdr knows this repo as, not the integration worktree.
         LISTING=$(herdr worktree list --cwd "$MAIN_WORKTREE" --json 2>/dev/null) || LISTING=""
         MATCH_COUNT=""
         if [ -n "$LISTING" ]; then

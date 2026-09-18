@@ -77,29 +77,17 @@ assert_rc() {
   fi
 }
 
-# =============================================================================
-# 1. Corrupt / empty stdin -> fails open (rc=0)
-# =============================================================================
-
 OUT="$(printf '{"tool_name": "Bash", "tool_in' | env BASH_SHUNT_STATE_ROOT="$STATE_ROOT" "$SCRIPT" 2>"$WORKDIR/.last_stderr"; echo "RC=$?")"
 assert_rc "truncated JSON fails open" "0" "$OUT"
 
 OUT="$(printf '' | env BASH_SHUNT_STATE_ROOT="$STATE_ROOT" "$SCRIPT" 2>"$WORKDIR/.last_stderr"; echo "RC=$?")"
 assert_rc "empty stdin fails open" "0" "$OUT"
 
-# =============================================================================
-# 2. Non-Bash tool, and non-noisy Bash commands, are left alone (rc=0)
-# =============================================================================
-
 OUT="$(run_hook Read "" "sess-nonbash")"
 assert_rc "non-Bash tool_name is left alone" "0" "$OUT"
 
 OUT="$(run_hook Bash "ls -la" "sess-plain")"
 assert_rc "plain unrelated Bash command is left alone" "0" "$OUT"
-
-# =============================================================================
-# 3. Bare, uncapped known-noisy commands are gated (rc=2) with guidance
-# =============================================================================
 
 OUT="$(run_hook Bash "git log" "sess-gitlog")"
 assert_rc "bare 'git log' is gated" "2" "$OUT"
@@ -114,25 +102,13 @@ assert_rc "bare 'jira-api.sh board' is gated" "2" "$OUT"
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh raw /search" "sess-jiraraw")"
 assert_rc "bare 'jira-api.sh raw' is gated" "2" "$OUT"
 
-# =============================================================================
-# 3b. issues.py board/waves is never gated, at any argument shape — this
-#     plugin's own to-issues issue tracker (skills/to-issues/scripts/
-#     issues.py) has no --tag/--status/--assignee/--wave/--limit filter, so
-#     gating it would block the exact command every session-start and
-#     tickets-protocol call runs unfiltered, with no capping flag available
-#     to add. See the "Deliberately NOT gated" note in this script's header.
-# =============================================================================
-
 OUT="$(run_hook Bash "python3 skills/to-issues/scripts/issues.py board issues/" "sess-issues-board")"
 assert_rc "'issues.py board issues/' (this plugin's real invocation) is never gated" "0" "$OUT"
 
 OUT="$(run_hook Bash "python3 skills/to-issues/scripts/issues.py waves issues/" "sess-issues-waves")"
 assert_rc "'issues.py waves issues/' is never gated" "0" "$OUT"
 
-# =============================================================================
-# 4. Already-capped known-noisy commands are NEVER gated (rc=0) — this is
-#    the group the discriminating mutant (see header) flips to rc=2.
-# =============================================================================
+# Group 4 is what the discriminating mutant (see the header) flips to rc=2.
 
 OUT="$(run_hook Bash "git log --oneline -20" "sess-gitlog-capped-1")"
 assert_rc "capped 'git log --oneline -20' is not gated" "0" "$OUT"
@@ -146,36 +122,20 @@ assert_rc "capped 'git log -20' (bare numeric limit) is not gated" "0" "$OUT"
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh board --limit 20" "sess-jira-capped")"
 assert_rc "capped 'jira-api.sh board --limit 20' is not gated" "0" "$OUT"
 
-# =============================================================================
-# 5. Escape hatch: same (session, exact command) run again -> allowed (rc=0)
-# =============================================================================
-
 OUT="$(run_hook Bash "git log" "sess-escape")"
 assert_rc "first uncapped 'git log' in a fresh session is gated" "2" "$OUT"
 
 OUT="$(run_hook Bash "git log" "sess-escape")"
 assert_rc "escape hatch: identical command, same session, runs unblocked" "0" "$OUT"
 
-# A DIFFERENT session with the same command is gated again (per-session).
 OUT="$(run_hook Bash "git log" "sess-escape-other")"
 assert_rc "escape hatch is per-session: new session re-gates" "2" "$OUT"
-
-# =============================================================================
-# 6. Secrets-bearing commands are never gated, even if they happen to also
-#    match a noisy shape textually.
-# =============================================================================
 
 OUT="$(run_hook Bash "op item get some-credential" "sess-secret-1")"
 assert_rc "'op item get' is never gated" "0" "$OUT"
 
 OUT="$(run_hook Bash "git log --grep=token" "sess-secret-2")"
 assert_rc "command text containing 'token' is never gated" "0" "$OUT"
-
-# =============================================================================
-# 7.  rework round: capped git log variants the digit-flag detection
-#    previously missed because it only recognised a cap immediately after
-#    `git log -`.
-# =============================================================================
 
 OUT="$(run_hook Bash "git log --stat -5" "sess-cap-stat")"
 assert_rc "'git log --stat -5' (cap not first flag) is not gated" "0" "$OUT"
@@ -186,12 +146,6 @@ assert_rc "'git log --graph -10' (cap not first flag) is not gated" "0" "$OUT"
 OUT="$(run_hook Bash "git log -n50" "sess-cap-n50")"
 assert_rc "'git log -n50' (glued -n<N>) is not gated" "0" "$OUT"
 
-# =============================================================================
-# 8.  rework round: unanchored substring match previously blocked any
-#    command merely MENTIONING a noisy shape's name in text, not an actual
-#    invocation of it.
-# =============================================================================
-
 OUT="$(run_hook Bash "grep -rn \"git log\" scripts/" "sess-mention-1")"
 assert_rc "'git log' inside a quoted grep pattern is not gated" "0" "$OUT"
 
@@ -201,31 +155,14 @@ assert_rc "'git log' inside an echoed string is not gated" "0" "$OUT"
 OUT="$(run_hook Bash "echo \"jira-api.sh raw is noisy\"" "sess-mention-4")"
 assert_rc "'jira-api.sh raw' inside an echoed string is not gated" "0" "$OUT"
 
-# =============================================================================
-# 9.  rework round: compound statements. A capping flag belonging to
-#    an unrelated command in the same line must not satisfy the cap check
-#    for an uncapped git log elsewhere on that line, and a git log piped to
-#    ANY later stage is treated as already capped.
-# =============================================================================
-
 OUT="$(run_hook Bash "git log; grep -n foo bar" "sess-compound-1")"
 assert_rc "uncapped 'git log' followed by an unrelated ';'-separated command is gated" "2" "$OUT"
 
 OUT="$(run_hook Bash "git log --format=%H | grep abc" "sess-compound-2")"
 assert_rc "'git log' piped to grep (already filtered) is not gated" "0" "$OUT"
 
-# =============================================================================
-# 10.  rework round: --since/--until bound TIME, not output SIZE, and
-#     must not count as a cap.
-# =============================================================================
-
 OUT="$(run_hook Bash "git log --name-only --since=2000-01-01" "sess-since")"
 assert_rc "'--since' alone does not count as a cap; still gated" "2" "$OUT"
-
-# =============================================================================
-# 11.  rework round: secrets-exclusion word list must match actual
-#     shell words, not substrings of comments or unrelated paths.
-# =============================================================================
 
 OUT="$(run_hook Bash "git log --all  # note: token budget" "sess-secret-comment")"
 assert_rc "'token' inside a trailing comment does not suppress gating" "2" "$OUT"
@@ -233,57 +170,17 @@ assert_rc "'token' inside a trailing comment does not suppress gating" "2" "$OUT
 OUT="$(run_hook Bash "git log -- docker/env/plex.env.tpl" "sess-secret-path")"
 assert_rc "a path merely containing '.env' (as '.env.tpl') does not suppress gating" "2" "$OUT"
 
-# =============================================================================
-# 12.  rework round: narrow 'jira-api.sh raw' gating to noisy
-#     collection/search paths — a single-object read should not be gated.
-# =============================================================================
-
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh raw /myself" "sess-jira-myself")"
 assert_rc "'jira-api.sh raw /myself' (single-object read) is not gated" "0" "$OUT"
 
-# =============================================================================
-# 13.  rework round: session_id path traversal must not be usable to
-#     write the gate marker outside STATE_ROOT.
-# =============================================================================
-
-# rc=0 here means fail_open rejected the session_id BEFORE any mkdir/write
-# happened at all (see the `case "$SESSION_ID" in */* | *..*)` guard) — this
-# project's own write-guard convention blocks this selftest itself from
-# touching anything under /tmp to double-check, so the
-# absence of a write is established by code path (fail_open exits before
-# SESSION_DIR is ever computed), not by re-inspecting the target path here.
+# rc=0 means fail_open rejected the session_id BEFORE any mkdir/write; the
+# absence of a write is established by code path, not by inspecting /tmp.
 OUT="$(run_hook Bash "git log" "../../../../../../tmp/pwned")"
 assert_rc "path-traversal session_id fails open instead of escaping STATE_ROOT" "0" "$OUT"
 case "$(last_stderr)" in
   *"session_id contains a path separator"*) pass "path-traversal session_id was rejected by the session_id guard specifically" ;;
   *) fail "path-traversal session_id did not hit the session_id guard: $(last_stderr)" ;;
 esac
-
-# =============================================================================
-# 14. split_segments must not treat '&' inside a redirection
-#     operator (2>&1, >&2, &>, &>>, <&) as a pipeline/background separator.
-#     Before the fix, the '&' in '2>&1' split the invocation's own segment
-#     off from its trailing '| head' pipe stage, so SEG_SEP for the
-#     invocation's segment came out "&" instead of "|" and an
-#     already-piped (capped) command was reported uncapped and wrongly
-#     gated. Reproduced live against the hook's real payload
-#     shape (jq-built {tool_name,session_id,tool_input:{command}}).
-#
-#     Assertions below, in two groups — do not miscount them as
-#     discriminating cases:
-#       - discriminating cases (sess-redir-2, -3, -5, -6, -7, -8): each
-#         got rc=2 (wrongly gated) against the pre-fix script and rc=0
-#         against the fix, covering the two noisy shapes crossed with
-#         2>&1/>&2/<&.
-#       - regression guards (sess-redir-1, -4, -9, -10) that already
-#         passed against the pre-fix script and must keep passing: a plain
-#         pipe with no redirection at all (-1), the fully uncapped/unpiped
-#         case that must stay gated (-4), a '>' redirect with no '&' in it
-#         at all so it was never near this bug (-9), and a no-pipe '&>' to
-#         a file, which is still correctly gated because writing to a file
-#         is not a cap (-10) — included so a future change to the '&'
-#         handling can't silently start treating "redirected" as "capped".
-# =============================================================================
 
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh board | head -60" "sess-redir-1")"
 assert_rc "[regression guard] jira-api.sh board piped to head, no redirection, is not gated" "0" "$OUT"
@@ -315,17 +212,6 @@ assert_rc "[regression guard] 'git log' with a plain 2>/dev/null redirect (no '&
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh board &> /tmp/out.log" "sess-redir-10")"
 assert_rc "[regression guard] '&>' redirect with no pipe still counts as uncapped (redirecting to a file is not filtering)" "2" "$OUT"
 
-# =============================================================================
-# 15. each is_uncapped_* detector previously returned on the FIRST
-#     ';'-separated stage that named the command, so a capped first stage
-#     followed by an uncapped later stage of the SAME shape escaped the gate
-#     entirely (reviewer evidence opus script-reviewer). Fix:
-#     detectors scan every stage and gate if ANY named stage is uncapped.
-#     Two discriminating cases (one per shape) plus the `&&`/`|`-joiner
-#     variant named in the brief, plus one negative control confirming a
-#     fully-capped multi-stage command of the same shape is still allowed.
-# =============================================================================
-
 OUT="$(run_hook Bash "git log --oneline -20; git log" "sess-mixed-3")"
 assert_rc "[discriminating] capped git log stage followed by an uncapped ';'-joined git log stage is gated" "2" "$OUT"
 
@@ -337,21 +223,6 @@ assert_rc "[discriminating] capped jira-api.sh board stage followed by an uncapp
 
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh board --limit 20; ./scripts/api/jira-api.sh board --limit 10" "sess-mixed-5")"
 assert_rc "[negative control] capped jira-api.sh board stage followed by ANOTHER capped stage is not gated" "0" "$OUT"
-
-# =============================================================================
-# 16. a heredoc BODY, or a quoted-string literal, that merely
-#     mentions/quotes a gated shape as prose must never be tokenized as a
-#     live invocation of that shape. split_segments treats every newline as
-#     a ';'-equivalent stage separator, so before this fix a heredoc body
-#     line describing a gated command (e.g. inside a `git commit -F -
-#     <<'EOF'` commit-message body) was split into its own stage and gated
-#     as if it were a real invocation — reproduced live ~06:58Z
-#     against a real main-thread commit, cleared only via the escape hatch.
-#     Six discriminating cases (heredoc bodies of various quoting/redirect
-#     shapes) plus one negative control confirming a REAL gated command
-#     immediately after a heredoc terminator still gates, so the fix cannot
-#     be "ignore everything after the first heredoc".
-# =============================================================================
 
 GITCOMMIT_HEREDOC_CMD="$(cat <<'EOF'
 git commit -F - <<'EOF2'
@@ -414,27 +285,6 @@ EOF
 )"
 OUT="$(run_hook Bash "$HEREDOC_THEN_REAL_CMD" "sess-heredoc-then-real")"
 assert_rc "[negative control] a REAL gated command immediately after a heredoc terminator still gates" "2" "$OUT"
-
-# =============================================================================
-# 17. the first
-#     strip_heredocs() landing over-corrected. Three shapes, each proven
-#     to regress against the FIRST  landing before this round's fix
-#     (see the ticket comment / spike table — reproduced live against a
-#     reconstructed copy of that landing, not asserted from memory):
-#       - HIGH: a heredoc attached to a STDIN-EXECUTING interpreter
-#         (ssh/bash/sh/zsh/dash/python/python3, incl. via `pct exec .. --
-#         bash` / `sudo sh`) is a COMMAND LIST, not prose — stripping it
-#         silently turned the gate off for every noisy shape run over one
-#         of these channels.
-#       - MEDIUM: `<<WORD` inside an actual shell comment is not a real
-#         heredoc operator; the first landing had no comment awareness and
-#         swallowed the rest of the command as a fake "body".
-#       - MEDIUM: a heredoc delimiter is a shell WORD, not restricted to
-#         [A-Za-z0-9_] — `<<'EOF-1'` never matched, and the body-consuming
-#         loop silently ate to end-of-string.
-#     One regression guard confirms the original  fix (prose in a
-#     git-commit heredoc body) still works after this rework.
-# =============================================================================
 
 OUT="$(run_hook Bash "$(cat <<'EOF'
 ssh docker-host <<'EOF2'

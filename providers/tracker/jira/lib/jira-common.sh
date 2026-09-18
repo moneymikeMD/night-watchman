@@ -1,9 +1,8 @@
 #!/bin/bash
 # shellcheck disable=SC2034  # JIRA_KEY_ERR is read by sourcing scripts (jira-api.sh), never in this file
 #
-# jira-common.sh — the two Jira helpers shared between jira-api.sh and (via
-# scripts/land-branch.sh's own copy) the rest of this plugin's jira-mode
-# tooling. Ported from the source project's scripts/lib/jira-common.sh, de-identified.
+# jira-common.sh — the two Jira helpers shared between jira-api.sh and the
+# rest of this plugin's jira-mode tooling.
 #
 # Source it, do not execute it:
 #     . "$(cd "$(dirname "$0")" && pwd)/lib/jira-common.sh"
@@ -12,18 +11,12 @@
 # readarray.
 #
 # Rule: a fallible helper here returns non-zero and prints NOTHING on
-# failure — the caller decides how to die. jira-api.sh has its own die();
-# each caller reads $JIRA_KEY_ERR immediately:
+# failure — the caller decides how to die:
 #     require_issue_key "$key" || die "$JIRA_KEY_ERR"
 
-# require_issue_key <key> — validates PROJECT-123 shape: letters, digits,
-# underscore and dash only, then a run of letters, a dash, then digits only.
-#
-# jira-api.sh's `comment` and `issue` (view_issue) subcommands interpolate
-# $key straight into an /issue/$key/... path, and require_path's own checks
-# allow '/' and '?' — so an unvalidated key like 'PROJ-1/../../project/PROJ'
-# or 'PROJ-1?x=y' would reach a different endpoint than the one
-# show_request prints. This closes that.
+# require_issue_key <key> — validate PROJECT-123 shape; returns non-zero and
+# sets $JIRA_KEY_ERR. A guard, not a typo check: require_path allows '/' and
+# '?', so an unvalidated key reaches an endpoint show_request never printed.
 JIRA_KEY_ERR=""
 require_issue_key() {
     local key="$1"
@@ -51,15 +44,8 @@ require_issue_key() {
 }
 
 # jira_comment_body <text> — the ADF document Jira Cloud's v3 comment
-# endpoint requires. One paragraph per input line; a blank line becomes an
-# empty paragraph, which is how a blank line reads as a paragraph break in
-# the rendered comment. Text is JSON-encoded by jq, never interpolated.
-# Prints the body; returns jq's status (rule: nothing printed on failure).
-#
-# Strips ALL trailing newlines from $1 before splitting into paragraphs,
-# rather than trusting every caller to have already done so — a
-# trailing-newline value assigned straight from argv (no `$( )` to strip
-# it) would otherwise produce an extra empty paragraph.
+# endpoint requires, one paragraph per input line; prints it, returns jq's
+# status. Strips trailing newlines, which would add an empty paragraph.
 jira_comment_body() {
     jq -cn --arg t "$1" '{
         body: {

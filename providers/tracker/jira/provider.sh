@@ -2,17 +2,12 @@
 #
 # provider.sh — jira's implementation of the `tracker` provider kind
 # (verbs: fetch, transition, comment, create — see ../../README.md for the
-# contract). Dispatch only; the actual HTTP client is jira-api.sh, which is
-# also independently runnable for the raw/write/comment/view subcommands a
-# script like scripts/land-branch.sh's jira mode calls directly via
-# --jira-api PATH.
+# contract). Dispatch only; the HTTP client is jira-api.sh.
 #
 # transition/comment/create are LIVE WRITES by default (--yes is passed to
-# jira-api.sh with no interactive confirmation) — deliberate, so this
-# provider works unattended from automation the same way the tracker kind
-# is meant to. Set $NW_DRY_RUN=1, or pass --dry-run before the verb, to
-# have every verb print the exact request jira-api.sh would issue and
-# exit 0 without writing or resolving a credential (see providers/README.md).
+# jira-api.sh with no interactive confirmation), so the provider works
+# unattended. $NW_DRY_RUN=1, or --dry-run before the verb, prints the
+# request instead and exits 0.
 #
 # Usage:
 #   provider.sh [--dry-run] fetch KEY

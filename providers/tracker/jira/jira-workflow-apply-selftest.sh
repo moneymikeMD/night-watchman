@@ -1,140 +1,16 @@
 #!/bin/bash
 #
 # Selftest for jira-workflow-apply.sh. Runs entirely against a fake
-# `jira-api.sh`-shaped stub script (never the real wrapper, never a real
-# Jira site, never a real credential) that replays fixtures captured live
-# and read-only-by-semantics. `--jira-api` points straight at that stub, so
-# there is no `curl` and no `JIRA_HOST` to point at 127.0.0.1 — the
-# isolation here is structural for a different reason than
-# jira-agile-api-selftest.sh's: this script never talks to curl directly at
-# all, only through a wrapper it is handed, so the stub simply refuses to
-# be anything other than a stub. `$ISSUES_JIRA_API` is explicitly unset at
-# the top of this file and then pointed at a nonexistent path for the one
-# test that means to exercise its absence (section 6d) — leaving it as
-# whatever the ambient shell happened to have set would let that one case
-# silently fall through to a REAL wrapper on a machine that has
-# $ISSUES_JIRA_API exported for its own project's session-start.
+# `jira-api.sh`-shaped stub — never the real wrapper, never a real Jira
+# site, never a real credential. The isolation is structural: this script
+# only ever talks to a wrapper it is handed, and the stub refuses to be
+# anything else. $ISSUES_JIRA_API is unset below so the one case that
+# exercises its absence cannot fall through to a real wrapper on a machine
+# that exports it.
 #
-# Fixtures under fixtures/ are real bodies captured live against a real
-# Jira Cloud site (example.atlassian.net), via `jira-api.sh raw GET ...`
-# (read-only) and `jira-api.sh --yes write POST /workflows ...` /
-# `.../workflows/update/validation` (both non-mutating despite the POST
-# verb — see jira-workflow-apply.sh's header) — see each fixture's own
-# header for the exact command:
-#   workflow.search.nwm.txt                       — project NWM's template
-#                                                    workflow (3 statuses,
-#                                                    the missing-set case)
-#   workflow.search.lab.txt                       — project LAB's workflow
-#                                                    (9 statuses, "already
-#                                                    complete")
-#   statuses.search.txt                           — site-wide
-#                                                    /statuses/search, trimmed
-#   workflows.bulkget.nwm.txt                      — POST /workflows
-#                                                    bulk-get for NWM, the
-#                                                    real base
-#                                                    build_update_body
-#                                                    renders from
-#   workflows.update.validation.nwm.txt            — the FINAL, correct
-#                                                    envelope body,
-#                                                    validated live:
-#                                                    HTTP 200,
-#                                                    `{"errors": []}`
-#   workflows.update.validation.spk4.txt           — the same, against
-#                                                    SPK4 (see its header
-#                                                    for the full
-#                                                    iteration history that
-#                                                    found the envelope
-#                                                    requirement)
-#   workflows.update.validation.spk4-rejected-idless.txt
-#                                                  — a REAL rejection (HTTP
-#                                                    200, several ERROR-
-#                                                    level entries) from an
-#                                                    earlier iteration step
-#   workflows.update.validation.spk4-warnings-only.txt
-#                                                  — a REAL WARNING-only
-#                                                    response (HTTP 200,
-#                                                    zero ERRORs, six
-#                                                    WARNINGs) from another
-#                                                    iteration step
-#
-# One response body below is SYNTHETIC, not captured — labelled at its use:
-# a transport-level (non-2xx) failure of the /validation call itself, which
-# every real attempt with a STRUCTURALLY valid envelope in this session
-# never produced (a malformed envelope did, once, before the envelope
-# requirement was found — see jira-workflow-apply.sh's header — but that
-# capture no longer represents anything this script would ever send, now
-# that it always wraps the body correctly). A post-write "read-back"
-# workflow (both a complete one and one still missing "Deferred") is also
-# SYNTHETIC — real fixtures cannot supply either because the mutating call
-# they would follow (/workflows/update) was never issued against any
-# project in this session, by design (see the header of
-# jira-workflow-apply.sh and this file's section 8).
-#
-# What this file proves:
-#   1. NWM: missing-set computation names all 6 statuses and all 6
-#      transitions; the rendered body carries the real ids/categories, and
-#      matches — byte for byte — the shape actually validated live (see
-#      section 2's envelope-shape assertions).
-#   2. The request this script sends to /workflows/update/validation is
-#      wrapped in the {"payload": ..., "validationOptions": {"levels":
-#      [...]}} envelope — not the bare update body — matching what was
-#      found live to be required.
-#   3. LAB: "already complete" — exits 0 WITHOUT ever calling the bulk-get
-#      or validation endpoints at all (there is nothing to build).
-#   4. A REAL rejection (multiple ERROR-level entries) makes the script
-#      exit non-zero and print every error, before ever reaching
-#      /workflows/update.
-#   5. A REAL WARNING-only response (zero ERRORs) is printed as a warning
-#      but does NOT stop the run.
-#   6. Without --yes and without --dry-run: a real validation SUCCESS
-#      still stops before the update call (--yes gate), after showing the
-#      full body — and exits the DISTINCT code 3, not 1.
-#   7. THE STUB ITSELF fails the whole run if jira-workflow-apply.sh ever
-#      issues a `write POST /workflows/update` (the one call that actually
-#      mutates state) in any case that should not reach it — proven by
-#      observing it actually fire, not merely assumed.
-#   8. With --yes, a real validation success, and a stub that DOES allow
-#      the update call once: assert_readback's own two branches — (a) a
-#      complete re-read (the REAL fixtures/workflow.search.lab.txt — LAB's
-#      workflow already carries all 9 target statuses/transitions, so it
-#      doubles as "what a successful NWM write would read back as") passes,
-#      (b) the same fixture with "Deferred" stripped fails non-zero and
-#      names it.
-#   9. An unparseable, or `errors`-key-less, 2xx from /validation is a hard
-#      die naming the raw response — NOT silently "zero errors" (ROUND-2
-#      REVIEW ITEM 1).
-#   10. A post-write re-read whose per-transition rule arrays (actions/
-#      validators/triggers/links) DIFFER at all from the pre-write
-#      snapshot's — full jq deep equality, not merely a count — is a hard
-#      stop at the DISTINCT exit code 2, naming the transition. Exercised
-#      with a stub that actually empties a real rule between the first
-#      and second `write POST /workflows` call (ROUND-3 REVIEW ITEM 3).
-#   10b/10c. Using the REAL before/after pair from the actual successful
-#      ZZPROBE apply: a rule id that merely got regenerated by Jira on
-#      write (ruleKey/parameters unchanged) does NOT trip the diff; a
-#      rule whose ruleKey/parameters actually changed still does
-#      (ROUND-4 REVIEW ITEM 1 — the false positive found live on that
-#      same ZZPROBE apply).
-#   11. A target transition id (41/51/61/71/81/91) that already belongs to
-#      a DIFFERENT existing transition name is a hard die naming the
-#      collision, before anything else runs (ROUND-2 REVIEW ITEM 4).
-#   14. --rules, on the REAL SPK4 rehearsal captures: the body
-#      rendered for the rule-less workflow equals the probe payload Jira
-#      validated and then stored; re-running on the stored workflow is
-#      "0 changes" with no validation or update call; a partially-ruled
-#      workflow gets only the missing rule; an unknown field name or
-#      transition name dies before any write-path call; the real
-#      before/after apply pair passes the post-write diff, and an after
-#      read that lacks the added rules fails it with exit 2; a placeholder
-#      nested in an array is resolved, and a mistyped one dies, both
-#      before any write-path call; the spec's errorMessage strings equal
-#      the messages Jira returned when it rejected real transitions (14k).
-#   12. --restore-from (ROUND-3 REVIEW ITEM 4): (a) a file containing the
-#      literal string "<redacted>" (a pre-fix, non---show-secrets
-#      snapshot) is refused outright, before any network call; (b) a
-#      clean --show-secrets-era file renders and validates a restore
-#      body with a freshly-fetched version, reaching the same
-#      validate-and-write path as the normal flow.
+# Fixtures under fixtures/ are real bodies captured live, except the few
+# labelled SYNTHETIC or derived at their point of use. See each fixture's
+# own header for the command that produced it.
 #
 # Usage: ./jira-workflow-apply-selftest.sh
 
@@ -192,12 +68,8 @@ assert_nonempty() {
 TMPD=$(mktemp -d) || { echo "FAIL - could not create scratch dir" >&2; exit 1; }
 trap 'rm -rf "$TMPD"' EXIT
 
-# --------------------------------------------------------------- fixtures
-#
-# strip_fixture_header is computed from the actual file (comment lines and
-# a lone "HTTP <code>" status line stripped, no hardcoded line count), same
-# technique as jira-agile-api-selftest.sh, so a future re-recording with a
-# longer or shorter header comment can't silently shift the JSON body.
+# The strip point is computed from the file, never a hardcoded line count,
+# so a re-recording with a different header cannot shift the JSON body.
 strip_fixture_header() {
     awk '/^#/{next} /^HTTP [0-9]+$/{next} {print}' "$1"
 }
@@ -207,12 +79,8 @@ LAB_WORKFLOW="$TMPD/lab-workflow.json"
 strip_fixture_header "$FIXDIR/workflow.search.lab.txt" > "$LAB_WORKFLOW"
 STATUSES_SEARCH="$TMPD/statuses-search.json"
 strip_fixture_header "$FIXDIR/statuses.search.txt" > "$STATUSES_SEARCH"
-# ROUND-3 REVIEW ITEM 1/2/6 — the --show-secrets capture, NOT the older
-# redacted one (workflows.bulkget.nwm.txt, kept only as a historical
-# record of the bug this superseded — see jira_bulkget's header). Real
-# ruleKey/permissionKey values (e.g. "system:update-field",
-# "CREATE_ISSUES") let section 1 below assert full-passthrough byte for
-# byte, not merely structurally.
+# The --show-secrets capture, not the older redacted one: real
+# ruleKey/permissionKey values let section 1 assert passthrough byte for byte.
 NWM_BULKGET="$TMPD/nwm-bulkget.json"
 strip_fixture_header "$FIXDIR/workflows.bulkget.nwm-secrets.txt" > "$NWM_BULKGET"
 VALIDATION_SUCCESS="$TMPD/validation-success.json"
@@ -222,42 +90,23 @@ strip_fixture_header "$FIXDIR/workflows.update.validation.spk4-rejected-idless.t
 VALIDATION_WARNINGS_ONLY="$TMPD/validation-warnings-only.json"
 strip_fixture_header "$FIXDIR/workflows.update.validation.spk4-warnings-only.txt" > "$VALIDATION_WARNINGS_ONLY"
 
-# SYNTHETIC — a transport-level (non-2xx) failure of the /validation call
-# itself. See this file's header for why every REAL attempt in this
-# session with a structurally valid envelope got a 200 instead (errors, if
-# any, arrive INSIDE a 200's `errors` array, not as an HTTP-level
-# rejection) — this exercises validate_update_body's `|| die "...failed
-# outright"` branch, which a well-formed envelope no longer reaches.
+# SYNTHETIC — a transport-level failure of /validation itself. A valid
+# envelope always returns 200, errors inside the body, so this is unreachable live.
 VALIDATION_TRANSPORT_FAILURE="$TMPD/validation-transport-failure.json"
 echo '{"errorMessages":["synthetic: malformed envelope, never actually produced by this script"]}' > "$VALIDATION_TRANSPORT_FAILURE"
 
-# SYNTHETIC — ROUND-2 REVIEW ITEM 1: a 2xx response with no `errors` key
-# at all. Never observed live (every real capture always had one, empty
-# or not) — this exercises validate_update_body's hard die on an
-# unparseable-or-keyless response, which used to silently become "zero
-# errors" via `// []` before the fix.
+# SYNTHETIC — a 2xx with no `errors` key at all. Never observed live.
 VALIDATION_NO_ERRORS_KEY="$TMPD/validation-no-errors-key.json"
 echo '{"acknowledged":true}' > "$VALIDATION_NO_ERRORS_KEY"
 
-# ROUND-3 REVIEW ITEM 3 — a bulk-get "after" document derived from the
-# REAL --show-secrets fixture above, with transition id "11"'"'"'s
-# `actions` array emptied out — as if the write had silently stripped an
-# existing post-function (this is EXACTLY the shape found live on SPK4 —
-# see jira_bulkget's header). Used as the SECOND response to
-# `write POST /workflows` (the post-write re-read), while the FIRST call
-# in the same run still serves the real, unmodified fixture — this is
-# what lets the deep-diff actually observe a change.
+# DERIVED from the real fixture above, transition 11's `actions` emptied —
+# the shape found live on SPK4. Served as the post-write re-read only.
 NWM_BULKGET_STRIPPED="$TMPD/nwm-bulkget-stripped.json"
 jq '.workflows[0].transitions |= map(if .id == "11" then .actions = [] else . end)' \
     "$NWM_BULKGET" > "$NWM_BULKGET_STRIPPED"
 
-# ROUND-4 REVIEW ITEM 1/2 — the REAL before/after pair from the actual
-# successful ZZPROBE apply (the run that found the false positive this
-# item fixes). See jira-workflow-apply.sh's validate_write_and_diff header
-# for the full story: transition 1's validator got a REGENERATED uuid
-# `id` on write even though its ruleKey/parameters (its real identity)
-# never changed; transitions 11/21/31's numeric action ids did not
-# regenerate in the same write.
+# The REAL before/after pair from the ZZPROBE apply: transition 1's
+# validator uuid regenerated on write, the numeric action ids did not.
 ZZPROBE_WORKFLOW="$TMPD/zzprobe-workflow.json"
 strip_fixture_header "$FIXDIR/workflow.search.zzprobe.txt" > "$ZZPROBE_WORKFLOW"
 ZZPROBE_BEFORE="$TMPD/zzprobe-before.json"
@@ -265,18 +114,14 @@ strip_fixture_header "$FIXDIR/workflows.bulkget.zzprobe-secrets-before-apply.txt
 ZZPROBE_AFTER="$TMPD/zzprobe-after.json"
 strip_fixture_header "$FIXDIR/workflows.bulkget.zzprobe-secrets-after-apply.txt" > "$ZZPROBE_AFTER"
 
-# Derived from the REAL after-fixture: transition 1's validator ruleKey
-# changed (not just its id) — the deep-diff must still catch THIS, since
-# a changed ruleKey/parameters is the rule's actual identity changing, not
-# merely Jira's own id-regeneration noise.
+# DERIVED from the real after-fixture: transition 1's validator ruleKey
+# changed, not just its id — the rule's real identity, so the diff must catch it.
 ZZPROBE_AFTER_RULEKEY_CHANGED="$TMPD/zzprobe-after-rulekey-changed.json"
 jq '.workflows[0].transitions |= map(if .id == "1" then .validators[0].ruleKey = "system:some-other-validator" else . end)' \
     "$ZZPROBE_AFTER" > "$ZZPROBE_AFTER_RULEKEY_CHANGED"
 
-# --rules. REAL captures from the SPK4 rules rehearsal: the
-# workflow before any rule, the same workflow read back after the probe-3
-# body was applied live, the site field list, and probe 3's own request and
-# response. The committed workflow-rules.json is the spec under test.
+# --rules: REAL captures from the SPK4 rules rehearsal. The committed
+# workflow-rules.json is the spec under test.
 FIELD_LIST="$TMPD/field-list.json"
 strip_fixture_header "$FIXDIR/field.list.txt" > "$FIELD_LIST"
 SPK4_WORKFLOW="$TMPD/spk4-workflow.json"
@@ -298,9 +143,8 @@ RULES_SPEC="$HERE/workflow-rules.json"
 SPK4_RULES_PARTIAL="$TMPD/spk4-rules-partial.json"
 jq '.workflows[0].transitions |= map(if .id == "81" then .validators |= map(select(.ruleKey != "system:previous-status-validator")) else . end)' \
     "$SPK4_RULES_AFTER" > "$SPK4_RULES_PARTIAL"
-# Derived from the REAL after-fixture: transition 21's touches rule carries a
-# different field id — same ruleKey, different parameters, so a different
-# rule. Identity must be ruleKey + parameters, not ruleKey alone.
+# DERIVED: transition 21's touches rule under a different field id — same
+# ruleKey, different parameters, so a different rule.
 SPK4_RULES_OTHER_PARAMS="$TMPD/spk4-rules-other-params.json"
 jq '.workflows[0].transitions |= map(if .id == "21" then .validators |= map(if .parameters.fieldsRequired == "customfield_10043" then .parameters.fieldsRequired = "customfield_10047" else . end) else . end)' \
     "$SPK4_RULES_AFTER" > "$SPK4_RULES_OTHER_PARAMS"
@@ -313,59 +157,33 @@ jq '.transitions[0].validators[0].parameters.fieldsRequired = "{Field:verify}"' 
 RULES_SPEC_BADTRANSITION="$TMPD/rules-badtransition.json"
 jq '.transitions[0].name = "In Progres"' "$RULES_SPEC" > "$RULES_SPEC_BADTRANSITION"
 
-# ROUND-3 REVIEW ITEM 4 — --restore-from's two fixture sources: a REAL
-# pre-fix, redacted document (the old workflows.bulkget.nwm.txt, captured
-# WITHOUT --show-secrets — its own header explains why it was superseded)
-# for the REFUSAL path, and the REAL --show-secrets fixture above (already
-# a valid restore source) for the happy path.
+# --restore-from's two sources: the REAL pre-fix redacted document for the
+# refusal path, the --show-secrets fixture above for the happy path.
 RESTORE_FROM_REDACTED="$TMPD/restore-from-redacted.json"
 strip_fixture_header "$FIXDIR/workflows.bulkget.nwm.txt" > "$RESTORE_FROM_REDACTED"
 RESTORE_FROM_CLEAN="$NWM_BULKGET"
 
-# ROUND-2 REVIEW ITEM 7 — a REAL post-write re-read stand-in, not a
-# hand-authored one: LAB's own workflow (fixtures/workflow.search.lab.txt)
-# already carries all 9 target statuses/transitions (it is the very
-# fixture section 3's "already complete" case reads), so it doubles here
-# as "what a successful post-write re-read of NWM would look like" —
-# read_workflow only checks `.total >= 1`, never that the returned
-# object's own name matches what was asked for, so serving LAB's real
-# content in place of NWM's post-write GET is a legitimate stand-in, not
-# a mismatch the script would ever notice or care about.
+# LAB's REAL workflow stands in for a successful post-write re-read of
+# NWM: it already carries all 9 targets, and read_workflow only checks
+# `.total >= 1`, never that the returned object's name is the one asked for.
 WORKFLOW_COMPLETE="$LAB_WORKFLOW"
 
-# Derived from the REAL fixture above (not hand-typed): the same content
-# with "Deferred" (both status and transition) removed, as if the write
-# had silently dropped one addition. Proves assert_readback's FAILING
-# branch, not just its passing one.
+# DERIVED from the fixture above with "Deferred" removed, as if the write
+# had silently dropped one addition — assert_readback's failing branch.
 WORKFLOW_STILL_MISSING_DEFERRED="$TMPD/workflow-still-missing-deferred.json"
 jq '.values[0].statuses |= map(select(.name != "Deferred")) | .values[0].transitions |= map(select(.name != "Deferred"))' \
     "$WORKFLOW_COMPLETE" > "$WORKFLOW_STILL_MISSING_DEFERRED"
 
-# ROUND-2 REVIEW ITEM 4 — a REAL workflow fixture (NWM's own) with one
-# extra, fabricated transition added under id 51 (one of this script's own
-# target transition ids) but a DIFFERENT name — exercises
-# check_transition_id_collisions' die path against a real base document,
-# not a synthetic one built from nothing.
+# DERIVED from NWM's real workflow with one extra transition fabricated
+# under target id 51 but a different name.
 WORKFLOW_ID_COLLISION="$TMPD/workflow-id-collision.json"
 jq '.values[0].transitions += [{"id": "51", "name": "Some Unrelated Transition", "description": "", "from": [], "to": "10009", "type": "global"}]' \
     "$NWM_WORKFLOW" > "$WORKFLOW_ID_COLLISION"
 
-# --------------------------------------------------------------- fake wrapper
-#
-# A jira-api.sh-shaped stub, one per scenario. `$1` selects which
-# workflow/search response to serve for the FIRST call and which for the
-# SECOND (assert_readback re-reads after a write) — most scenarios never
-# reach a second call at all. `$2` selects the validation response and
-# whether it comes back as a wrapper-level success (real behaviour: HTTP
-# 200 with an `errors` array, empty or not) or a transport failure
-# (`$4`=fail). `$3` (0/1) allows or refuses `write POST /workflows/update`,
-# the ONE call that actually mutates state — refusing is the default in
-# every case that should never reach it. `$7` (default: the real NWM
-# bulk-get fixture) is the response for the FIRST `write POST /workflows`
-# call (used to build FINAL_BODY and as the pre-write snapshot); `$8`
-# (default: same as `$7`, i.e. unchanged) is the response for the SECOND
-# such call (the post-write re-read the rule-count diff — ROUND-2 REVIEW
-# ITEM 3 — compares against the first).
+# make_stub PATH WORKFLOW_1ST WORKFLOW_2ND VALIDATION ALLOW_UPDATE
+#           [MODE=ok|fail] [BULKGET_1ST] [BULKGET_2ND] — a jira-api.sh-shaped
+# stub, one per scenario; the 2nd responses cover the post-write re-read.
+# ALLOW_UPDATE gates the one mutating call and defaults to 0, refuse.
 CALLLOG=""
 make_stub() {
     local path="$1" workflow_first="$2" workflow_second="$3" validation_resp="$4" allow_update="$5" \
@@ -380,9 +198,8 @@ make_stub() {
     cat > "$path" <<STUBEOF
 #!/bin/bash
 printf '%s\n' "\$*" >> "$CALLLOG"
-# ROUND-3 REVIEW ITEM 1 — jira_bulkget now sends BOTH --show-secrets AND
-# --yes (in that order) ahead of "write POST /workflows"; strip either/
-# both, in whatever order, not just a single leading --yes.
+# jira_bulkget sends both --show-secrets and --yes ahead of the verb; strip
+# either or both, in any order, not just a single leading --yes.
 while true; do
     case "\$1" in
         --yes|--show-secrets) shift ;;
@@ -439,10 +256,8 @@ STUBEOF
     chmod +x "$path"
 }
 
-# run <name> <args...> — TMPDIR is pointed at this file's own scratch dir
-# (not the ambient /tmp) so the before/after snapshot files
-# jira-workflow-apply.sh writes on a real write (ROUND-2 REVIEW ITEM 2)
-# land somewhere this selftest already cleans up, not in system /tmp.
+# run <name> <args...> — TMPDIR points at this file's own scratch dir so
+# the snapshot files a real write produces land somewhere it cleans up.
 run() {
     local name="$1"; shift
     local rc=0
@@ -453,11 +268,7 @@ run() {
     LAST_ERR=$(cat "$errf")
 }
 
-# =================================================================
-# 0. baseline — the happy path reaches the stub for both required GETs on
-#    the "already complete" (LAB) case, so every "the stub was never
-#    reached" assertion elsewhere is meaningful.
-# =================================================================
+# 0. baseline: the happy path reaches the stub, so the negative assertions mean something
 WRAP_LAB="$TMPD/wrap-lab.sh"
 make_stub "$WRAP_LAB" "$LAB_WORKFLOW" "$LAB_WORKFLOW" "$VALIDATION_SUCCESS" 0
 run base0 LAB --jira-api "$WRAP_LAB" --dry-run
@@ -467,14 +278,7 @@ assert_nonempty "0: the stub was actually reached" "$CALLLOG_LAB"
 check "0: statuses/search was called" "$(cat "$CALLLOG_LAB")" "statuses/search"
 check "0: workflow/search was called" "$(cat "$CALLLOG_LAB")" "workflow/search"
 
-# =================================================================
-# 1. NWM (missing-set) — names every missing status and transition, and
-#    the rendered body (validated against a REAL validation success)
-#    carries the right ids/categories, and no id-less transition. This is
-#    the SAME body confirmed live to validate with zero errors — see
-#    jira-workflow-apply.sh's header and workflows.update.validation.
-#    {spk4,nwm}.txt.
-# =================================================================
+# 1. NWM: names every missing status and transition, and renders the validated body
 WRAP_NWM_OK="$TMPD/wrap-nwm-ok.sh"
 make_stub "$WRAP_NWM_OK" "$NWM_WORKFLOW" "$NWM_WORKFLOW" "$VALIDATION_SUCCESS" 0
 run nwm1 NWM --jira-api "$WRAP_NWM_OK" --dry-run
@@ -501,14 +305,8 @@ STATUSCOUNT=$(printf '%s' "$DRYRUN_JSON" | jq '.workflows[0].statuses | length' 
 assert_eq "1: FULL body — 3 existing + 6 added = 9 statuses (not a delta of 6)" "9" "$STATUSCOUNT"
 check_not "1: never calls the actual update endpoint under --dry-run" "$(cat "$TMPD/$(basename "$WRAP_NWM_OK").calllog")" "workflows/update "
 
-# ROUND-3 REVIEW ITEM 2/6 — build_update_body carries EVERY existing
-# transition's full rule definitions forward BYTE FOR BYTE from the
-# fixture, not merely structurally — this is the actual fix for the
-# stripped-rules bug found live on SPK4. Compares the three EXISTING
-# transitions (11/21/31, all "system:update-field") plus the INITIAL one
-# (transition "1", "system:check-permission-validator" / "CREATE_ISSUES")
-# in the rendered body against the same objects in the fixture, via jq
-# deep equality — the strongest form of "byte for byte" available.
+# Full-passthrough, byte for byte: jq deep equality between each existing
+# transition in the rendered body and the same object in the fixture.
 FULLPASS_OK=$(printf '%s' "$DRYRUN_JSON" | jq --slurpfile fixture "$NWM_BULKGET" '
     ($fixture[0].workflows[0].transitions) as $fx
     | (.workflows[0].transitions) as $rendered
@@ -522,31 +320,16 @@ check "1: a real ruleKey survived (not redacted, not dropped)" "$DRYRUN_JSON" '"
 check "1: a real permissionKey survived" "$DRYRUN_JSON" '"permissionKey": "CREATE_ISSUES"'
 check_not "1: no redacted placeholder leaked into the rendered body" "$DRYRUN_JSON" "<redacted>"
 
-# =================================================================
-# 2. Envelope shape — the request this script actually sends to
-#    /workflows/update/validation must be wrapped in
-#    {"payload": ..., "validationOptions": {"levels": [...]}}, not the
-#    bare update body. This is the root-cause fix: sending the bare body
-#    400s with a useless generic message (see jira-workflow-apply.sh's
-#    header) — confirmed by inspecting what the stub actually received.
-# =================================================================
-# The stub logs each call's full argv, including embedded newlines from
-# jq's own pretty-printed output — so the request body can span several
-# PHYSICAL lines in the calllog file even though it is one logical call.
-# Read the WHOLE file rather than grepping a single line, or a multi-line
-# JSON body would only ever show its first line to `check`.
+# 2. the validation request is wrapped in the payload/validationOptions envelope
+# Read the WHOLE calllog, never grep one line: the stub logs full argv, so
+# a pretty-printed JSON body spans several physical lines per logical call.
 VALIDATION_CALL_LOG=$(cat "$TMPD/$(basename "$WRAP_NWM_OK").calllog")
 check "2: the validation call's body is wrapped in a \"payload\" key" "$VALIDATION_CALL_LOG" '"payload"'
 check "2: the validation call's body carries validationOptions.levels" "$VALIDATION_CALL_LOG" '"validationOptions"'
 check "2: validationOptions names both severity levels" "$VALIDATION_CALL_LOG" '"ERROR"'
 check "2: the wrapped payload nests a \"workflows\" key (the actual update body, not something re-shaped)" "$VALIDATION_CALL_LOG" '"workflows"'
 
-# =================================================================
-# 3. LAB (already complete) — exits 0, says so, and NEVER calls the
-#    bulk-get or validation endpoints at all (there is nothing to build,
-#    so this script's own design skips them entirely — see main's
-#    ordering). Also true without --dry-run/--yes.
-# =================================================================
+# 3. LAB is already complete: exits 0 without the bulk-get or validation calls
 run lab1 LAB --jira-api "$WRAP_LAB" --dry-run
 assert_eq "3a: LAB --dry-run exits 0" "0" "$LAST_RC"
 check "3a: reports already complete" "$LAST_OUT" "already complete"
@@ -558,12 +341,7 @@ check "3b: still reports already complete" "$LAST_OUT" "already complete"
 assert_eq "3b: exactly 2 calls (both GETs) — no bulk-get, no validation, no update" "2" "$(wc -l < "$CALLLOG_LAB" | tr -d ' ')"
 check_not "3b: no bulk-get was issued" "$(cat "$CALLLOG_LAB")" "write POST /workflows "
 
-# =================================================================
-# 4. A REAL rejection (workflows.update.validation.spk4-rejected-idless.txt
-#    — several ERROR-level entries from an early iteration step, kept as
-#    real fixture material) makes the run exit non-zero, printing every
-#    error, BEFORE ever reaching /workflows/update.
-# =================================================================
+# 4. a real ERROR-level rejection exits non-zero before reaching /workflows/update
 WRAP_NWM_REJECTED="$TMPD/wrap-nwm-rejected.sh"
 make_stub "$WRAP_NWM_REJECTED" "$NWM_WORKFLOW" "$NWM_WORKFLOW" "$VALIDATION_REJECTED" 0
 run nwm4 NWM --jira-api "$WRAP_NWM_REJECTED" --yes
@@ -572,12 +350,7 @@ check "4: a real error message is shown" "$LAST_ERR" "NON_UNIQUE_STATUS_NAME"
 check "4: refuses before the update call, naming why" "$LAST_ERR" "refusing to write"
 check_not "4: the stub's write-refusal never had to fire (validation stopped it first)" "$LAST_ERR" "STUB: refusing"
 
-# =================================================================
-# 5. A REAL WARNING-only response (zero ERRORs, six WARNINGs —
-#    workflows.update.validation.spk4-warnings-only.txt) is printed but
-#    does NOT stop the run — validate_update_body's WARNING branch warns
-#    and continues, unlike its ERROR branch.
-# =================================================================
+# 5. a real WARNING-only response is printed but does not stop the run
 WRAP_NWM_WARNONLY="$TMPD/wrap-nwm-warnonly.sh"
 make_stub "$WRAP_NWM_WARNONLY" "$NWM_WORKFLOW" "$NWM_WORKFLOW" "$VALIDATION_WARNINGS_ONLY" 0
 run nwm5 NWM --jira-api "$WRAP_NWM_WARNONLY" --dry-run
@@ -586,26 +359,14 @@ check "5: the warning is shown" "$LAST_ERR" "NO_INBOUND_TRANSITIONS_TO_STATUS"
 check "5: says how many warnings" "$LAST_ERR" "reported 6 warning(s)"
 check "5: still reaches the final-body preview" "$LAST_OUT" "validation passed"
 
-# =================================================================
-# 6. Without --yes and without --dry-run: a REAL validation success still
-#    stops before the update call (--yes gate), after showing the full
-#    body — and exits the DISTINCT code 3 (ROUND-2 REVIEW ITEM 6), not the
-#    generic failure code 1.
-# =================================================================
+# 6. no --yes and no --dry-run: stops before the write at the distinct exit code 3
 run noyes2 NWM --jira-api "$WRAP_NWM_OK"
 assert_eq "6: no --yes and no --dry-run exits the distinct code 3, not 1" "3" "$LAST_RC"
 check "6: refusal names the reason" "$LAST_ERR" "not confirmed"
 check "6: the final body was still shown before stopping" "$LAST_OUT" "workflows"
 check_not "6: the update endpoint was never reached" "$(cat "$TMPD/$(basename "$WRAP_NWM_OK").calllog")" "workflows/update "
 
-# =================================================================
-# 7. THE STUB ITSELF fails the run if jira-workflow-apply.sh issues a
-#    `write POST /workflows/update` in a case that should never reach it —
-#    proven by observing it actually fire, not merely assumed. Force this
-#    by handing --yes to a stub explicitly configured to REFUSE the update
-#    call (allow_update=0) with a real validation success — if the
-#    script's own --yes gate were broken, this would trip the refusal.
-# =================================================================
+# 7. the stub itself fails the run on any /workflows/update it should not have seen
 run forceupdate NWM --jira-api "$WRAP_NWM_OK" --yes
 assert_nonzero "7: even with --yes, a stub configured to refuse /workflows/update stops the run" "$LAST_RC"
 check "7: the stub's own refusal is what stopped it" "$LAST_ERR" "STUB: refusing write POST /workflows/update"
@@ -619,13 +380,7 @@ run transportfail NWM --jira-api "$WRAP_TRANSPORT_FAIL" --yes
 assert_nonzero "7b: a transport-level (non-2xx) validation failure also stops the run" "$LAST_RC"
 check "7b: names the failure as outright, not an errors-array rejection" "$LAST_ERR" "failed outright"
 
-# =================================================================
-# 8. assert_readback's own two branches, exercised for real: a stub that
-#    ALLOWS exactly one write POST /workflows/update (so the script's
-#    happy path can actually complete), then serves either (a) LAB's REAL
-#    complete workflow (PASS) or (b) the same with "Deferred" stripped
-#    (FAIL, and names it) — see ROUND-2 REVIEW ITEM 7 / this file's header.
-# =================================================================
+# 8. assert_readback's two branches, against a stub that allows one real update
 WRAP_READBACK_PASS="$TMPD/wrap-readback-pass.sh"
 make_stub "$WRAP_READBACK_PASS" "$NWM_WORKFLOW" "$WORKFLOW_COMPLETE" "$VALIDATION_SUCCESS" 1
 run readbackpass NWM --jira-api "$WRAP_READBACK_PASS" --yes
@@ -640,11 +395,7 @@ assert_nonzero "8b: --yes with a re-read still missing Deferred exits non-zero" 
 check "8b: names Deferred as still missing" "$LAST_ERR" "Deferred"
 check "8b: says the update did not take effect as expected" "$LAST_ERR" "did not take effect as expected"
 
-# =================================================================
-# 9. ROUND-2 REVIEW ITEM 1 — an unparseable-or-`errors`-key-less 2xx from
-#    /validation is a hard die naming the raw response, not silently
-#    "zero errors".
-# =================================================================
+# 9. an unparseable or errors-key-less 2xx dies naming the raw response
 WRAP_NOERRORSKEY="$TMPD/wrap-noerrorskey.sh"
 make_stub "$WRAP_NOERRORSKEY" "$NWM_WORKFLOW" "$NWM_WORKFLOW" "$VALIDATION_NO_ERRORS_KEY" 0
 run noerrorskey NWM --jira-api "$WRAP_NOERRORSKEY" --dry-run
@@ -652,16 +403,7 @@ assert_nonzero "9: a 2xx validation response with no 'errors' array is a hard di
 check "9: names the problem, not a silent pass" "$LAST_ERR" "no 'errors' array"
 check "9: shows the raw (already-redacted) response" "$LAST_ERR" "acknowledged"
 
-# =================================================================
-# 10. ROUND-3 REVIEW ITEM 3 — a post-write re-read whose per-transition
-#     rule ARRAYS differ at all (full jq deep equality, not merely a
-#     count) from the pre-write snapshot's is a hard stop at the DISTINCT
-#     exit code 2, naming the transition. The stub serves the REAL,
-#     unmodified NWM bulk-get fixture for the FIRST `write POST
-#     /workflows` call (used to build FINAL_BODY and as the
-#     before-snapshot) and the emptied-`actions` variant for the SECOND
-#     (the post-write re-read) — the exact shape found live on SPK4.
-# =================================================================
+# 10. a post-write re-read whose rule arrays differ is exit 2, naming the transition
 WRAP_STRIPPED="$TMPD/wrap-stripped.sh"
 make_stub "$WRAP_STRIPPED" "$NWM_WORKFLOW" "$NWM_WORKFLOW" "$VALIDATION_SUCCESS" 1 ok "$NWM_BULKGET" "$NWM_BULKGET_STRIPPED"
 run stripped NWM --jira-api "$WRAP_STRIPPED" --yes
@@ -675,19 +417,9 @@ check "10: the update response was shown before the diff" "$LAST_OUT" "/workflow
 check "10: the deep diff itself was printed" "$LAST_OUT" "per-transition rule DEEP DIFF"
 check "10: the diff shows what was sent against what was stored" "$LAST_OUT" '"stored":'
 
-# =================================================================
-# 10b/10c. ROUND-4 REVIEW ITEM 1 — the REAL before/after pair from the
-#     actual successful ZZPROBE apply. A rule entry's OWN `id` changing
-#     (Jira regenerates a validator's uuid on every write) must NOT trip
-#     the diff (10b); a rule's ruleKey or parameters actually changing —
-#     its real identity — still must (10c). Both use PROJECT_KEY=ZZPROBE
-#     and the exact real fixtures, not synthetic ones — this is the
-#     regression test for a false positive that actually happened live.
-# =================================================================
-# workflow_second is LAB's REAL complete workflow (same trick as section
-# 8's readback-pass) — assert_readback's own re-read after the write needs
-# to see all 9 target statuses/transitions present, and ZZPROBE_WORKFLOW
-# (workflow/search, 3 statuses) is the PRE-write state, not post.
+# 10b/10c. a regenerated rule id must not trip the diff; a changed ruleKey must
+# workflow_second is LAB's REAL complete workflow: assert_readback's
+# re-read needs all 9 targets present, and ZZPROBE_WORKFLOW is pre-write.
 WRAP_ZZPROBE_IDCHANGE="$TMPD/wrap-zzprobe-idchange.sh"
 make_stub "$WRAP_ZZPROBE_IDCHANGE" "$ZZPROBE_WORKFLOW" "$LAB_WORKFLOW" "$VALIDATION_SUCCESS" 1 ok "$ZZPROBE_BEFORE" "$ZZPROBE_AFTER"
 run zzprobeidchange ZZPROBE --jira-api "$WRAP_ZZPROBE_IDCHANGE" --yes
@@ -701,12 +433,7 @@ run zzproberulekeychange ZZPROBE --jira-api "$WRAP_ZZPROBE_RULEKEYCHANGE" --yes
 assert_eq "10c: a rule whose ruleKey actually changed still exits the DISTINCT code 2" "2" "$LAST_RC"
 check "10c: names the affected transition (1, the INITIAL/Create one)" "$LAST_ERR" "differ from what the update sent on transition 1"
 
-# =================================================================
-# 11. ROUND-2 REVIEW ITEM 4 — a target transition id (here: 51, "Open")
-#     that already belongs to a DIFFERENT existing transition name is a
-#     hard die naming the collision, before anything else about that
-#     project runs.
-# =================================================================
+# 11. a target transition id already owned by a different name is a hard die
 WRAP_COLLISION="$TMPD/wrap-collision.sh"
 make_stub "$WRAP_COLLISION" "$WORKFLOW_ID_COLLISION" "$WORKFLOW_ID_COLLISION" "$VALIDATION_SUCCESS" 0
 run collision NWM --jira-api "$WRAP_COLLISION" --dry-run
@@ -716,18 +443,7 @@ check "11: names the unexpected existing owner" "$LAST_ERR" "Some Unrelated Tran
 check "11: names what this script would have called it instead" "$LAST_ERR" "not 'Open'"
 check_not "11: never reaches the bulk-get (dies before any write-path call)" "$(cat "$TMPD/$(basename "$WRAP_COLLISION").calllog")" "write POST"
 
-# =================================================================
-# 12. --restore-from (ROUND-3 REVIEW ITEM 4).
-#     (a) a file containing the literal string "<redacted>" is refused
-#         BEFORE any network call — proven with a stub that refuses
-#         literally everything; if the redaction check happened after a
-#         read, this case would trip the stub's own refusal instead of
-#         the intended message.
-#     (b) a clean --show-secrets-era file renders and validates a restore
-#         body with a freshly-fetched version, reaching the same
-#         validate-and-print path as the normal flow (--dry-run stops it
-#         there, same as always).
-# =================================================================
+# 12. --restore-from: a redacted file is refused; a clean one reaches validate
 WRAP_REFUSE_ALL="$TMPD/wrap-refuse-all.sh"
 cat > "$WRAP_REFUSE_ALL" <<'STUBEOF'
 #!/bin/bash
@@ -759,11 +475,7 @@ check "12b: reaches the same validation-passed preview as the normal flow" "$LAS
 check "12b: the restore body still carries the real ruleKey (full passthrough, not reshaped)" "$LAST_OUT" '"ruleKey": "system:update-field"'
 check_not "12b: never reaches the actual update endpoint under --dry-run" "$LAST_OUT" "/workflows/update response"
 
-# =================================================================
-# 13. Argument validation — a script that earns its place fails loudly on
-#     a bad PROJECT_KEY or a missing --jira-api, rather than silently
-#     doing nothing useful.
-# =================================================================
+# 13. argument validation: a bad PROJECT_KEY or a missing --jira-api fails loudly
 run novargs
 assert_nonzero "13a: no arguments at all fails" "$LAST_RC"
 
@@ -787,9 +499,7 @@ run rulesrestore NWM --jira-api "$WRAP_REFUSE_ALL" --rules "$RULES_SPEC" --resto
 assert_nonzero "13f: --rules with --restore-from is refused" "$LAST_RC"
 check "13f: message says they are mutually exclusive" "$LAST_ERR" "mutually exclusive"
 
-# =================================================================
 # 14. --rules, against the REAL SPK4 rehearsal captures.
-# =================================================================
 WRAP_RULES_ADD="$TMPD/wrap-rules-add.sh"
 make_stub "$WRAP_RULES_ADD" "$SPK4_WORKFLOW" "$SPK4_WORKFLOW" "$SPK4_PROBE3_RESPONSE" 0 ok "$SPK4_RULES_BEFORE"
 CALLLOG_RULES_ADD="$CALLLOG"

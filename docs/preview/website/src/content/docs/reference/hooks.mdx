@@ -8,31 +8,58 @@ description: Generated from every hooks/*.sh header (excluding selftests), plus 
 
 ### hooks/bash-result-shunt.sh
 
-bash-result-shunt.sh — Claude Code PreToolUse hook for Bash. Attacks the
-largest known-noisy Bash tool results (uncapped `git log`, `jira-api.sh
-board`/`raw` search pulls) before they land in the calling model's
-context.
+bash-result-shunt.sh — Claude Code PreToolUse hook for Bash. Gates the
+largest known-noisy Bash tool results (uncapped `git log`, unfiltered
+`jira-api.sh board`/`raw` search pulls) before they reach the calling
+model's context.
+
+```text
+Usage: not a CLI. Fed the PreToolUse payload on stdin; reads `.tool_name`
+and `.tool_input.command`. Nothing is ever summarised and no command output
+is ever inspected — PreToolUse fires BEFORE the command runs, so the only
+size signal available is the command string itself. Deliberately less
+powerful than read-shunt.sh; see memory-graph on why no hook primitive can
+substitute a command's real output.
+```
 
 ### hooks/guard-fs-writes.sh
 
 guard-fs-writes.sh — Claude Code PreToolUse hook for the Bash tool.
+Enforces "agents write only inside their own trees" deterministically,
+rather than as prose in a CLAUDE.md a fresh subagent can read and violate.
+
+```text
+Usage: not a CLI. Claude Code feeds it the PreToolUse payload on stdin; it
+reads `.tool_input.command` (literal, pre-expansion text) and `.cwd` (the
+recorded working directory the call ran from, falling back to this
+process's own `pwd -P`).
+```
 
 ### hooks/read-shunt.sh
 
-read-shunt.sh — Claude Code PreToolUse hook for Read (and simple `cat`
-Bash calls). Copies Portal by Spotify's read-shunt mechanism
-(https://engineering.atspotify.com/2026/9/portal-by-spotify-cut-my-claude-code-token-usage-by-90),
-deliberately scoped narrow: READS ONLY, never edits, reasoning, or safety
-review.
+read-shunt.sh — Claude Code PreToolUse hook for Read (and simple `cat` Bash
+calls). A file over the line threshold is summarised by a stateless
+`claude -p --model haiku` subprocess instead of being returned to the
+calling model in full. READS ONLY: never edits, reasoning, or safety review.
+
+```text
+Usage: not a CLI. Fed the PreToolUse payload on stdin.
+```
 
 ### hooks/script-events-hook.sh
 
-script-events-hook.sh — Claude Code SubagentStop hook.
-Feeds every finished `script-author`/`script-reviewer` Agent-tool
-subagent into the existing lifecycle extractor
-(scripts/script-analytics.py extract, see docs/cost.md "Script
-lifecycle analytics") automatically, so the events log stops depending
-on someone remembering to run `extract` by hand after the fact.
+script-events-hook.sh — Claude Code SubagentStop hook. Feeds every finished
+`script-author`/`script-reviewer` subagent into the lifecycle extractor
+(scripts/script-analytics.py extract, see docs/cost.md) automatically, so
+the events log stops depending on someone remembering to run `extract` by
+hand after the fact.
+
+```text
+Usage: not a CLI. Fed the SubagentStop payload on stdin — session_id,
+transcript_path, cwd, hook_event_name, agent_id, agent_type (verified live
+2026-09-10). `agent_transcript_path` is NOT documented and is not used; the
+extractor resolves the subagent's own transcript itself, by agent_id.
+```
 
 ### hooks/session-cost.sh
 

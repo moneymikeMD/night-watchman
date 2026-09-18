@@ -202,7 +202,6 @@ def append_ledger_jsonl(path, row):
         os.close(fd)
 
 
-# --------------------------------------------------------------- render
 def render_table(headers, rows):
     if not rows:
         widths = [len(h) for h in headers]
@@ -235,7 +234,6 @@ def render_md(headers, rows):
 RENDERERS = {"table": render_table, "tsv": render_tsv, "md": render_md}
 
 
-# ------------------------------------------------------------- subcommands
 def cmd_append(args):
     validate_field(args.wave, "--wave")
     if args.date is not None:
@@ -342,7 +340,6 @@ def cmd_compare(args):
     print(renderer(headers, table_rows))
 
 
-# ------------------------------------------------------------------- main
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog="claude-cost.py",

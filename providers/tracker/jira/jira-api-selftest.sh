@@ -1,36 +1,10 @@
 #!/bin/bash
 #
 # Selftest for providers/tracker/jira/{jira-api.sh,provider.sh,lib/*}.
-# Nothing here reaches a real network or a real 1Password vault: the
-# --dry-run assertions never call curl at all (that is what --dry-run
-# means), and every assertion that does exercise the HTTP layer puts a
-# stub `curl` on PATH first, so even $NW_JIRA_HOST=127.0.0.1 (used
-# throughout, mainly to keep the fixtures below realistic-looking) is
-# never actually dialed — the stub, not the host, is what makes this
-# network-free.
-#
-# What is asserted, in order:
-#   1  lib/jira-common.sh: require_issue_key accepts PROJECT-123, rejects
-#      a bare project, and rejects a key carrying '/' or other
-#      non-[A-Za-z0-9_-] characters (the path-traversal shape).
-#   2  lib/jira-common.sh: jira_comment_body builds one ADF paragraph per
-#      input line and strips trailing newlines.
-#   3  --dry-run prints the exact request and exits 0 without ever
-#      reaching curl, for every subcommand with a DRY_RUN branch: raw,
-#      whoami, projects, fields, statuses, issue, search, comment, write.
-#   4  jira-api.sh raw refuses a path containing '..'.
-#   5  jira-api.sh write/comment refuse to run with no --yes and no
-#      terminal.
-#   6  End-to-end happy path through a stubbed curl + the real `env`
-#      secrets provider: a 2xx response is redacted before printing, EXCEPT
-#      an issue's own `key`/`id` fields (fetch's read path and create's
-#      write-readback both survive redaction intact — the CRITICAL fix).
-#   7  End-to-end: a non-2xx response dies non-zero and prints the
-#      (redacted) error body.
-#   8  provider.sh dispatches fetch/transition/comment/create to
-#      jira-api.sh with the arguments the contract implies, refuses an
-#      unknown verb, and — under NW_DRY_RUN=1 or --dry-run — passes
-#      --dry-run through instead of --yes (the HIGH fix).
+# Nothing here reaches a real network or a real vault: --dry-run assertions
+# never call curl at all, and every assertion that exercises the HTTP layer
+# puts a stub `curl` on PATH first. The stub, not $NW_JIRA_HOST=127.0.0.1,
+# is what makes this network-free.
 #
 # Usage: providers/tracker/jira/jira-api-selftest.sh
 
@@ -106,8 +80,7 @@ eq "jira_comment_body: one paragraph per line, blank line included" \
     '[{"type":"paragraph","content":[{"type":"text","text":"line one"}]},{"type":"paragraph","content":[]},{"type":"paragraph","content":[{"type":"text","text":"line three"}]}]' \
     "$OUT"
 
-# ---- 3. --dry-run resolves no credential, on every subcommand that has a
-#         DRY_RUN branch -----------------------------------------------------
+# ---- 3. --dry-run resolves no credential on every subcommand ------------
 
 mkdir -p "$WORK/bin"
 unset NW_CONFIG NW_ROOT NW_TRACKER NW_SECRETS NW_DISPATCH NW_MEMORY
@@ -166,9 +139,8 @@ contains "write's refusal names the missing confirmation" "needs confirmation an
 
 cat > "$WORK/bin/curl" <<'CURLEOF'
 #!/bin/bash
-# Stand-in for curl. Reads and discards --config - (the auth config on
-# stdin), finds the -o output path and writes $STUB_BODY there, and prints
-# $STUB_CODE in place of curl's own -w '%{http_code}' expansion.
+# Stand-in for curl: discards the --config - auth config on stdin, writes
+# $STUB_BODY to the -o path, prints $STUB_CODE for -w '%{http_code}'.
 cat >/dev/null
 out=""
 prev=""
@@ -202,9 +174,8 @@ eq "e2e non-2xx: dies non-zero" "1" "$RC"
 contains "e2e non-2xx: prints HTTP code and method/path" "HTTP 400 GET /myself" "$ERR"
 contains "e2e non-2xx: prints the (redacted, here unchanged) error body" "field X is required" "$ERR"
 
-# `issue` accepts a bare numeric issue id, not only a PROJECT-123
-# key — Jira's own issueIdOrKey path segment takes either shape, and a
-# create-readback (provider.sh create) only ever has the numeric id.
+# `issue` accepts a bare numeric id as well as PROJECT-123: a
+# create-readback only ever has the numeric id.
 OUT=$(STUB_CODE="200" STUB_BODY='{"key":"PROJ-9","fields":{"summary":"numeric id fetch"}}' \
     run_e2e "$JIRA_API" issue 10504)
 contains "e2e issue: a numeric issue id resolves" "numeric id fetch" "$OUT"
@@ -213,10 +184,8 @@ ERR=$( ( run_e2e "$JIRA_API" --dry-run issue 'notakey' ) 2>&1 ); RC=$?
 eq "issue: a non-numeric, non-key string is still refused" "1" "$RC"
 contains "issue: refusal names it as not a Jira key" "not a Jira key" "$ERR"
 
-# error_body's non-JSON fallback must redact too — a raw `cat` here
-# would leak a credential-shaped value straight from an HTML/plain-text
-# error page (e.g. a proxy's 502 in front of Jira that happens to echo an
-# Authorization header back).
+# error_body's non-JSON fallback must redact too: a proxy's 502 page can
+# echo an Authorization header straight back.
 ERR=$(STUB_CODE="502" STUB_BODY=$'<html><body>Authorization: Basic SENTINEL-502-LEAK</body></html>' \
     run_e2e "$JIRA_API" raw GET /myself 2>&1 </dev/null); RC=$?
 eq "e2e non-2xx, non-JSON body: dies non-zero" "1" "$RC"
@@ -224,18 +193,12 @@ contains "e2e non-2xx, non-JSON body: names it HTTP 502" "HTTP 502" "$ERR"
 not_contains "e2e non-2xx, non-JSON body: the credential-shaped value is redacted" "SENTINEL-502-LEAK" "$ERR"
 contains "e2e non-2xx, non-JSON body: redaction marker present" "<redacted>" "$ERR"
 
-# review round: redact_text must fail CLOSED rather than try to
-# find a value's real end with a delimiter class — any such class is
-# incomplete and lets the value's TAIL past the false stop print in clear.
-# Three adversarial shapes, each asserting the WHOLE sentinel (prefix AND
-# tail) is absent, not just the prefix a truncating pattern would still
-# catch:
+# redact_text must fail CLOSED: any delimiter class is incomplete and lets
+# the value's TAIL print in clear. Three adversarial shapes, each asserting
+# the WHOLE sentinel is absent, not just the prefix.
 
-# (a) an escaped quote inside a value, in a body that is JSON-*shaped* but
-# fails jq's strict parse (trailing garbage after the top-level value — a
-# truncated/garbled proxy response is exactly this shape) and so falls to
-# redact_text, not redact_json. The old `[^"]*` value-stop pattern stopped
-# at the escaped quote's own `"`, leaking everything after it.
+# (a) an escaped quote inside a value, in a JSON-shaped body that fails
+# jq's strict parse and so falls to redact_text.
 ERR=$(STUB_CODE="400" STUB_BODY=$'{"apiToken":"SENTINEL-ESCQUOTE\\"TAIL"} trailing garbage' \
     run_e2e "$JIRA_API" raw GET /myself 2>&1 </dev/null); RC=$?
 eq "e2e non-2xx, escaped-quote value: dies non-zero" "1" "$RC"
@@ -243,8 +206,7 @@ not_contains "e2e non-2xx, escaped-quote value: sentinel prefix absent" "SENTINE
 not_contains "e2e non-2xx, escaped-quote value: sentinel tail past the escaped quote is absent" "TAIL" "$ERR"
 contains "e2e non-2xx, escaped-quote value: redaction marker present" "<redacted>" "$ERR"
 
-# (b) a comma inside a plain key=value's value — the old `[^,;]`-excluding
-# class stopped at the comma, leaking the tail.
+# (b) a comma inside a plain key=value's value.
 ERR=$(STUB_CODE="400" STUB_BODY='token=SENTINEL-COMMA,TAIL' \
     run_e2e "$JIRA_API" raw GET /myself 2>&1 </dev/null); RC=$?
 eq "e2e non-2xx, comma in value: dies non-zero" "1" "$RC"
@@ -252,9 +214,7 @@ not_contains "e2e non-2xx, comma in value: sentinel prefix absent" "SENTINEL-COM
 not_contains "e2e non-2xx, comma in value: sentinel tail past the comma is absent" "TAIL" "$ERR"
 contains "e2e non-2xx, comma in value: redaction marker present" "<redacted>" "$ERR"
 
-# (c) a semicolon inside a Cookie header's value — Cookie/Authorization
-# headers routinely contain ';', which the old pattern also excluded from
-# the value class.
+# (c) a semicolon inside a Cookie header's value.
 ERR=$(STUB_CODE="400" STUB_BODY='Cookie: session=SENTINEL-SEMI;TAIL; path=/' \
     run_e2e "$JIRA_API" raw GET /myself 2>&1 </dev/null); RC=$?
 eq "e2e non-2xx, semicolon in Cookie value: dies non-zero" "1" "$RC"
@@ -262,11 +222,8 @@ not_contains "e2e non-2xx, semicolon in Cookie value: sentinel prefix absent" "S
 not_contains "e2e non-2xx, semicolon in Cookie value: sentinel tail past the semicolon is absent" "TAIL" "$ERR"
 contains "e2e non-2xx, semicolon in Cookie value: redaction marker present" "<redacted>" "$ERR"
 
-# The CRITICAL regression this guards against: a bare Jira issue `key`
-# field must survive redact_json, on both the read path (fetch -> raw GET)
-# and the write path (create -> write POST's readback), or a caller like
-# provider.sh fetch/create gets "<redacted>" back where it needed the real
-# key (memorygraph, 2026-09-11, the jira-import.sh KEY READBACK gotcha).
+# A bare Jira issue `key` must survive redact_json on both the read and
+# the write-readback path, or provider.sh gets "<redacted>" for a real key.
 OUT=$(STUB_CODE="200" STUB_BODY='{"key":"PROJ-1","id":"10042","fields":{"summary":"hi"}}' \
     run_e2e "$JIRA_API" raw GET /issue/PROJ-1)
 eq "e2e fetch: the issue's own 'key' field is NOT redacted" "PROJ-1" "$(printf '%s' "$OUT" | jq -r .key)"
@@ -305,8 +262,8 @@ ERR=$("$PROVIDER_SH" bogus 2>&1); RC=$?
 eq "provider.sh refuses an unknown verb" "1" "$RC"
 contains "provider.sh names the legal verb set" "fetch, transition, comment, create" "$ERR"
 
-# HIGH: NW_DRY_RUN=1 (and --dry-run) must reach jira-api.sh as --dry-run,
-# never --yes — a live write must not slip through under either spelling.
+# NW_DRY_RUN=1 and --dry-run must both reach jira-api.sh as --dry-run,
+# never --yes: a live write must not slip through under either spelling.
 OUT=$(NW_DRY_RUN=1 "$WORK/dispatch/provider.sh" comment PROJ-1 "hello")
 eq "NW_DRY_RUN=1: provider.sh comment passes --dry-run, not --yes" "--dry-run comment PROJ-1 hello" "$OUT"
 

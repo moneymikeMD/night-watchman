@@ -47,7 +47,6 @@ mkdir -p "$WORK/repo"
 trap 'rm -rf "$WORK"' EXIT
 
 run_hook() {
-    # run_hook STDIN_JSON [LEDGER]
     local stdin_json="$1" ledger="${2:-}"
     NW_COST_PROJECT_SLUG="-Users-fixture-repoC" \
     NW_COST_PROJECTS_DIR="$FIXTURES/projects" \
@@ -57,7 +56,6 @@ run_hook() {
 
 FIXTURE_STDIN="$(cat "$FIXTURES/stdin.json")"
 
-# --- test 1: a real session, a real ledger -------------------------------
 LEDGER1="$WORK/ledger1.tsv"
 STATE1="$WORK/repo/.night-watchman/last-session-cost.txt"
 cp "$HERE/../templates/cost-ledger.tsv" "$LEDGER1" 2>/dev/null \
@@ -79,7 +77,6 @@ else
     fail "test1: expected 'cost: \$0.0042, 2 turns' in $STATE1 (got: $(cat "$STATE1" 2>&1))"
 fi
 
-# --- test 2: running again against the same ledger is a no-op ------------
 LINES_BEFORE=$(wc -l < "$LEDGER1")
 run_hook "$STDIN1" "$LEDGER1" >/dev/null 2>&1
 STATUS2=$?
@@ -91,7 +88,6 @@ else
     fail "test2: duplicate wave changed the ledger line count ($LINES_BEFORE -> $LINES_AFTER)"
 fi
 
-# --- test 3: no ledger file present -> ledger step skipped, state file ok -
 LEDGER3="$WORK/does-not-exist.tsv"
 rm -rf "$WORK/repo/.night-watchman"
 run_hook "$STDIN1" "$LEDGER3" >/dev/null 2>&1
@@ -108,7 +104,6 @@ else
     fail "test3: expected state file even with no ledger configured"
 fi
 
-# --- test 4: no session_id in stdin -> exit 0, nothing written -----------
 rm -rf "$WORK/repo/.night-watchman"
 BAD_STDIN="{\"cwd\":\"$WORK/repo\"}"
 run_hook "$BAD_STDIN" "$LEDGER3" >/dev/null
@@ -120,12 +115,10 @@ else
     fail "test4: a state file was written despite no session_id"
 fi
 
-# --- test 5: empty stdin -> exit 0 ----------------------------------------
 : | NW_COST_PROJECT_SLUG="-Users-fixture-repoC" NW_COST_PROJECTS_DIR="$FIXTURES/projects" NW_COST_LEDGER="$LEDGER3" bash "$HOOK"
 STATUS5=$?
 if [ "$STATUS5" -eq 0 ]; then pass "test5: exit 0 on empty stdin"; else fail "test5: exit 0 on empty stdin (got $STATUS5)"; fi
 
-# --- test 6: scanner missing -> exit 0, warns, never crashes --------------
 FAKE_ROOT="$WORK/fake-plugin-root"
 mkdir -p "$FAKE_ROOT/hooks" "$FAKE_ROOT/scripts"
 cp "$HOOK" "$FAKE_ROOT/hooks/session-cost.sh"

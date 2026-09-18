@@ -4,15 +4,6 @@
 # `.night-watchman/config.toml`, plus the discovery rule that finds that
 # file. Sourced by providers/lib/provider.sh; not a CLI of its own.
 #
-# Why a subset and not a real TOML parser: the core is dependency-free by
-# rule, so `tomlq`/`python3 -c 'import tomllib'` are both off the table
-# (the latter is 3.11+, and the plugin supports whatever python3 an
-# adopter's machine already has). A whole TOML implementation in bash 3.2
-# would be a large, badly-tested surface for a file that only ever holds
-# provider selections and a handful of per-provider settings. So the
-# supported grammar is fixed and small, and everything outside it is a
-# LOUD ERROR rather than a silent misparse:
-#
 #   SUPPORTED
 #     # comment lines, and trailing comments after a value
 #     bare_key = "basic string"        \" \\ \n \t \r escapes
@@ -21,7 +12,7 @@
 #     bare_key = true / false          booleans
 #     [table]                          one level or dotted, e.g. [tracker.jira]
 #
-#   REJECTED, each with its own message naming what it saw
+#   REJECTED, each an error naming the file, line number and reason
 #     [[array.of.tables]]              arrays of tables
 #     key = [1, 2]                     arrays
 #     key = { a = 1 }                  inline tables
@@ -30,18 +21,10 @@
 #     "quoted key" = 1                 quoted keys
 #     a duplicate bare key, or a duplicate [table] header
 #
-# The rejections are the point. A reader that quietly skipped a line it
-# did not understand would let `tracker = "jira"` fall back to a built-in
-# default because of a typo three lines above it, and the operator would
-# get a working run against the wrong provider with nothing printed. Every
-# unparsable line is an error naming the file, line number, and reason.
-#
-# Values are carried between the awk parser and the shell as ONE LINE PER
-# KEY, so a value containing a literal newline (from a `\n` escape) has to
-# be re-encoded on the way out and decoded on the way in — see
-# `_nw_config_encode` / `nw_config_decode`. Skipping that round-trip is
-# how a line-based config reader corrupts every key after the first
-# multi-line value.
+# Rejecting rather than skipping is the point: a reader that quietly
+# skipped an unparsable line would let a typo three lines above
+# `tracker = "jira"` fall back to a built-in default, silently running
+# against the wrong provider.
 #
 # bash 3.2 compatible: no associative arrays (the parsed config is a
 # newline-delimited "key<TAB>value" blob, looked up by scanning), no
@@ -53,19 +36,9 @@
 #   nw_config_get KEY [DEF]   — decoded value; 1 if absent and no DEF
 #   nw_config_keys            — every dotted key, one per line
 
-# Discovery order, highest priority first:
-#   1. $NW_CONFIG            — an explicit path (used by the selftest, and
-#                              by anyone running against another checkout)
-#   2. the nearest `.night-watchman/config.toml` walking UP from
-#      ${NW_ROOT:-$PWD} to /, so a script invoked from a subdirectory of
-#      the adopting repo finds the repo's committed config
-#   3. nothing — callers fall back to their own built-in defaults
-#
-# Note there is deliberately no ~/.night-watchman/config.toml step. Provider
-# selection is a property of the repo being worked on and is reviewed in
-# that repo's history; a per-operator home-directory config would mean two
-# people running the same script against the same repo silently hitting
-# different providers.
+# Discovery: $NW_CONFIG, else the nearest `.night-watchman/config.toml` walking
+# UP from ${NW_ROOT:-$PWD} to /, else nothing. Deliberately no ~/ step:
+# selection is a property of the repo, reviewed in its history.
 nw_config_file() {
     if [ -n "${NW_CONFIG:-}" ]; then
         printf '%s\n' "$NW_CONFIG"
@@ -85,11 +58,9 @@ nw_config_file() {
     done
 }
 
-# _nw_config_awk — the parser itself. Reads a config on stdin, writes
-# `key<TAB>encoded-value` lines on stdout, and every complaint on stderr.
-# Exits 1 if it complained about anything, having still printed the keys
-# it did understand (so a caller that only wants to report errors gets the
-# full list in one run rather than one per invocation).
+# _nw_config_awk — config on stdin, `key<TAB>encoded-value` on stdout,
+# complaints on stderr. Exits 1 if it complained, having still printed the
+# keys it did understand, so one run reports every error.
 _nw_config_awk() {
     awk -v src="$1" '
         function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
@@ -223,19 +194,9 @@ _nw_config_awk() {
     '
 }
 
-# nw_config_parse [FILE] — encoded `key<TAB>value` lines for FILE (default:
-# whatever nw_config_file resolves to). A missing/empty config is not an
-# error: it prints nothing and succeeds, so a repo with no config falls
-# through to the caller's built-in defaults. An UNREADABLE named file IS an
-# error — "you pointed me at a file I cannot read" is never the same
-# situation as "there is no config here".
-#
-# Not cached, deliberately. An earlier revision memoised the parse in two
-# globals; they were dead weight, because every caller in this file reads
-# nw_config_parse through a command substitution and a subshell's
-# assignment does not survive back to the parent. A cache that only works
-# on the one call path nothing uses is worse than none: it reads as a
-# guarantee about repeat cost that it does not provide.
+# nw_config_parse [FILE] — encoded `key<TAB>value` lines; a missing config is
+# not an error, an UNREADABLE named one is. Deliberately not cached: callers
+# read it through a substitution, so a memo would never reach the parent.
 nw_config_parse() {
     local file="${1:-}"
     if [ -z "$file" ]; then file=$(nw_config_file); fi
@@ -248,8 +209,7 @@ nw_config_parse() {
         return 1
     fi
     local out
-    # shellcheck disable=SC2094  # the file is only ever read: the name is
-    # passed in for error messages, the bytes come in on stdin.
+    # shellcheck disable=SC2094  # read-only: name for messages, bytes on stdin
     out=$(_nw_config_awk "$file" < "$file") || return 1
     printf '%s' "$out"
 }
@@ -276,9 +236,8 @@ nw_config_decode() {
     }'
 }
 
-# nw_config_get KEY [DEFAULT] — the decoded value for a dotted key. Returns
-# 1 (printing nothing) when the key is absent and no DEFAULT was given, so
-# `if v=$(nw_config_get x); then` distinguishes absent from empty-string.
+# nw_config_get KEY [DEFAULT] — the decoded value for a dotted key. Returns 1
+# printing nothing when absent with no DEFAULT, so absent differs from empty.
 nw_config_get() {
     local key="$1" parsed line
     parsed=$(nw_config_parse) || return 2

@@ -1,53 +1,25 @@
 #!/bin/bash
 #
 # Selftest for providers/lib/config.sh and providers/lib/provider.sh — the
-# two files that decide, for every night-watchman script, which outside
-# tool gets called. Both are worth a selftest for the same reason: their
-# failure mode is silent. A config reader that skips a line it does not
-# understand, or a resolver that falls through to a default when a
-# committed selection was meant to win, does not error — it does the wrong
-# thing successfully, against the wrong Jira site or the wrong vault.
+# two files that decide, for every night-watchman script, which outside tool
+# gets called. Both are worth a selftest because their failure mode is
+# SILENT: a config reader that skips a line it does not understand, or a
+# resolver that falls through to a default when a committed selection was
+# meant to win, does not error — it does the wrong thing successfully,
+# against the wrong Jira site or the wrong vault.
 #
-# What is asserted, in the order the cases appear:
-#
-#   1-2   the supported grammar parses, and every value shape round-trips
-#         through the one-line key<TAB>value transport intact — including
-#         a value holding a literal newline, tab, backslash, and quote,
-#         which is exactly what a line-based transport gets wrong.
-#   3     every REJECTED construct is rejected, by name, with its line
-#         number. This is the bulk of the file: a reader is only as good
-#         as what it refuses.
-#   4     discovery — NW_CONFIG beats the walk-up, the walk-up finds a
-#         config from a nested subdirectory, and no config is not an error.
-#   5     precedence — env > config > built-in default, with `origin`
-#         agreeing with `resolve` rather than re-deriving the rule.
-#   6     a malformed implementation name is refused BEFORE it is
-#         concatenated into a path and executed (the traversal case).
-#   7     unknown kinds and unknown verbs are refused naming the legal set.
-#   8     `run` actually execs the implementation, passing the verb and
-#         every argument after it through unmangled.
-#   9     sourcing either library does not turn `set -e` on in the caller.
-#   10    the shipped template parses, and declares every kind the code
-#         knows about — the drift check between the two.
-#
-# Runs entirely against scratch directories under a temp root. Nothing
-# here reads the operator's real config, contacts a host, or reads a
-# credential: there is no live target for this layer to reach.
+# Runs entirely against scratch directories under a temp root. Nothing here
+# reads the operator's real config, contacts a host, or reads a credential.
 #
 # Usage: providers/config-selftest.sh
 
-# shellcheck disable=SC1090  # every `.` below sources one of the two files
-# under test, at a path computed from this script's own location.
+# shellcheck disable=SC1090  # sourced at a path computed at runtime
 
 set -uo pipefail
 
-# Hermetic environment. Every one of these is a legitimate thing for an
-# operator to have exported in the shell they run this from, and each one
-# would quietly change what the assertions below are measuring — the
-# drift check at the end reads the shipped template through the same
-# resolution path an operator's `NW_TRACKER` would win. Clear them once,
-# here, rather than per case: a case that forgets is a case that passes
-# for the wrong reason.
+# Hermetic environment. Each of these is a legitimate thing for an operator
+# to have exported, and each would quietly change what the assertions measure.
+# Cleared once here, not per case: a case that forgets passes for the wrong reason.
 unset NW_CONFIG NW_ROOT NW_TRACKER NW_SECRETS NW_DISPATCH NW_MEMORY
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -86,10 +58,9 @@ contains() {
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-# The walk-up in nw_config_file climbs to /. If the temp root happens to
-# sit under a directory that has its own .night-watchman/config.toml, the
-# "no config" cases below would silently test the wrong thing — so refuse
-# to run rather than report a pass that means nothing.
+# nw_config_file's walk-up climbs to /. If the temp root sits under a
+# directory with its own config.toml the "no config" cases silently test the
+# wrong thing, so refuse to run rather than report a meaningless pass.
 if ( cd "$WORK" && unset NW_CONFIG NW_ROOT && . "$CONFIG_SH" && [ -n "$(nw_config_file)" ] ); then
     echo "refusing to run: a .night-watchman/config.toml exists above the temp root $WORK" >&2
     exit 2
@@ -100,8 +71,6 @@ get() {
     local f="$1"; shift
     ( unset NW_ROOT; NW_CONFIG="$f"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_get "$@" )
 }
-
-# ---- 1. the supported grammar parses -----------------------------------
 
 cat > "$WORK/good.toml" <<'EOF'
 # a leading comment
@@ -137,12 +106,9 @@ eq "an absent key prints nothing" "" "$MISSING"
 eq "an absent key with a default returns the default" "fallback" \
    "$(get "$WORK/good.toml" no.such.key fallback)"
 
-# ---- 2. values round-trip through the one-line transport ---------------
-#
-# The reader carries values from awk to the shell one key per line, so a
-# value containing a literal newline has to survive an encode/decode pair.
-# This is the case a line-based config reader gets wrong, and it corrupts
-# every key after the offending one rather than just that value.
+# The reader carries values one key per line, so a value holding a literal
+# newline must survive an encode/decode pair. Getting this wrong corrupts
+# every key AFTER the offending one, not just that value.
 
 printf 'nasty = "a\\tb\\nc\\"d\\\\e"\nafter = "still here"\n' > "$WORK/esc.toml"
 WANT=$(printf 'a\tb\nc"d\\e')
@@ -153,11 +119,8 @@ eq "a key after a multi-line value is still readable" "still here" \
 printf "lit = 'a\\\\tb'\n" > "$WORK/lit.toml"
 eq "a literal string does NOT process escapes" 'a\tb' "$(get "$WORK/lit.toml" lit)"
 
-# A '#' or an '=' inside a quoted string is DATA, not a comment
-# delimiter or a second assignment. Both are ordinary in the values this
-# config actually carries — an op:// reference, a URL with a fragment, a
-# query string — and a reader that scanned for '#' before finding the end
-# of the string would silently truncate them.
+# A '#' or '=' inside a quoted string is DATA. Both are ordinary in real
+# values (op:// refs, URLs with fragments, query strings).
 cat > "$WORK/punct.toml" <<'EOF'
 hashed  = "a#b"
 equals  = "k=v"
@@ -175,21 +138,16 @@ eq "an empty string is a value, not an absent key" "" "$(get "$WORK/punct.toml" 
 EMPTY_RC=0; get "$WORK/punct.toml" emptied >/dev/null || EMPTY_RC=$?
 eq "an empty string returns 0, distinguishing it from absent" "0" "$EMPTY_RC"
 
-# CRLF. A config edited on Windows, or pasted through a tool that
-# normalises line endings, must not end up with a trailing carriage
-# return welded onto every value — `tracker = "jira\r"` would fail the
-# implementation-name check with a message naming a value that looks
-# correct on screen.
+# CRLF must not weld a carriage return onto every value: `tracker = "jira\r"`
+# fails the name check with a message naming a value that looks correct.
 printf '[providers]\r\ntracker = "jira"\r\n\r\n[tracker.jira]\r\nhost = "example.atlassian.net"\r\n' > "$WORK/crlf.toml"
 eq "CRLF line endings parse, with no stray carriage return in the value" \
    "jira" "$(get "$WORK/crlf.toml" providers.tracker)"
 eq "CRLF: a later table's key is unaffected" "example.atlassian.net" \
    "$(get "$WORK/crlf.toml" tracker.jira.host)"
 
-# A key is only ever reachable at its own dotted path. Asking for the
-# bare name, or for it under a different table, must miss — a lookup that
-# fell back to "any table with this key" would let [secrets.op] silently
-# answer a question about [tracker.jira].
+# A key is reachable ONLY at its own dotted path: falling back to "any table
+# with this key" would let [secrets.op] answer about [tracker.jira].
 cat > "$WORK/tables.toml" <<'EOF'
 [tracker.jira]
 host = "jira.example.invalid"
@@ -206,11 +164,8 @@ eq "a key is not reachable under a truncated table path" "MISS" \
 eq "the correct dotted path still resolves" "jira.example.invalid" \
    "$(get "$WORK/tables.toml" tracker.jira.host)"
 
-# ---- 3. everything outside the subset is a named error -----------------
-
-# reject LABEL NEEDLE CONTENT — CONTENT must fail to parse, with NEEDLE in
-# the complaint. Both halves matter: a reader that rejects everything
-# passes the exit-status half, so the message is asserted too.
+# reject LABEL NEEDLE CONTENT — CONTENT must fail to parse with NEEDLE in the
+# complaint. A reader that rejects everything passes on exit status alone.
 reject() {
     local out rc=0
     printf '%s\n' "$3" > "$WORK/bad.toml"
@@ -244,8 +199,6 @@ contains "every bad line is reported, not just the first (arrays)" "arrays are n
 contains "every bad line is reported, not just the first (floats)" "only strings, integers" "$MANY"
 contains "an error names the line number" "many.toml:2:" "$MANY"
 
-# ---- 4. discovery ------------------------------------------------------
-
 mkdir -p "$WORK/repo/.night-watchman" "$WORK/repo/deep/deeper"
 printf '[providers]\ntracker = "filed"\n' > "$WORK/repo/.night-watchman/config.toml"
 
@@ -266,8 +219,6 @@ eq "parsing with no config succeeds and prints nothing" "rc=0" "$NOCFG"
 UNREADABLE=$( ( unset NW_ROOT; NW_CONFIG="$WORK/no-such-file.toml"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_parse ) 2>&1; echo "rc=$?" )
 contains "a named-but-unreadable config IS an error" "not readable" "$UNREADABLE"
 
-# ---- 5-8. the resolver -------------------------------------------------
-#
 # Exercised through the CLI in a scratch repo, so the assertions cover the
 # path an actual caller takes rather than the functions in isolation.
 
@@ -287,7 +238,6 @@ chmod +x "$WORK/repo/providers/tracker/fake/provider.sh"
 
 run_p() { ( cd "$WORK/repo" && unset NW_CONFIG NW_TRACKER NW_SECRETS NW_DISPATCH NW_MEMORY; "$@" ) }
 
-# 5. precedence
 eq "config beats the built-in default" "filed" "$(run_p "$P" resolve tracker)"
 eq "origin says config when the config decided" "config" "$(run_p "$P" origin tracker)"
 eq "a kind absent from the config falls back to the built-in default" "op" \
@@ -300,7 +250,6 @@ eq "origin says env when the env var decided" "env" \
 eq "an empty NW_<KIND> does not count as a selection" "filed" \
    "$( cd "$WORK/repo" && NW_TRACKER='' "$P" resolve tracker )"
 
-# 6. a malformed implementation name never reaches the filesystem
 TRAV=$( cd "$WORK/repo" && NW_TRACKER='../../../tmp' "$P" resolve tracker 2>&1 ); TRAV_RC=$?
 eq "a path-traversing implementation name exits non-zero" "1" "$TRAV_RC"
 contains "a path-traversing implementation name is refused by name" "malformed implementation name" "$TRAV"
@@ -316,7 +265,6 @@ for nasty in 'Jira' 'ji ra' 'ji/ra' '-x' ''; do
     fi
 done
 
-# 7. unknown kinds and verbs
 OUT=$( run_p "$P" resolve nonsense 2>&1 ); RC=$?
 eq "an unknown kind exits non-zero" "1" "$RC"
 contains "an unknown kind lists the known ones" "tracker, secrets, dispatch, memory" "$OUT"
@@ -328,7 +276,6 @@ eq "the documented secrets verb set" "read" "$(run_p "$P" verbs secrets)"
 eq "the documented dispatch verb set" "start watch stop" "$(run_p "$P" verbs dispatch)"
 eq "the documented memory verb set" "store recall" "$(run_p "$P" verbs memory)"
 
-# 8. run dispatches, passing the verb and arguments through unmangled
 OUT=$( cd "$WORK/repo" && NW_TRACKER=fake "$P" run tracker fetch NWM-17 --json 2>&1 )
 eq "run execs the implementation with the verb first, arguments intact" \
    "$(printf '[fetch]\n[NWM-17]\n[--json]')" "$OUT"
@@ -347,19 +294,9 @@ eq "a non-executable entry point exits non-zero" "1" "$RC"
 contains "a non-executable entry point is distinguished from a missing one" \
    "no executable entry point" "$OUT"
 
-# ---- 8b. THE SOURCED PATH: a refusal must actually stop the caller -----
-#
-# provider.sh is documented as sourceable, and a sourced caller runs with
-# `set -e` OFF. nw_resolve's refusal of a malformed implementation name
-# happens inside a command substitution, so before this was fixed the
-# refusal exited only that subshell: nw_run carried on with `impl=''` and
-# went looking for `providers/<kind>//provider.sh`.
-#
-# The stray entry point below is what makes this an assertion rather than
-# an accident. Pre-fix, the empty implementation name collapsed the path
-# to `providers/tracker/provider.sh` — so if such a file exists and is
-# executable, a refused name DISPATCHES. It passed the old suite only
-# because no such file happened to be there.
+# 8b — a refusal must stop a SOURCED caller (`set -e` OFF). Do NOT delete the
+# stray providers/tracker/provider.sh below: an empty impl name collapses to
+# exactly that path, so pre-fix a refused name DISPATCHED to it.
 
 cat > "$WORK/repo/providers/tracker/provider.sh" <<'STRAYEOF'
 #!/bin/bash
@@ -390,8 +327,7 @@ contains "sourced + set -e off: the refusal is still reported" \
 contains "sourced + set -e off: the sourcing shell is not killed by the refusal" \
    "caller-survived" "$SRC_OUT"
 
-# The same shape for the other two entry points that resolve an
-# implementation inside a command substitution.
+# The same shape for the other two entry points resolving inside a $( ).
 for fn in nw_dir nw_origin nw_doctor; do
     RC=$( cd "$WORK/repo" && bash -c '
         set +e
@@ -407,16 +343,14 @@ for fn in nw_dir nw_origin nw_doctor; do
     fi
 done
 
-# nw_origin must apply the same name check as nw_resolve, or `doctor`
-# reports a selection that `resolve` refuses.
+# nw_origin must apply nw_resolve's name check, or `doctor` reports a
+# selection `resolve` refuses.
 OUT=$( cd "$WORK/repo" && NW_TRACKER='../../../tmp' "$P" origin tracker 2>&1 ); RC=$?
 eq "origin refuses a malformed implementation name too" "1" "$RC"
 contains "origin's refusal names the same problem resolve's does" \
    "malformed implementation name" "$OUT"
 
 rm -f "$WORK/repo/providers/tracker/provider.sh"
-
-# ---- 9. sourcing must not change the caller's error handling -----------
 
 SOURCED=$( bash -c '
     . "$1"
@@ -426,8 +360,6 @@ SOURCED=$( bash -c '
 ' _ "$CONFIG_SH" "$PROVIDER_SH" 2>&1 )
 eq "sourcing the libraries does not turn set -e on in the caller" "survived" "$SOURCED"
 
-# ---- 10. the shipped template ------------------------------------------
-
 eq "templates/night-watchman.config.toml exists and parses" "0" \
    "$( ( unset NW_ROOT; NW_CONFIG="$TEMPLATE"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_parse >/dev/null ) 2>/dev/null; echo $? )"
 eq "the template selects the shipped tracker" "jira" \
@@ -435,9 +367,8 @@ eq "the template selects the shipped tracker" "jira" \
 eq "NW_TRACKER still overrides the template" "fake" \
    "$( cd "$WORK/bare" && NW_CONFIG="$TEMPLATE" NW_TRACKER=fake "$PROVIDER_SH" resolve tracker )"
 
-# Drift check: the template must declare every kind the resolver knows
-# about. Without this, adding a kind to provider.sh and forgetting the
-# template leaves adopters with a selection they cannot see or review.
+# Drift check: the template must declare every kind the resolver knows, or
+# adopters get a selection they cannot see or review.
 for kind in $( cd "$WORK/bare" && "$PROVIDER_SH" kinds ); do
     VAL=$( unset NW_ROOT; NW_CONFIG="$TEMPLATE"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_get "providers.$kind" "" )
     if [ -n "$VAL" ]; then
@@ -449,13 +380,9 @@ for kind in $( cd "$WORK/bare" && "$PROVIDER_SH" kinds ); do
     eq "the template's $kind matches the built-in default ($DEFAULT)" "$DEFAULT" "$VAL"
 done
 
-# The per-provider coordinates cannot be checked against a built-in
-# default, because there is none: there is no sensible default value for
-# someone else's Jira site or project key, and inventing one is how a
-# template starts pointing at a real instance. So they are checked
-# against the PLACEHOLDERS instead — which is the failure this actually
-# guards against, a real host or project key pasted into the shipped
-# template and copied unnoticed into every adopting repo.
+# Checked against the PLACEHOLDERS, not a built-in default (there is none for
+# someone else's Jira site): the real failure guarded against is a live host
+# or project key pasted into the shipped template and copied out unnoticed.
 TPL_HOST=$( NW_CONFIG="$TEMPLATE"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_get tracker.jira.host "" )
 TPL_PROJ=$( NW_CONFIG="$TEMPLATE"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_get tracker.jira.project "" )
 eq "the template's Jira host is the placeholder, not a real site" \
@@ -463,8 +390,7 @@ eq "the template's Jira host is the placeholder, not a real site" \
 eq "the template's Jira project is the placeholder, not a real key" \
    "PROJ" "$TPL_PROJ"
 
-# This repo's own committed config is the opposite case: it dogfoods the
-# contract, so it must NOT still be carrying the template's placeholders.
+# This repo's own config dogfoods the contract, so it must NOT carry them.
 REPO_CFG="$REPO/.night-watchman/config.toml"
 if [ -f "$REPO_CFG" ]; then
     OWN_PROJ=$( NW_CONFIG="$REPO_CFG"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_get tracker.jira.project "" )
@@ -476,8 +402,6 @@ if [ -f "$REPO_CFG" ]; then
     eq "this repo's own config resolves the tracker" "jira" \
        "$( cd "$WORK/bare" && NW_CONFIG="$REPO_CFG" "$PROVIDER_SH" resolve tracker )"
 fi
-
-# ---- 11. the publish kind's config keys ------------------------
 
 eq "publish has the fixed verb set" "publish-brief post-headline" \
    "$( cd "$WORK/bare" && "$PROVIDER_SH" verbs publish )"
@@ -502,8 +426,8 @@ for key in publish.atlassian.project_feed publish.atlassian.feeds.PROJ-1; do
        "$(tpl_get "$key")"
 done
 
-# A hyphenated epic key is a legal bare key, and the nested feeds table
-# reads back through the same dotted path post-headline looks up.
+# A hyphenated epic key is a legal bare key, read back through the same
+# dotted path post-headline looks up.
 FEEDS="$WORK/feeds.toml"
 printf '[publish.atlassian.feeds]\nNWM-88 = "ari:cloud:townsquare:c:project/p"\n' > "$FEEDS"
 eq "a hyphenated epic key maps to its feed" "ari:cloud:townsquare:c:project/p" \
@@ -511,8 +435,8 @@ eq "a hyphenated epic key maps to its feed" "ari:cloud:townsquare:c:project/p" \
 
 if [ -f "$REPO_CFG" ]; then
     own_get() { ( NW_CONFIG="$REPO_CFG"; export NW_CONFIG; . "$CONFIG_SH"; nw_config_get "$1" "" ); }
-    # This repo is published, so the owner-site identifiers stay in the
-    # private config, the same way [tracker.jira] host does.
+    # This repo is published, so owner-site identifiers stay in the private
+    # config, as [tracker.jira] host does.
     for key in host space root_page project_feed; do
         eq "this repo's committed config carries no publish.atlassian.$key" "" \
            "$(own_get "publish.atlassian.$key")"

@@ -1,47 +1,21 @@
 #!/bin/bash
 #
 # Selftest for land-branch.sh's file-mode completion path. Builds a scratch
-# git repo per test case, with config LOCAL to that repo only (never reads
-# or writes the operator's global ~/.gitconfig — commit.gpgsign, hooksPath,
-# and identity are all set via `git config`, not `--global`), and exercises
-# the four defects review round 1 found in the sed-based frontmatter rewrite
-# this file replaced:
+# git repo per test case, with config LOCAL to that repo only — never reads
+# or writes the operator's global ~/.gitconfig.
 #
-#   1. A default (or user-supplied) outcome containing an apostrophe,
-#      emitted into a single-quoted YAML scalar, produced invalid YAML.
-#   2. A `/` or `&` in the outcome broke the sed substitution outright (a
-#      `/` terminates `s/.../.../`); a multi-line --outcome-file failed
-#      with "unescaped newline inside substitute pattern".
-#   3. A ticket missing `outcome:`/`updated:` in its frontmatter had those
-#      fields appended past the closing `---`, into the ticket body — and
-#      the edit had no `|| die_reset`, so a failure there exited via
-#      `set -e` without reverting the merge.
-#   4. The completion commit was pathspec-limited to the new path only
-#      (`git commit ... -- "$DEST"`), so `git mv`'s staged deletion of the
-#      old path was never committed — it stayed staged, and the NEXT run's
-#      dirty-tree preflight refused on it.
-#
-# INTEGRATION WORKTREE. land-branch.sh no longer merges/
-# lints/completes/pushes in the tree it was invoked from — it does all of
-# that in a dedicated `<repo>-land` worktree, synced from a real "origin"
-# remote every run. So every fixture repo here ($WORK/<name>) has its own
-# bare "origin" at $WORK/<name>.git, pushed once (main) by the fixture
-# helper; a landing's actual effect is only ever visible by reading that
-# bare repo back (`land_bare_of`/`land_fetch` below), never by inspecting
-# the fixture repo's own working tree or its own 'main' ref, which a
-# landing must never move. `<name>-land` and `<name>-land.lock` are the
-# integration worktree and its lock — several tests below create, dirty, or
-# pre-seed them by hand to exercise the lifecycle/lock gates directly.
+# INTEGRATION WORKTREE. land-branch.sh merges/lints/completes/pushes in a
+# dedicated `<repo>-land` worktree, so every fixture repo ($WORK/<name>) has
+# its own bare "origin" at $WORK/<name>.git. A landing's effect is only ever
+# visible by reading that bare repo back (`land_bare_of`/`land_fetch`), never
+# from the fixture repo's own tree or 'main' ref, which a landing must never
+# move. Several tests create, dirty or pre-seed `<name>-land` and
+# `<name>-land.lock` by hand to exercise the lifecycle and lock gates.
 #
 # Usage: scripts/land-branch-selftest.sh [path-to-land-branch.sh] [path-to-issues.py]
-# Both default to this repo's current, fixed copies. Pass the path to an
-# older revision of EITHER (e.g. via `git show <rev>:...` into a temp file)
-# to reproduce the RED failures below against pre-fix code. Passing only
-# the first argument (an older land-branch.sh) still checks that revision's
-# ticket-writing behavior against the CURRENT issues.py parser — pass both
-# together when the finding under test spans both files (test 6 does: it
-# needs the SAME-revision issues.py a real checkout of that land-branch.sh
-# would have shipped with, not whatever happens to be on disk right now).
+# Both default to this repo's current copies. Pass an older revision of
+# EITHER to reproduce the RED failures below against pre-fix code; pass both
+# when the finding spans the two files (test 6 does).
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -79,10 +53,8 @@ land_fetch() {
 }
 
 # fresh_repo NAME TICKET_FRONTMATTER_BODY — a throwaway git repo under
-# $WORK/NAME, with a bare "origin" at $WORK/NAME.git it has already pushed
-# main to. One ticket in issues/in-progress/ and one commit on a 'work'
-# branch touching foo.txt, checked out back to main ready to land. Prints
-# the working repo's path.
+# $WORK/NAME with a bare "origin" at $WORK/NAME.git, one ticket in
+# issues/in-progress/, and a 'work' branch ready to land. Prints the repo path.
 fresh_repo() {
     local ticket_body="$2" d="$WORK/$1"
     rm -rf "$d" "$d.git" "$d-land" "$d-land.lock"
@@ -104,9 +76,8 @@ fresh_repo() {
         cp "$ISSUES_PY" skills/to-issues/scripts/issues.py
         chmod +x scripts/land-branch.sh
         printf '%s' "$ticket_body" > issues/in-progress/PROJ-1.md
-        # Tracked from the first commit so a later edit to it shows up as an
-        # "M " porcelain line at this exact path — used by the dirty-
-        # invoking-tree scenario to prove a real, trackable edit survives.
+        # Tracked from the first commit so a later edit shows as "M " at this
+        # exact path, which the dirty-invoking-tree scenario asserts on.
         printf 'placeholder\n' > notes/n.md
         git add -A
         git commit -q -m "init"
@@ -310,10 +281,8 @@ $LEFTOVER"
     fi
 fi
 
-# ---- test 5: an EXISTING multi-line outcome containing a blank line must
-# be fully replaced, not partially — the awk skip-loop used to stop at the
-# first blank line inside the old block and let every stale line after it
-# fall through into the rewritten frontmatter as ordinary top-level content.
+# ---- test 5: an EXISTING multi-line outcome containing a blank line must be
+# fully replaced — the awk skip-loop must not stop at that blank line.
 
 TICKET_STALE_OUTCOME='---
 id: PROJ-1
@@ -364,26 +333,9 @@ print(d.get("outcome", ""), end="")
 fi
 
 # ---- test 6: an outcome containing a line that is exactly '---' must not
-# truncate the ticket's frontmatter when read back by the plugin's own
-# parser (skills/to-issues/scripts/issues.py parse_frontmatter) — a
-# substring split on "---" would treat the indented '---' inside the block
-# scalar as the closing fence and dump the rest of the real frontmatter and
-# body into what it thinks is body text.
-#
-# Parses with the issues.py COPIED INTO THIS REPO by fresh_repo (the
-# revision passed as this script's 2nd argument, same-revision as whatever
-# land-branch.sh under test would have shipped alongside) — NOT this
-# script's own $HERE/../skills/... copy. Importing the outside copy always
-# tests today's (already-fixed) parser regardless of which land-branch.sh
-# revision produced the file, which is why an earlier version of this test
-# reported GREEN even against a pre-fix land-branch.sh: it was land-branch
-# that regressed, but the always-current parser papered over the exact
-# truncation this test means to catch.
-#
-# The assertion also checks the FULL outcome text round-trips exactly, not
-# just that id/verify/body-marker survive — the old substring split still
-# left all three of those intact while truncating outcome down to just
-# "first line", so a looser check would have reported this case as fine.
+# truncate the ticket's frontmatter when read back by issues.py. Parses with
+# the issues.py COPIED INTO the fixture repo — the always-current parser
+# papers over a pre-fix land-branch.sh and reports GREEN.
 
 REPO=$(fresh_repo t6 "$TICKET_OK")
 OUTCOME_FILE="$WORK/outcome6.txt"
@@ -416,13 +368,9 @@ print("OK" if ok else "BROKEN: id=%r verify=%r outcome=%r body=%r" % (data.get("
     fi
 fi
 
-# ---- test 7: a dirty invoking tree must NOT block a landing (port
-# — replaces the retired --tolerate-dirty scenario now that the merge runs
-# in the integration worktree, not the invoking tree: there is nothing left
-# for a dirty-invoking-tree preflight to protect). Both an uncommitted edit
-# to a tracked file and an untracked scratch file must survive
-# byte-identical, and land-branch.sh must never touch the shared stash
-# stack to get there.
+# ---- test 7: a dirty invoking tree must NOT block a landing. Both an
+# uncommitted edit to a tracked file and an untracked scratch file must
+# survive byte-identical, without land-branch.sh touching the stash stack.
 
 REPO=$(fresh_repo t7 "$TICKET_OK")
 echo "local edit, never committed" >> "$REPO/notes/n.md"
@@ -451,12 +399,8 @@ else
 fi
 
 # ---- test 8: the worker's OWN branch already moved the ticket file to
-# awaiting-deployment/ (a legitimate mixed-executor move, not a violation of
-# "a worker never completes its own ticket") before land-branch runs. The
-# pre-merge preflight (1c) still sees the ticket at its old path on
-# $TARGET_BRANCH; the merge is what actually relocates it. Before the
-# an earlier port, land-branch tried to git-mv the stale pre-merge path
-# after the merge, found it gone, and reverted a clean merge.
+# awaiting-deployment/ before land-branch runs. The pre-merge preflight sees
+# the old path; the merge is what relocates it.
 
 # worker_moved_repo NAME TICKET_FRONTMATTER_BODY DEST_STAGE — like
 # fresh_repo, but the 'work' branch's commit also git-mv's the ticket file
@@ -534,10 +478,8 @@ else
     WT_COUNT_1=$(cd "$REPO" && git worktree list | wc -l | tr -d ' ')
     [ -d "$REPO-land" ] || bad "test9: integration worktree '$REPO-land' was not created by the first landing"
 
-    # The first landing pushed from the integration worktree, not from
-    # $REPO — $REPO's own 'main' is deliberately NOT fast-forwarded (see
-    # header). Catch it up by hand, exactly as land-branch.sh's own success
-    # message tells a caller to, before adding a second ticket on top of it.
+    # $REPO's own 'main' is deliberately NOT fast-forwarded (see header), so
+    # catch it up by hand before adding a second ticket on top.
     (cd "$REPO" && git pull -q --ff-only) >/dev/null
 
     TICKET2='---
@@ -667,11 +609,9 @@ else
     ok "test12b: --reset-land discards the dirty integration worktree on request and the landing proceeds"
 fi
 
-# ---- test 13: the file-mode lifecycle. A ticket in in-progress/
-# is moved to awaiting-deployment/ in its OWN commit before the merge, then
-# to completed/ in its own commit after it — origin/main's first-parent
-# subjects read init, awaiting deployment, merge, complete, in that order,
-# and the awaiting commit touches nothing but that one rename.
+# ---- test 13: the file-mode lifecycle. origin/main's first-parent subjects
+# must read init, awaiting deployment, merge, complete, in that order, with
+# the awaiting commit touching nothing but that one rename.
 
 REPO=$(fresh_repo t13 "$TICKET_OK")
 set +e
@@ -751,11 +691,9 @@ else
     ok "test15: --no-complete moves the ticket to awaiting-deployment/ and stops there"
 fi
 
-# ---- test 16: a ticket larger than the pipe buffer still lands.
-# The outcome-block assertions used to pipe `git show` into `grep -q` under
-# pipefail: grep exits on the early frontmatter match, git show takes SIGPIPE
-# writing the rest, and the landing was reverted as "does not carry the
-# outcome block". Deterministic at this size, not a timing race.
+# ---- test 16: a ticket larger than the pipe buffer still lands. Guards the
+# `git show | grep -q` SIGPIPE-under-pipefail regression; deterministic at
+# this size, not a timing race.
 
 BIG_BODY=$(awk 'BEGIN { for (i = 0; i < 4000; i++) printf "filler line %05d for the large-ticket pipe test, padded to about eighty bytes\n", i }')
 REPO=$(fresh_repo t16 "$TICKET_OK$BIG_BODY")
@@ -774,10 +712,8 @@ else
     ok "test16: a ticket larger than the pipe buffer lands and completes (no SIGPIPE false assertion)"
 fi
 
-# ---- test 17: LAND_BRANCH_COAUTHOR / LAND_BRANCH_SESSION are
-# optional. Unset means the completion commit carries no trailer for that
-# var (owner decision 2026-09-15: attribution defaults to the owner alone),
-# not a refusal — and landing still succeeds.
+# ---- test 17: LAND_BRANCH_COAUTHOR / LAND_BRANCH_SESSION are optional.
+# Unset means no trailer for that var, not a refusal, and landing succeeds.
 
 REPO=$(fresh_repo t17 "$TICKET_OK")
 set +e
@@ -847,16 +783,10 @@ else
     ok "test19: only LAND_BRANCH_COAUTHOR set — landing succeeds, exactly that one trailer appears"
 fi
 
-# ---- HERDR_ENV cleanup: exit the worker's Claude session before removing
-# its workspace (NWM-117). A stub `herdr` on PATH stands in for the real
-# CLI: `agent get` succeeds while $STUB_AGENT_ALIVE/alive exists and fails
-# (agent gone) once it doesn't; each `agent send-keys ... enter` call
-# increments a counter and, on the second one, deletes the alive marker
-# (modeling the picker needing accept-then-submit, observed live
-# 2026-09-18 — see docs/open-questions.md) unless STUB_HERDR_NEVER_EXITS=1,
-# which leaves it in place so the bounded wait can be exercised. `worktree
-# list`/`worktree remove` are stubbed the same way regardless, so these
-# tests also prove the exit step runs BEFORE removal, not instead of it.
+# ---- HERDR_ENV cleanup: exit the worker's Claude session before removing its
+# workspace (NWM-117). The stub `herdr` deletes its alive marker on the SECOND
+# `send-keys ... enter`, modelling the picker's accept-then-submit;
+# STUB_HERDR_NEVER_EXITS=1 leaves it to exercise the bounded wait.
 install_stub_herdr_exit() {
     local repo="$1"
     mkdir -p "$repo/bin"

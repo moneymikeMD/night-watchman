@@ -5,10 +5,10 @@
 # confirmation. Sourced only; not a CLI.
 #
 # Source AFTER providers/lib/kit.sh, providers/lib/config.sh and the HTTP
-# helper lib (curl_auth_config, redact_json, redact_text, JQ_PRELUDE).
-# That helper lib lives at providers/tracker/jira/lib/http.sh: it is the
-# only copy in the plugin, and a second copy here would let the redaction
-# word list drift between two Atlassian clients hitting the same site.
+# helper lib at providers/tracker/jira/lib/http.sh (curl_auth_config,
+# redact_json, redact_text, JQ_PRELUDE). That is the only copy in the
+# plugin on purpose: a second one would let the redaction word list drift
+# between two Atlassian clients hitting the same site.
 #
 # HOST, highest priority first:
 #   $NW_ATLASSIAN_HOST              per-run override (+set: EMPTY refuses)
@@ -55,9 +55,7 @@ atl_load_credentials() {
     ATL_CREDS_LOADED=1
 }
 
-# atl_error_body <file> — redacted to stderr, capped. JSON goes through
-# redact_json then redact_text; anything else through redact_text alone;
-# never an unredacted cat.
+# atl_error_body <file> — redacted to stderr, capped. Never an unredacted cat.
 ATL_ERROR_BODY_MAX_BYTES=4096
 atl_error_body() {
     local in="$1" cur next

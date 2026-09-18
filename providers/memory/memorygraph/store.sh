@@ -1,12 +1,8 @@
 #!/bin/bash
 #
-# store.sh — the `store` verb: wraps `memorygraph store` with this
-# project's tag conventions instead of leaving every caller to remember
-# them. Every memory this plugin writes is meant to be tagged with the
-# project it came from, the component it touches, and the kind of change
-# it records (fix/feature/optimization/decision/...) — see the Project
-# Memory Protocol this ticket ports. A caller that forgets one of those
-# is how the graph fills up with memories nothing can later filter by.
+# store.sh — the `store` verb: wraps `memorygraph store` so every memory is
+# tagged with its project, component and kind of change, which is what makes
+# the graph filterable later.
 #
 # bash 3.2 compatible.
 

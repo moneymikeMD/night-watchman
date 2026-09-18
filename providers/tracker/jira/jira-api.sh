@@ -6,18 +6,9 @@
 # scripts/land-branch.sh's jira mode and providers/dispatch/herdr/herdr-ticket-start.sh
 # expect at --jira-api PATH / $ISSUES_JIRA_API.
 #
-# Ported from a production Jira wrapper, de-identified: the site
-# host and the credential reference come from this repo's own provider
-# contract, never a hardcoded literal —
-#
 #   host        [tracker.jira] host = "..." in .night-watchman/config.toml,
-#               or $NW_JIRA_HOST to override (mainly for testing; +set, not
-#               :- — a HOST set to the EMPTY string is a refusal, not a
-#               silent fall-through, because the realistic way that happens
-#               is a harness passing NW_JIRA_HOST="$UNSET_VAR")
-#   credentials providers/secrets/read.sh jira.user / jira.token, i.e.
-#               whatever the configured `secrets` provider resolves those
-#               two refs to (see providers/README.md)
+#               or $NW_JIRA_HOST to override (mainly for testing)
+#   credentials providers/secrets/read.sh jira.user / jira.token
 #
 # Usage:
 #   jira-api.sh whoami                   # confirm auth works, print the account (no secret)
@@ -35,10 +26,9 @@
 #
 # Global flags, before the subcommand:
 #   --show-secrets   do not redact credential-shaped fields in the output
-#   --dry-run        print the exact request that WOULD be issued and exit 0.
-#                    Reaches no network and resolves no credential — this
-#                    covers EVERY subcommand below, `raw` and the view
-#                    helpers included, not just `write`/`comment`.
+#   --dry-run        print the exact request that WOULD be issued and exit 0,
+#                    on EVERY subcommand. Reaches no network, resolves no
+#                    credential.
 #   --yes            skip the interactive confirmation for POST/PUT/PATCH
 #   --confirm <path> the DELETE confirmation, given non-interactively; must
 #                    equal the path argument exactly
@@ -54,14 +44,8 @@
 # A non-2xx response exits non-zero on EVERY path, `raw` included, and
 # prints the (redacted) response body to stderr before dying.
 #
-# SEARCH. `search <PROJECT>` exists because /rest/api/3/search is 410 Gone
-# on Jira Cloud — /search/jql is the live replacement, and it needs
-# pagination (nextPageToken, not startAt/total) no other subcommand does.
-# It prints the response JSON UNREDACTED, deliberately: the request is
-# PINNED to `fields=summary` here, not supplied by the caller, so the
-# response can only ever carry id/key/self/fields.summary/nextPageToken —
-# never an arbitrary field from an arbitrary endpoint the way `raw GET
-# <anything>` can. Do not widen `fields=` without reconsidering this trade.
+# `search` prints its response UNREDACTED because the request is pinned to
+# `fields=summary` here. Do not widen `fields=` without redacting it.
 
 # shellcheck disable=SC1091  # sourced at paths computed from $0, not visible to shellcheck's static resolution
 set -euo pipefail
@@ -79,7 +63,6 @@ LIB_DIR="$(cd "$DIR/../../lib" && pwd)"
 
 SECRETS_READ="$DIR/../../secrets/read.sh"
 
-# --------------------------------------------------------------- flags
 
 SHOW_SECRETS=0
 DRY_RUN=0
@@ -104,9 +87,8 @@ case "$1" in -h|--help|help) show_help ;; esac
 
 need curl jq column
 
-# --------------------------------------------------------------- host
-#
-# +set, not :- — see the header. Fail closed on set-but-empty.
+# +set, not :- — a harness passing NW_JIRA_HOST="$UNSET_VAR" must be a
+# refusal, not a silent fall-through to the configured host.
 if [ -n "${NW_JIRA_HOST+set}" ]; then
     [ -n "$NW_JIRA_HOST" ] || die "\$NW_JIRA_HOST is set but EMPTY — unset it to use the configured host, or give it one"
     HOST="$NW_JIRA_HOST"
@@ -118,7 +100,6 @@ case "$HOST" in
     *[[:space:]]*|*/*|*@*|*:*) die "Jira host does not look like a bare hostname: '${HOST:0:40}'" ;;
 esac
 
-# --------------------------------------------------------------- validation
 
 # valid_path <path> — the /rest/api/3 prefix is a string concatenation, not
 # a boundary: `raw GET /../../../../rest/api/2/project/X` normalises on the
@@ -141,10 +122,7 @@ require_path() {
     valid_path "$1" || die "path must start with '/' and contain no '..', '//' or whitespace: '$1'"
 }
 
-# --------------------------------------------------------------- credentials
-#
-# Read once. Skipped entirely under --dry-run: a dry run must reach
-# nothing, and the secrets provider is a something.
+
 JIRA_USER=""
 JIRA_TOKEN=""
 CREDS_LOADED=0
@@ -156,15 +134,9 @@ load_credentials() {
     CREDS_LOADED=1
 }
 
-# --------------------------------------------------------------- error body
-#
 # error_body <file> — print a failed response's body to stderr, redacted.
-# A non-2xx routinely carries `errorMessages`/`errors`, the only thing that
-# says why a write was rejected. redact_json handles the common JSON case;
-# a body that fails to parse as JSON (an HTML error page from a proxy in
-# front of Jira) or that redact_json itself cannot process falls back to
-# redact_text — never to an unredacted `cat`, since a non-2xx body can
-# echo a credential-shaped field straight back.
+# Falls back redact_json -> redact_text -> die, never to an unredacted
+# `cat`: a non-2xx body can echo a credential-shaped field straight back.
 error_body() {
     local in="$1"
     if jq -e . >/dev/null 2>&1 < "$in"; then
@@ -178,7 +150,6 @@ error_body() {
     return 0
 }
 
-# --------------------------------------------------------------- http
 
 # api <METHOD> <path> [json-body] — dies on a non-2xx response and on a
 # transport failure.
@@ -230,7 +201,6 @@ emit() {
     redact_json < "$out" || die "redact_json failed — refusing to print unredacted output"
 }
 
-# ---------------------------------------------------------------- views
 
 view_whoami() {
     api GET /myself | jq -r "$JQ_PRELUDE"'
@@ -263,8 +233,8 @@ view_statuses() {
 }
 
 # view_search <project-key> [--max N] [--token T] — one page of
-# {issues:[{key,fields:{summary}}], nextPageToken}. See SEARCH in the
-# header for why this is not redacted the way `raw`/`emit` are.
+# {issues:[{key,fields:{summary}}], nextPageToken}. /rest/api/3/search is
+# 410 Gone on Jira Cloud; /search/jql is the replacement.
 view_search() {
     local key="$1" max=100 token="" jql qs
     shift
@@ -281,11 +251,8 @@ view_search() {
             *) die "search: unknown argument '$1'" ;;
         esac
     done
-    # Validate the WHOLE key, not just a glob-anchored prefix: first char is
-    # a letter, and stripping every remaining [A-Z0-9] character must leave
-    # nothing, or a crafted key could rewrite the JQL this function builds —
-    # exactly what "the request is PINNED here" depends on not being
-    # possible.
+    # Both checks: `case ... [A-Z]*)` validates only the first character,
+    # and a crafted key would otherwise rewrite the JQL built below.
     case "$key" in
         [A-Z]*) ;;
         *) die "search: project key must look like a Jira key (e.g. PROJ), got '$key'" ;;
@@ -315,12 +282,9 @@ view_search() {
 
 view_issue() {
     local key="$1"
-    # Jira's REST API accepts either a key (PROJECT-123) or the issue's
-    # bare numeric internal id in this path segment. Accept that one extra
-    # shape here, checked BEFORE require_issue_key so the PROJECT-123 shape
-    # check never runs on it — this exception is scoped to this one
-    # read-only GET; `comment`'s key is unchanged and still requires a real
-    # key.
+    # Jira's issueIdOrKey path segment takes a bare numeric id as well as a
+    # PROJECT-123 key. Scoped to this read-only GET; `comment` still
+    # requires a real key.
     case "$key" in
         ''|*[!0-9]*)
             require_issue_key "$key" || die "$JIRA_KEY_ERR"
@@ -340,25 +304,22 @@ view_issue() {
         "Updated:  \(blank(.fields.updated))"'
 }
 
-# ---------------------------------------------------------------- write guard
 
 # show_request <method> <path> <body> <prefix> — echo the exact request
-# back. To stderr, so `write ... | jq` still gets clean stdout.
+# back, on stderr so `write ... | jq` still gets clean stdout.
 show_request() {
     warn "$4 $1 https://$HOST/rest/api/3$2"
     [ -n "$3" ] && warn "$4 body: $3"
     return 0
 }
 
-# confirm_write <method> <path> — the guard. Returns 0 to proceed, dies
-# otherwise.
+# confirm_write <method> <path> — returns 0 to proceed, dies otherwise.
 have_terminal() { [ -t 0 ] && [ -r /dev/tty ]; }
 confirm_write() {
     local method="$1" path="$2" answer
     if [ "$method" = "DELETE" ]; then
-        # --yes deliberately does NOT cover DELETE — a mistyped resource is
-        # the failure being guarded against, and a blanket flag cannot see
-        # one; naming the resource a second time can.
+        # --yes deliberately does NOT cover DELETE: a blanket flag cannot
+        # catch a mistyped resource; naming it a second time can.
         if [ "$HAVE_CONFIRM" = "1" ]; then
             [ "$CONFIRM_ARG" = "$path" ] \
                 || die "--confirm '$CONFIRM_ARG' does not match the path '$path' — refusing to DELETE"
@@ -380,7 +341,6 @@ confirm_write() {
     esac
 }
 
-# ---------------------------------------------------------------- main
 
 CMD="$1"; shift
 case "$CMD" in
@@ -457,10 +417,8 @@ case "$CMD" in
         fi
         show_request "POST" "$CPATH" "$CBODY" "about to issue:"
         confirm_write "POST" "$CPATH"
-        # Not emit(): the response is parsed for exactly one named field
-        # (.id) — the same trust boundary the view_* helpers and `search`
-        # draw — so it is not redact_json'd raw output and not subject to
-        # --show-secrets.
+        # Not emit(): the response is parsed for one named field (.id), the
+        # same trust boundary the view_* helpers draw.
         CRESP_FILE=$(tmpfile) || die "could not create temp file"
         api POST "$CPATH" "$CBODY" > "$CRESP_FILE"
         CID=$(jq -r '.id // empty' < "$CRESP_FILE") \

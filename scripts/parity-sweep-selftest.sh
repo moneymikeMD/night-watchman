@@ -6,41 +6,9 @@
 # --root flags against them. Nothing here reads or writes outside those
 # scratch trees.
 #
-# What is asserted:
-#   1  a clean map (every pair identical, nothing new, nothing vanished)
-#      exits 0 with all three sections reporting "(none)"
-#   2  a mapped pair whose local file was hand-edited is reported as drift
-#      with a non-zero diff-line count, and the run exits 1
-#   3  a mapped pair whose local file is missing entirely is reported as
-#      drift ("local file missing"), not silently skipped
-#   4  a new file dropped into a mapped source directory with no map row
-#      is reported under "new", exit 1
-#   5  a map row whose source file was deleted is reported under
-#      "vanished", exit 1
-#   6  a '-' (deliberately-not-ported) row is never diffed, never flagged
-#      missing, but still checked for vanished-source
-#   7  a missing --source directory is a could-not-evaluate exit (2)
-#   8  a malformed map row (wrong field count) is a could-not-evaluate
-#      exit (2), distinct from a real drift finding (1)
-#   9  --source-root: a fixture source project whose CLAUDE.md
-#      references one script absent from the map is reported under
-#      "unmapped" with the referencing file:line, exit 1
-#  10  the same reference, once added to a fixture allowlist
-#      file, is no longer reported — exit reverts to 0
-#  11  a hook "command" in a fixture .claude/settings.json
-#      pointing at an unmapped script is reported under "unmapped" naming
-#      settings.json:line, exit 1 — a distinct reference class from the
-#      incidental scripts/**.sh grep, not just whatever that grep happens
-#      to also catch in the raw JSON text
-#  12  a scripts/**.sh reference whose file does not exist under
-#      --source-root (a prose-example path in a doc) is reported under
-#      "dangling", never "unmapped", and does not by itself flip the exit
-#      code to 1
-#
 # Tests 9-11 build their own throwaway "source project" tree (CLAUDE.md +
-# scripts/ + .claude/settings.json) under $WORK — never $NW_PARITY_SOURCE,
-# never the real source project — so this selftest stays structurally
-# offline.
+# scripts/ + .claude/settings.json) under $WORK — never $NW_PARITY_SOURCE and
+# never the real source project, so this selftest stays structurally offline.
 #
 # Usage: scripts/parity-sweep-selftest.sh [path-to-parity-sweep.sh]
 # Defaults to the sibling scripts/parity-sweep.sh.
@@ -229,12 +197,9 @@ else
 fi
 rm -f "$REPO/templates/parity-allowlist.txt"
 
-# ---- test 11: a hook command in settings.json pointing at an unmapped
-# script is its own reference class, reported with settings.json:line.
-# Folds in the Pass-1 agent/skill enumeration case too (kept in the same
-# fixture tree rather than a separate one): an unmapped agent and skill
-# file are reported, and .claude/agents/README.md — never a real agent —
-# is not.
+# ---- test 11: a hook command in settings.json pointing at an unmapped script
+# is its own reference class, reported with settings.json:line. Also covers
+# Pass 1: an unmapped agent and skill are reported, README.md is not.
 mkdir -p "$SRCROOT/.claude/agents" "$SRCROOT/.claude/skills/bar"
 printf 'line one\n' >"$SRCROOT/scripts/dev/hookorphan.sh"
 printf '# Foo agent\n' >"$SRCROOT/.claude/agents/foo.md"

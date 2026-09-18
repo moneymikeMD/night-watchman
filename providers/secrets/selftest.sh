@@ -3,22 +3,7 @@
 # Selftest for providers/secrets/ — the `read.sh` dispatcher plus the two
 # shipped implementations, `env` and `op`. A stranger with no 1Password
 # access must be able to run this and a first session with `env` only, so
-# the `op` cases here stub the `op` binary rather than requiring a real
-# vault.
-#
-# What is asserted:
-#   1  env: a set NW_<REF> env var is read, and read.sh dispatches to it
-#      through NW_SECRETS=env exactly as the ticket's own verify command
-#      does.
-#   2  env: an unset env var is a named error, not a silent empty value.
-#   3  env: a malformed reference is refused before it is turned into an
-#      env var name.
-#   4  op: REF resolves an item/field/vault out of config into an
-#      op://vault/item/field URI, handed to a stubbed `op` on PATH.
-#   5  op: the per-ref vault overrides [secrets.op].vault, which overrides
-#      the built-in default "Private".
-#   6  op: a REF missing its item/field configuration is a named error.
-#   7  the secret value is never seen on stderr, in either implementation.
+# the `op` cases stub the `op` binary rather than requiring a real vault.
 #
 # Runs entirely against a scratch directory; the stub `op` never contacts
 # 1Password, and `env` never contacts anything.
@@ -61,8 +46,6 @@ contains() {
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-# ---- 1-3. env -----------------------------------------------------------
-
 run_env() { ( unset NW_CONFIG NW_ROOT; export NW_SECRETS=env; "$@" ) }
 
 OUT=$(run_env env NW_JIRA_TOKEN=abc "$READ_SH" jira.token)
@@ -82,7 +65,7 @@ contains "env: a malformed reference is refused by name" "malformed secret refer
 ERRLESS=$( ( run_env env NW_JIRA_TOKEN=abc "$ENV_PROVIDER" read jira.token ) 2>&1 1>/dev/null )
 eq "env: the secret value never appears on stderr" "" "$ERRLESS"
 
-# ---- 4-6. op, against a stubbed `op` binary ------------------------------
+# op, against a stubbed `op` binary
 
 mkdir -p "$WORK/bin" "$WORK/repo/.night-watchman"
 cat > "$WORK/bin/op" <<'OPEOF'

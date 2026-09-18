@@ -2,43 +2,11 @@
 #
 # Selftest for providers/tracker/jira/jira-backfill.sh.
 # Nothing here reaches a real network: --dry-run assertions never call
-# curl, and the end-to-end assertions put a stub `curl` on PATH first (the
-# same technique jira-api-selftest.sh uses). The transitions/status
-# responses the stub serves are REPLAYED from fixtures/issue.transitions.
-# live.json and fixtures/issue.status.live.json — captured live by the
-# orchestrator on scratch Space ZZSPK2, host scrubbed — rather than
-# hand-authored, so this selftest exercises the real response shape.
-#
-# What is asserted:
-#   1  --dry-run writes nothing, resolves no credential, and reports one
-#      "would backfill" line per ticket.
-#   2  End-to-end: a stubbed GET /field advertises the custom fields by
-#      name; jira-backfill.sh resolves their ids and PUTs
-#      /issue/KEY?returnIssue=true (a deliberate confirmation read, not a
-#      workaround — see the script's header) with description, labels
-#      and the customfield values built from the local ticket.
-#   3  A custom field NOT present in the stubbed /field response (here:
-#      "appends", requested by the ticket but absent from the site) is
-#      skipped, not a fatal error — the PUT still succeeds without it.
-#   4  A PUT that fails does not abort the run — the next ticket still
-#      gets backfilled — but the overall run exits non-zero and names the
-#      field-backfill and transition failure counts SEPARATELY.
-#   5  Status backfill, replayed against the live-captured fixtures: an
-#      in-progress-stage ticket (not yet at "In Progress" per the live
-#      status fixture) triggers exactly one transitions POST, the
-#      transition id resolved by NAME from the live transitions fixture,
-#      never a hardcoded id; an open-stage ticket triggers no status
-#      calls at all (this script never moves a fresh issue off its
-#      Jira-assigned initial status).
-#   6  A field emptied locally (here: SPK-1's absent human_steps) PUTs an
-#      explicit JSON null for that field's id, not an omitted key — a PUT
-#      that omits a key leaves the stored value untouched (a
-#      recorded fact), so a re-run after clearing a field must null it.
-#   7  defer_until: present -> the plain "YYYY-MM-DD" string (not ADF, a
-#      datepicker field); absent -> explicit null, same rule as 6.
-#   8  A description over 32767 characters is truncated to the longest
-#      prefix of whole blocks that fits, plus a pointer line — never cut
-#      mid-block, and the PUT body stays under the cap.
+# curl, and the end-to-end assertions put a stub `curl` on PATH first.
+# The transitions/status responses it serves are REPLAYED from
+# fixtures/issue.{transitions,status}.live.json, captured live on scratch
+# Space ZZSPK2 with the host scrubbed, so the real response shape is
+# exercised rather than a hand-authored one.
 #
 # Usage: providers/tracker/jira/jira-backfill-selftest.sh
 
@@ -76,24 +44,20 @@ contains() {
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-# Use only ticket SPK-1 (has touches, verify, tags, a body — no appends,
-# no human_steps, no defer_until) so the "field absent on this site" case
-# (3) and the "field empty locally" case (6) are exercised for free: the
-# stubbed /field below deliberately omits "appends".
+# SPK-1 alone: it has touches/verify/tags/a body but no appends,
+# human_steps or defer_until, which covers cases 3 and 6 for free.
 ONE_TICKET="$WORK/one-ticket"
 mkdir -p "$ONE_TICKET/open"
 cp "$FIXTURES/import-tickets/open/SPK-1.md" "$ONE_TICKET/open/SPK-1.md"
 
-# SPK-1 (open) + SPK-3 (in-progress, defer_until set) for the
-# status-backfill (5) and defer_until (7) assertions.
+# SPK-1 (open) + SPK-3 (in-progress, defer_until set) for cases 5 and 7.
 TWO_TICKETS="$WORK/two-tickets"
 mkdir -p "$TWO_TICKETS/open" "$TWO_TICKETS/in-progress"
 cp "$FIXTURES/import-tickets/open/SPK-1.md" "$TWO_TICKETS/open/SPK-1.md"
 cp "$FIXTURES/import-tickets/in-progress/SPK-3.md" "$TWO_TICKETS/in-progress/SPK-3.md"
 
-# A ticket whose body is well over the 32767-char cap, built from many
-# small "\n\n"-separated blocks so truncation must stop at a block
-# boundary, not mid-paragraph — assertion 8.
+# A body well over the 32767-char cap, in many small blocks so truncation
+# must stop at a block boundary rather than mid-paragraph.
 BIG_TICKET="$WORK/big-ticket"
 mkdir -p "$BIG_TICKET/open"
 {

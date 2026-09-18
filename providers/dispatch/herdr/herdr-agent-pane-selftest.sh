@@ -3,25 +3,18 @@
 # Assertions for herdr-agent-pane.sh: every refusal path (bad --direction,
 # HERDR_ENV unset, missing dir, missing herdr/jq, an invalid --name) makes
 # zero `herdr pane split` / `herdr agent start` calls, and the happy path
-# passes the right argv through to each — including the `--kind`,
-# `--direction`, and trailing `-- agent-args` cases, and a derived name
-# sanitized from the directory basename.
+# passes the right argv through to each.
 #
 # Isolation: a stub `herdr` on PATH, installed fresh per scratch repo, is
-# what every scenario below runs against — never a real binary. `jq` is
-# the real system jq (read-only JSON parsing of a fixed stub response, no
-# host/network access), except in the one scenario that specifically
-# proves `need jq` fires when jq is absent from PATH.
+# what every scenario runs against — never a real binary or a real pane.
+# `jq` is the real system jq (read-only parsing of a fixed stub response),
+# except in the one scenario proving `need jq` fires when jq is absent.
 #
-# Each scenario builds its own scratch git repo under mktemp -d, with a
-# COPY of herdr-agent-pane.sh and lib/kit.sh. Per this plugin's
-# testing-philosophy doc ("a scratch git repo is not isolated by
-# default"), every scratch repo pins core.hooksPath, commit.gpgsign,
-# gpg.format and user.signingkey to values inside itself so it cannot pick
-# up this machine's global git config.
-#
-# Never touches a real herdr binary or a real Herdr pane — every herdr
-# call in this file goes to the per-scenario stub.
+# Each scenario builds its own scratch git repo under mktemp -d with a COPY
+# of the SUT and lib/kit.sh. Per this plugin's testing-philosophy doc ("a
+# scratch git repo is not isolated by default"), every scratch repo pins
+# core.hooksPath, commit.gpgsign, gpg.format and user.signingkey to values
+# inside itself so it cannot pick up this machine's global git config.
 #
 # Usage: ./herdr-agent-pane-selftest.sh
 # Exit 0 if every assertion passes, 1 otherwise.
@@ -84,8 +77,6 @@ assert_nonzero() {
     fi
 }
 
-# ------------------------------------------------------------------ fixtures
-
 CREATE_FIXTURE_JSON='{"id":"cli:pane:split","result":{"pane":{"pane_id":"pane-1"}}}'
 NULL_FIXTURE_JSON='{"id":"cli:pane:split","result":{"pane":{"pane_id":null}}}'
 
@@ -112,14 +103,9 @@ make_repo() {
     printf '%s' "$d"
 }
 
-# install_stub_herdr <repo> — a stub speaking exactly the two subcommands
-# herdr-agent-pane.sh calls: `pane split`, `agent start`. Every invocation's
-# argv is appended to $STUB_HERDR_LOG (one line per call, space-joined).
-# Behaviour is driven by env vars:
-#   STUB_SPLIT_JSON   canned stdout for `pane split`
-#   STUB_SPLIT_FAIL=1 `pane split` exits 1
-#   STUB_START_FAIL=1 `agent start` exits 1
-# Anything else logs and exits 99, so an unanticipated call fails loudly.
+# install_stub_herdr <repo> — a stub speaking only `pane split` and `agent
+# start`, logging every argv to $STUB_HERDR_LOG and driven by the STUB_* env
+# vars read in its body below. Anything else exits 99, so it fails loudly.
 install_stub_herdr() {
     local repo="$1"
     cat > "$repo/bin/herdr" <<'STUBEOF'
@@ -156,9 +142,8 @@ call_count() {
     printf '%s' "$n"
 }
 
-# run_sut <repo> <herdr-env> [extra args...] — invoke the scratch repo's
-# copy of the SUT with the scratch bin/ AND a real jq prepended to PATH,
-# from inside the repo. Prints combined stdout+stderr; caller captures $?.
+# run_sut <repo> <herdr-env> [args...] — run the scratch copy of the SUT with
+# the scratch bin/ and a real jq on PATH. Prints stdout+stderr; caller takes $?.
 run_sut() {
     local repo="$1" herdr_env="$2"; shift 2
     ( cd "$repo" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
@@ -166,12 +151,7 @@ run_sut() {
         ./herdr-agent-pane.sh "$@" 2>&1 )
 }
 
-# ------------------------------------------------------------------ scenarios
-
-# A0 — happy path, defaults. Asserts: exit 0; exactly one pane split /
-# agent start call each; split carries --direction right and --cwd DIR;
-# start carries the derived-and-sanitized name, --kind claude, --pane
-# pane-1; no trailing "--" (no agent args passed).
+# A0 — happy path, defaults.
 scenario_A0() {
     local repo log out rc=0
     repo=$(make_repo) || { echo "FAIL: A0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -193,8 +173,7 @@ scenario_A0() {
     assert_contains "A0 prints confirmation" "$out" "agent my_project (claude) started in pane pane-1"
 }
 
-# A1 — explicit --name, --kind, --direction down, and trailing agent args
-# are all passed through unchanged.
+# A1 — explicit --name/--kind/--direction and trailing agent args pass through.
 scenario_A1() {
     local repo log out rc=0
     repo=$(make_repo) || { echo "FAIL: A1 setup (make_repo)" >&2; FAIL=1; return; }
@@ -212,8 +191,7 @@ scenario_A1() {
     assert_contains "A1 start carries trailing agent args" "$(cat "$log")" "-- --resume --model opus"
 }
 
-# B0 — bad --direction is refused before HERDR_ENV/dir/herdr are even
-# checked: zero calls, non-zero exit, even with HERDR_ENV unset.
+# B0 — bad --direction is refused before HERDR_ENV/dir/herdr are checked.
 scenario_B0() {
     local repo log rc=0
     repo=$(make_repo) || { echo "FAIL: B0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -252,9 +230,8 @@ scenario_B2() {
     assert_eq "B2 makes zero herdr calls" 0 "$(call_count "$log" ".")"
 }
 
-# B3 — herdr missing from PATH is refused (need herdr) before any call is
-# attempted. PATH is deliberately scoped to only the real system PATH
-# minus the scratch bin/ (no stub installed at all).
+# B3 — herdr missing from PATH is refused before any call. PATH is scoped to
+# the real system PATH minus the scratch bin/, with no stub installed.
 scenario_B3() {
     local repo out rc=0
     repo=$(make_repo) || { echo "FAIL: B3 setup (make_repo)" >&2; FAIL=1; return; }
@@ -277,8 +254,7 @@ scenario_B4() {
     assert_contains "B4 names jq as the missing command" "$out" "jq"
 }
 
-# B5 — an explicit --name that fails the [a-z][a-z0-9_-]{0,31} regex is
-# refused before any herdr call is made.
+# B5 — an explicit --name failing the regex is refused before any herdr call.
 scenario_B5() {
     local repo log rc=0
     repo=$(make_repo) || { echo "FAIL: B5 setup (make_repo)" >&2; FAIL=1; return; }
@@ -291,8 +267,7 @@ scenario_B5() {
     assert_eq "B5 makes zero herdr calls" 0 "$(call_count "$log" ".")"
 }
 
-# B6 — `pane split` returning a null pane_id is refused (no `agent start`
-# call follows a pane split that produced no usable pane).
+# B6 — a null pane_id from `pane split` is refused; no `agent start` follows.
 scenario_B6() {
     local repo log rc=0
     repo=$(make_repo) || { echo "FAIL: B6 setup (make_repo)" >&2; FAIL=1; return; }
@@ -332,8 +307,6 @@ scenario_B8() {
 
     assert_nonzero "B8 agent start failure" "$rc"
 }
-
-# ------------------------------------------------------------------ run
 
 scenario_A0
 scenario_A1

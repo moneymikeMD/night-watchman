@@ -1,22 +1,12 @@
 #!/bin/bash
 #
 # Client for the Jira Cloud Agile REST API (/rest/agile/1.0) — boards and
-# sprints. OPTIONAL LAYER, ported from a production system (see the
-# plugin's README, "Optional layers"): adopting Jira at all remains
-# optional core-wide. Sibling to the plain issue-API wrapper
-# (providers/tracker/jira/jira-api.sh, the one scripts/land-branch.sh's
-# jira mode and --jira-api PATH / $ISSUES_JIRA_API convention already
-# assume) rather than an extension of it: this script pins /rest/agile/1.0
-# as a hard security boundary the same way that wrapper pins /rest/api/3 —
-# a `raw`/`write` path argument
-# can never be walked into a different API version by string
-# concatenation. It exists to open/populate/close a Jira Sprint around a
-# work block, which the plain issue API has no endpoints for at all.
+# sprints. Sibling to the plain issue-API wrapper
+# (providers/tracker/jira/jira-api.sh); /rest/agile/1.0 is pinned as a
+# hard boundary a `raw`/`write` path argument cannot walk out of.
 #
-# Auth: HTTP Basic <account-email>:<api-token>, read once at startup from
-# two required env vars (never argv — see JIRA_AGILE_USER/JIRA_AGILE_TOKEN
-# below) and passed to curl via a config on stdin (curl_auth_config, see
-# lib/http.sh), never on curl's command line.
+# Auth: HTTP Basic, from JIRA_AGILE_USER/JIRA_AGILE_TOKEN below, passed to
+# curl via a config on stdin — never on argv.
 #
 # Usage:
 #   ./jira-agile-api.sh boards <project-key>             # boards for a project
@@ -49,59 +39,14 @@
 #   ./jira-agile-api.sh sprint-add-issue 7 PROJ-1 PROJ-2
 #   ./jira-agile-api.sh sprint-close 7
 #
-# SPRINT STATE MACHINE (found live against a real Jira Cloud site,
-# recorded here because neither behavior is documented anywhere obvious).
-# A company-managed (classic) project created from a basic
-# software-development template gets a KANBAN board by default, and POST
-# /sprint against it 400s "The board does not support sprints" — a SCRUM
-# board has to be created separately (a saved filter via POST
-# /rest/api/3/filter, then POST /rest/agile/1.0/board
-# {name, type:"scrum", filterId}) before any of this script's sprint
-# commands have anywhere to point. `boards <project-key>` shows the TYPE
-# column for exactly this reason — check it before sprint-create.
+# Sprint state is future -> active -> closed; sprint-start before
+# sprint-close. sprint-create needs a SCRUM board — check `boards`' TYPE
+# column, a classic project gets a kanban board by default.
 #
-# A sprint is created in state "future" — POST /sprint accepts only
-# originBoardId/name/startDate/endDate/goal, no state field. Moving it to
-# "active" (POST /sprint/{id} {state:"active"}) needs startDate AND endDate
-# in that SAME request — sending state alone 400s "You must specify a start
-# date for the sprint", even though creation a moment earlier accepted none.
-# sprint-start supplies both (now, and +24h or --end) for this reason.
-# Closing a "future" sprint directly also 400s "You must specify a start
-# date for the sprint." — the SAME message as the missing-dates case above,
-# not a distinct "not compatible" message; see
-# fixtures/write.close-future-sprint-rejected.txt for the real capture.
-# Jira checks for missing dates before it checks the state-transition rule,
-# so future -> active and future -> closed fail identically at this step.
-# The transition is always future -> active -> closed regardless. sprint-close
-# therefore reads the sprint's current state first and dies rather than
-# force-starting a "future" sprint on the caller's behalf, because that
-# transition would also set the sprint's real start date to "now" without
-# being asked.
-#
-# sprint-update is a partial PUT /sprint/{id} — only the fields named by a
-# flag are sent, so an update to just --goal does not clobber name/dates the
-# caller did not mention.
-#
-# DELETE /sprint/{id} exists (unlike the plain issue API, which has no
-# delete-sprint endpoint at all) but Jira accepts it only for a sprint still
-# in "future" state — an active or closed sprint's DELETE is rejected.
-# sprint-delete reads current state first and refuses on active/closed,
-# the same caution sprint-close applies above, rather than surfacing Jira's
-# rejection after the fact.
-#
-# Env vars (all required, no defaults hardcoded to any one team's Jira
-# instance — see the plugin's own convention of taking arguments/env
-# rather than hardcoding one target):
-#   JIRA_HOST           bare hostname of the Jira Cloud site, e.g.
-#                        yourteam.atlassian.net. Point it at 127.0.0.1 to
-#                        test — see jira-agile-api-selftest.sh.
+# Env vars (all required):
+#   JIRA_HOST           bare hostname, e.g. yourteam.atlassian.net.
 #   JIRA_AGILE_USER      the Jira account email for HTTP Basic auth.
-#   JIRA_AGILE_TOKEN     the Jira API token for HTTP Basic auth. Never pass
-#                        this on argv; export it from whatever credential
-#                        store your project already uses (e.g.
-#                        `export JIRA_AGILE_TOKEN=$(op read
-#                        op://vault/item/field)`), a call this script never
-#                        makes itself.
+#   JIRA_AGILE_TOKEN     the Jira API token. Never pass it on argv.
 
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -110,7 +55,6 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib/http.sh
 . "$DIR/lib/http.sh"
 
-# --------------------------------------------------------------- host
 
 [ -n "${JIRA_HOST:-}" ] || die "\$JIRA_HOST is required (e.g. yourteam.atlassian.net) — no default is hardcoded to any one team's Jira instance"
 HOST="$JIRA_HOST"
@@ -118,7 +62,6 @@ case "$HOST" in
     *[[:space:]]*|*/*|*@*|*:*) die "\$JIRA_HOST does not look like a bare hostname: '${HOST:0:40}'" ;;
 esac
 
-# --------------------------------------------------------------- credentials
 
 AGILE_USER=""
 AGILE_TOKEN=""
@@ -132,7 +75,6 @@ load_credentials() {
     CREDS_LOADED=1
 }
 
-# --------------------------------------------------------------- flags
 
 SHOW_SECRETS=0
 DRY_RUN=0
@@ -151,12 +93,8 @@ case "$1" in -h|--help|help) show_help ;; esac
 
 need curl jq column
 
-# --------------------------------------------------------------- validation
-#
-# Same boundary as the plain issue-API wrapper's valid_path, applied to the
-# agile prefix — a string-concatenation risk, not cosmetic: without this, a
-# caller-supplied path containing '..' or a second leading '/' could walk a
-# `raw`/`write` call outside /rest/agile/1.0 entirely.
+# The /rest/agile/1.0 prefix is string concatenation, not a boundary: a
+# path with '..' or a second leading '/' would walk out of it. Make it one.
 valid_path() {
     local p="$1"
     case "$p" in
@@ -176,11 +114,6 @@ require_path() {
 }
 
 # error_body <file> — print a failed response's body to stderr, redacted.
-# The agile API's error bodies observed live are flat {errorMessages,
-# errors} shapes — a plain string, or a field->string map — not a nested
-# name/value pair echoing a submitted field back, so a single redact_json
-# pass is enough here (unlike a richer /rest/api/3 surface that might need
-# more).
 error_body() {
     local in="$1"
     if jq -e . >/dev/null 2>&1 < "$in"; then
@@ -192,7 +125,7 @@ error_body() {
 }
 
 # api <METHOD> <path> [json-body] — dies on a non-2xx response and on a
-# transport failure (rule: no die-inside-$( ), this is the top-level call).
+# transport failure.
 LABKIT_TIMEOUT="${LABKIT_TIMEOUT:-25}"
 api() {
     local method="$1" path="$2" body="${3:-}" out code bodyfile rc
@@ -228,8 +161,7 @@ api() {
 }
 
 # emit <method> <path> [body] — run the request and print it, redacted
-# unless --show-secrets. api's die must run outside a pipeline's left-hand
-# subshell for its exit status to reach the caller.
+# unless --show-secrets.
 emit() {
     local method="$1" path="$2" body="${3:-}" out
     if [ "$SHOW_SECRETS" = "1" ]; then
@@ -242,14 +174,11 @@ emit() {
     redact_json < "$out" || die "redact_json failed — refusing to print unredacted output"
 }
 
-# ---------------------------------------------------------------- views
 
 view_boards() {
     local key="$1" enc
-    # Whole-string check, not just the first char — a trailing `*` in a
-    # `case ... [A-Z]*)` pattern matches any remaining characters, so the
-    # WHOLE string must be validated before it is spliced into a query
-    # string.
+    # Both checks: `case ... [A-Z]*)` validates only the first character,
+    # and the whole key is spliced into a query string.
     case "$key" in
         [A-Z]*) ;;
         *) die "boards: project key must look like a Jira key (e.g. PROJ), got '$key'" ;;
@@ -278,10 +207,7 @@ view_sprint() {
         "Goal:      \(blank(.goal))"'
 }
 
-# ---------------------------------------------------------------- write guard
-#
-# POST/PUT/PATCH need --yes or a y/N answer on a terminal. There is no
-# DELETE path here (nothing this script exposes deletes anything).
+
 show_request() {
     warn "$4 $1 https://$HOST/rest/agile/1.0$2"
     [ -n "$3" ] && warn "$4 body: $3"
@@ -314,9 +240,8 @@ do_write() {
     emit "$method" "$path" "$body"
 }
 
-# sprint-create <board-id> <name> — a new sprint, state "future" (Jira's own
-# default — POST /sprint does not accept a state field at all; see the
-# header's SPRINT STATE MACHINE note).
+# sprint-create <board-id> <name> — a new sprint, state "future". POST
+# /sprint accepts no state field at all.
 do_sprint_create() {
     local board="$1" name="$2" body
     case "$board" in ''|*[!0-9]*) die "sprint-create: board id must be numeric, got '$board'" ;; esac
@@ -326,11 +251,8 @@ do_sprint_create() {
     do_write POST /sprint "$body"
 }
 
-# now_iso8601 / end_iso8601 — startDate/endDate are ALSO required to move a
-# sprint to "active" (see the header's state-machine note), even though the
-# create call a moment earlier accepted no dates at all. `date`'s
-# relative-offset syntax differs between BSD (macOS) and GNU, so both forms
-# are tried rather than assuming one.
+# `date`'s relative-offset syntax differs between BSD (macOS) and GNU, so
+# both forms are tried rather than assuming one.
 now_iso8601() { date -u +%Y-%m-%dT%H:%M:%S.000Z; }
 end_iso8601() {
     local days="$1"
@@ -338,11 +260,8 @@ end_iso8601() {
         || date -u -d "+${days} day" +%Y-%m-%dT%H:%M:%S.000Z
 }
 
-# sprint-start <sprint-id> [--end <ISO-8601>] — future -> active. Required
-# before sprint-close; see the header note. --end defaults to 24h from now,
-# which is a placeholder Jira requires but that sprint-close does not check
-# against — closing early is normal for a work-block sprint that finishes
-# sooner than the placeholder end date implies.
+# sprint-start <sprint-id> [--end <ISO-8601>] — future -> active. Jira
+# requires both dates on this call; --end defaults to 24h from now.
 do_sprint_start() {
     local id="$1" end="" body
     shift
@@ -363,20 +282,13 @@ do_sprint_start() {
 }
 
 # sprint-close <sprint-id> — active -> closed. Refuses (rather than
-# force-starting) a sprint that is still "future" — see the header note.
+# force-starting) a sprint that is still "future".
 do_sprint_close() {
     local id="$1" state body
     case "$id" in ''|*[!0-9]*) die "sprint-close: sprint id must be numeric, got '$id'" ;; esac
     if [ "$DRY_RUN" != "1" ]; then
-        # api's own `die` (a non-2xx GET, e.g. a 404 for a bad sprint id)
-        # runs inside this pipe inside a command substitution — that only
-        # reaches the caller because the top-level `set -euo pipefail`
-        # makes the pipeline's exit status the RIGHTMOST failing command's,
-        # and `jq` itself exits 0 on api's empty stdout when api already
-        # died, so `api`'s exit code, not jq's, is what `|| die` below
-        # sees. Covered by jira-agile-api-selftest.sh's "close a
-        # nonexistent sprint" case; do not remove `pipefail` without
-        # re-checking this call site.
+        # api's `die` reaches the caller from inside this pipe inside a
+        # command substitution ONLY via pipefail — do not drop it here.
         state=$(api GET "/sprint/$id" | jq -r '.state') \
             || die "sprint-close: could not read current state of sprint $id"
         case "$state" in
@@ -391,8 +303,8 @@ do_sprint_close() {
 }
 
 # sprint-update <sprint-id> [--name N] [--goal G] [--start ISO] [--end ISO] —
-# partial PUT /sprint/{id}. Only fields named by a flag are sent (see the
-# header note); at least one is required.
+# partial PUT /sprint/{id}. Only fields named by a flag are sent; at least
+# one is required.
 do_sprint_update() {
     local id="$1"; shift
     local name="" goal="" start="" end=""
@@ -433,9 +345,8 @@ do_sprint_update() {
 }
 
 # sprint-delete <sprint-id> — permanently deletes a sprint. Jira only
-# accepts this for a 'future' sprint (see the header note); reads the
-# current state first and refuses on active/closed rather than letting
-# Jira's own rejection surface after the fact.
+# accepts this for a 'future' sprint; reads the current state first and
+# refuses on active/closed.
 do_sprint_delete() {
     local id="$1" state
     case "$id" in ''|*[!0-9]*) die "sprint-delete: sprint id must be numeric, got '$id'" ;; esac
@@ -453,9 +364,7 @@ do_sprint_delete() {
 }
 
 # sprint-add-issue <sprint-id> <issue-key>... — POST /sprint/{id}/issue,
-# {issues:[keys...]}. Jira accepts a batch in one call; this passes every
-# key given on the command line through in one request rather than looping,
-# so a caller adding a whole wave issues exactly one POST.
+# {issues:[keys...]}. Every key given goes in one batched request.
 do_sprint_add_issue() {
     local id="$1" body; shift
     case "$id" in ''|*[!0-9]*) die "sprint-add-issue: sprint id must be numeric, got '$id'" ;; esac
@@ -465,7 +374,6 @@ do_sprint_add_issue() {
     do_write POST "/sprint/$id/issue" "$body"
 }
 
-# ---------------------------------------------------------------- main
 
 CMD="$1"; shift
 case "$CMD" in

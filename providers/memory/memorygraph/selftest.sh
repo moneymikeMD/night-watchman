@@ -5,29 +5,6 @@
 # duration of the test — nothing here touches the operator's real
 # ~/.memorygraph store.
 #
-# What is asserted, in order:
-#
-#   1  store.sh --dry-run builds --tags from project/component/kind/extra
-#      in that order, and never calls the stub.
-#   2  store.sh with no --dry-run calls the stub exactly once, with the
-#      arguments store.sh built.
-#   3  store.sh refuses a call missing any of --type/--title/--content/
-#      --project.
-#   4  recall.sh --dry-run on a three-word query prints exactly three
-#      single-noun `memorygraph recall` commands, none of them the
-#      original multi-word phrase — this is the fan-out fix itself.
-#   5  recall.sh --dry-run on a one-word query prints exactly one.
-#   6  recall.sh with no --dry-run calls the stub once per word and
-#      prints each call's output.
-#   7  recall.sh drops stopwords and sub-3-char words from tokenising —
-#      dry-run on "how do jira and api auth work" plans only jira/api/auth.
-#   8  recall.sh fuses per-token rank with reciprocal rank
-#      fusion: a multi-noun query where one memory is returned by two
-#      tokens outranks a memory returned by only one token at rank 1 —
-#      this is the rank-fusion port itself, not just the per-word fan-out.
-#   9  provider.sh dispatches `store`/`recall` to the matching script and
-#      refuses an unknown verb.
-#
 # Usage: providers/memory/memorygraph/selftest.sh
 
 set -uo pipefail
@@ -64,16 +41,9 @@ contains() {
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-# A stub `memorygraph` on PATH that records every invocation (one line per
-# call, args tab-joined) to $WORK/calls.log and, for `recall`, prints
-# memorygraph's real prose result format so recall.sh's own parser and RRF
-# merge run for real against a fixture instead of a shortcut string. Three
-# fixture memories:
-#   ID_A "Jira auth flow"    — returned by tokens jira (rank 1) and api (rank 2)
-#   ID_C "API rate limits"   — returned by tokens api (rank 1) and jira (rank 2)
-#   ID_D "Standalone auth note" — returned only by token auth, at rank 1
-# so a memory hit by two tokens (A, C) must outscore one hit by a single
-# token at rank 1 (D) — the rank-fusion behavior this ports in.
+# A stub `memorygraph` logging to $WORK/calls.log and printing the real prose
+# format, so recall.sh's parser and RRF merge run for real. The three fixture
+# memories below make a two-token hit outscore a single-token rank-1 hit.
 mkdir -p "$WORK/bin"
 cat > "$WORK/bin/memorygraph" <<'STUB'
 #!/bin/bash
@@ -125,8 +95,6 @@ export WORK_LOG="$WORK/calls.log"
 export PATH="$WORK/bin:$PATH"
 : > "$WORK_LOG"
 
-# ---- 1. store.sh --dry-run builds --tags in the right order ------------
-
 DRY=$("$STORE_SH" --type problem --title "T" --content "C" \
     --project nwm --component memory --kind fix --tags extra1,extra2 --dry-run)
 contains "dry-run store prints the memorygraph command" "memorygraph store" "$DRY"
@@ -140,23 +108,17 @@ case "$DRY" in
 esac
 if [ -s "$WORK_LOG" ]; then bad "dry-run store never calls the stub"; else ok "dry-run store never calls the stub"; fi
 
-# ---- 2. store.sh actually calls the stub once ---------------------------
-
 : > "$WORK_LOG"
 OUT=$("$STORE_SH" --type solution --title "T2" --content "C2" --project nwm)
 eq "store.sh prints the stub's output" "stored" "$OUT"
 eq "store.sh calls the stub exactly once" "1" "$(wc -l < "$WORK_LOG" | tr -d ' ')"
 contains "the call carries the built tags" "--tags nwm" "$(cat "$WORK_LOG")"
 
-# ---- 3. store.sh refuses a call missing a required flag -----------------
-
 if "$STORE_SH" --type problem --title "T" --content "C" >/dev/null 2>&1; then
     bad "store.sh without --project is refused"
 else
     ok "store.sh without --project is refused"
 fi
-
-# ---- 4. recall.sh --dry-run fans a 3-word query into 3 commands ---------
 
 DRY=$("$RECALL_SH" "jira api auth" --dry-run)
 LINES=$(printf '%s\n' "$DRY" | grep -c '^memorygraph recall')
@@ -170,13 +132,9 @@ case "$DRY" in
     *) ok "no planned command re-sends the whole multi-word phrase" ;;
 esac
 
-# ---- 5. recall.sh --dry-run on one word prints exactly one --------------
-
 DRY=$("$RECALL_SH" jira --dry-run)
 LINES=$(printf '%s\n' "$DRY" | grep -c '^memorygraph recall')
 eq "a one-word query prints exactly one planned command" "1" "$LINES"
-
-# ---- 6. recall.sh without --dry-run calls the stub per word -------------
 
 : > "$WORK_LOG"
 OUT=$("$RECALL_SH" "jira auth" --limit 5)
@@ -184,8 +142,6 @@ eq "recall.sh calls the stub once per word" "2" "$(wc -l < "$WORK_LOG" | tr -d '
 contains "recall.sh's output includes the jira-token memory" "Jira auth flow" "$OUT"
 contains "recall.sh's output includes the auth-token memory" "Standalone auth note" "$OUT"
 contains "each call carries the given --limit" "--limit 5" "$(cat "$WORK_LOG")"
-
-# ---- 7. recall.sh tokenising drops stopwords and sub-3-char words -------
 
 DRY=$("$RECALL_SH" "how do jira and api auth" --dry-run)
 LINES=$(printf '%s\n' "$DRY" | grep -c '^memorygraph recall')
@@ -199,14 +155,9 @@ case "$DRY" in
     *) ok "no planned command queries a dropped stopword" ;;
 esac
 
-# ---- 8. recall.sh fuses per-token rank with RRF -----------------
-#
-# Fixture: "Jira auth flow" (ID_A) is returned by both jira (rank 1) and
-# api (rank 2); "Standalone auth note" (ID_D) is returned only by auth, at
-# rank 1. A plain "best single-token rank" merge would rank ID_D above
-# ID_A (rank 1 beats rank 2); RRF, which rewards a memory found by more
-# than one token, must rank ID_A first instead — that is the fix this
-# ticket ports.
+# A plain "best single-token rank" merge would rank ID_D above ID_A (rank 1
+# beats rank 2). RRF rewards a memory found by more than one token, so ID_A
+# must come first — that is the whole point of the fusion.
 
 : > "$WORK_LOG"
 OUT=$("$RECALL_SH" "jira api auth")
@@ -222,8 +173,6 @@ else
 fi
 contains "the fused memory reports matching 2 of 3 tokens" "matched 2/3 tokens" "$OUT"
 contains "the single-token memory reports matching 1 of 3 tokens" "matched 1/3 tokens" "$OUT"
-
-# ---- 9. provider.sh dispatches verbs and refuses unknown ones -----------
 
 : > "$WORK_LOG"
 OUT=$("$PROVIDER_SH" store --type problem --title T --content C --project nwm)

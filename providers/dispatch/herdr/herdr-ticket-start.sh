@@ -1,205 +1,91 @@
 #!/bin/bash
 #
-# herdr-ticket-start.sh — one command that opens a Herdr git-worktree
-# workspace for an open ticket, starts a Claude agent in it PINNED to a
-# chosen model, and hands it the ticket's session-start brief.
-#
-# OPTIONAL LAYER, ported from a production system: this plugin does not
-# ship or require Herdr (see the README's "optional layers"). It exists to
-# enforce the model choice structurally instead of relying on someone
-# remembering the `-- --model sonnet` flag by hand — a plain `claude`
-# inherits the OWNER's global default model from ~/.claude/settings.json,
-# which is easy to forget when a worktree-dispatch tool is starting several
-# unattended agent processes back to back.
+# herdr-ticket-start.sh — open a Herdr git-worktree workspace for a ticket,
+# start a Claude agent in it pinned to a chosen model, and hand it the
+# ticket's brief. Optional layer: this plugin does not ship or require Herdr.
 #
 # Usage:
 #   herdr-ticket-start.sh <ticket-id> --jira-progress-status ID [--model sonnet|opus|haiku] [--timebox TEXT] [--forbidden TEXT]... [--wait|--no-wait] [--dry-run]
 #   herdr-ticket-start.sh --help
 #
-# BRIEF. Step 3 sends a complete brief rendered from templates/dispatch-brief.md
-# ($HERDR_BRIEF_TEMPLATE overrides): TRACKER, TIMEBOX, FORBIDDEN, REPORT and
-# STANDING, so no second prompt is needed for the initial brief. STANDING
-# lives only in the template, which the session-start skill points at; the
-# script must run from any checkout and cannot depend on the skill's path.
-# --timebox TEXT and --forbidden TEXT (repeatable) give the per-ticket lines;
-# defaults come from [dispatch.brief] `timebox` and `forbidden` in the
-# config. If either is empty the script dies naming it before any herdr or
-# tracker call. The TRACKER line carries the --jira-api path, the project key and
-# [dispatch.brief] `cloud_id` if set. --dry-run prints the full brief.
+# <ticket-id> is matched case-insensitively. The title and executor always
+# come from the tracker, never a local file. The branch, the herdr worktree
+# label and the herdr agent name are all the LOWERCASED id (e.g. proj-123).
 #
-# REQUIRED INPUTS. Export ISSUES_JIRA_API (or pass --jira-api PATH) or the
-# script dies before doing anything. --jira-progress-status takes the STATUS
-# id of In Progress (e.g. 3), NOT the transition id (e.g. 21).
+# Flags:
+#   --model                 sonnet (default), opus or haiku. Anything else is
+#                           a hard refusal, never a fallback to the caller's
+#                           shell default.
+#   --jira-progress-status  REQUIRED. The STATUS id of In Progress (e.g. 3),
+#                           NOT the transition id (e.g. 21). No default
+#                           exists: every tracker's workflow ids differ.
+#   --timebox TEXT          the brief's TIMEBOX line.
+#   --forbidden TEXT        the brief's FORBIDDEN lines; repeatable.
+#   --wait                  block until the agent settles (up to an hour).
+#   --no-wait               hand off and return with no confirmation.
+#   (default)               bounded: --wait --until working --timeout 60000.
+#   --dry-run               run every check, print the plan and the full
+#                           brief, send nothing. Also on with NW_DRY_RUN=1.
 #
-# LIFECYCLE. A ticket is In Progress from the moment it is dispatched. After
-# the brief hand-off returns (observed `working`, by default), the ticket is
-# transitioned to In Progress, resolved BY TARGET STATUS: --jira-progress-status
-# ID (or $HERDR_JIRA_PROGRESS_STATUS; required, no default — every tracker's
-# workflow ids differ) is matched against the issue's live transitions list,
-# and zero or several matches are refused before anything is created. The
-# issue is read back after the POST; a 2xx is not proof. Already In Progress
-# is a no-op. A failed transition exits 1 naming the ticket and leaves the
-# agent running. --dry-run (or NW_DRY_RUN=1) prints the transition and sends
-# nothing. The idempotent exit below (workspace already open) transitions
-# nothing.
+# --wait and --no-wait are mutually exclusive; the last one on the command
+# line wins.
 #
-# <ticket-id> is matched case-insensitively against the Jira issue of the
-# same key (e.g. `proj-123` and `PROJ-123` both resolve to the Jira issue
-# PROJ-123 via `--jira-api PATH raw GET /issue/PROJ-123?fields=summary,
-# <executor-field>` — see JIRA API below). The title and executor always
-# come from Jira, never a local file. The branch, the herdr worktree label,
-# and the herdr agent name are all the LOWERCASED id (e.g. `proj-123`) —
-# matching the convention in this plugin's session-start skill,
-# "Dispatching a wave through a worktree-dispatch tool".
+# The brief is rendered from templates/dispatch-brief.md: TRACKER, TIMEBOX,
+# FORBIDDEN, REPORT and STANDING. --timebox/--forbidden default to
+# [dispatch.brief]; an empty one dies naming it before any herdr or tracker
+# call, so an incomplete brief is never sent.
 #
-# --model defaults to sonnet (the cost-efficient choice for a worker agent).
-# Refused outright if it is anything else — this is the one flag the script
-# exists to make impossible to skip, so an unresolvable value is a hard
-# refusal, not a fallback to the caller's shell default.
+# After the brief hand-off the ticket is transitioned to In Progress,
+# resolved by matching --jira-progress-status against the issue's live
+# transitions; zero or several matches are refused before anything is
+# created. The issue is read back after the POST; a 2xx is not proof.
+# Already In Progress is a no-op.
 #
-# --no-wait / --wait: step 3's `herdr agent prompt` can block the CALLER —
-# not the agent — for up to an hour when run with `--wait --timeout
-# 3600000`. That makes a wave of tickets impossible to fan out with
-# sequential calls: the first call would not return until its agent
-# finished or the hour expired, so a second ticket could not even be
-# started.
+# Refusals, checked in this order, before anything is created:
+#   1. bad --model, or --jira-progress-status missing or not numeric
+#   2. HERDR_ENV is not "1"
+#   3. the issue's executor field is not `agent` (human/mixed need a person)
+#   4. the branch already exists, as a herdr worktree or a bare local branch
 #
-# The DEFAULT is a BOUNDED wait, not no wait at all: step 3 runs
-# `--wait --until working --timeout 60000`, so the call returns as soon as
-# herdr observes the agent reach `working` (normally a few seconds), and
-# fails loudly — carrying herdr's own error text (agent_prompt_stalled,
-# agent_blocked, or timeout; see `herdr agent prompt --help`) — if that is
-# not observed within 60s. This closes the pane-readiness race: the prompt
-# is handed off AND the script confirms the agent actually started working
-# on it, in well under a minute, instead of either blocking for an hour or
-# returning the instant the transport accepted the text with no
-# confirmation it was ever read.
+# Idempotency: a herdr workspace ALREADY open on the target branch prints
+# that and exits 0, transitioning nothing. A branch or worktree with NO open
+# workspace is refusal #4 — land it or remove it by hand first.
 #
-# --wait is the explicit opt-in that restores the old fully-blocking
-# behaviour (`--wait --timeout 3600000`, no `--until`, so it settles on the
-# first idle/done/blocked), for the case of starting one ticket and
-# watching it to completion in the same call.
-#
-# --no-wait opts OUT of the bounded wait entirely: step 3 hands off the
-# brief with no `--wait` flag at all and returns as soon as the transport
-# accepts it, with no confirmation the agent ever started. Use it only when
-# even the ~60s bounded wait is unacceptable (e.g. fanning out a very large
-# wave and accepting the pane-readiness race as a known risk).
-#
-# --wait and --no-wait are mutually exclusive; when both are passed, the
-# LAST one on the command line wins (ordinary shell flag-parsing
-# last-writer semantics — this script does not special-case the
-# combination or refuse it).
-#
-# Refusals (checked in this order, before anything is created):
-#   1. --model is not sonnet/opus/haiku, or --jira-progress-status is
-#      missing or not numeric.
-#   2. HERDR_ENV is not "1" — this script only makes sense run from inside a
-#      Herdr-managed session; a plain shell has no worktree/pane model to
-#      hang a workspace off.
-#   3. The Jira issue's executor custom field (see JIRA API below) resolves
-#      to anything other than `agent` — `human` and `mixed` tickets need a
-#      person in the loop and must never get an unattended agent.
-#   4. The branch already exists — either as a herdr worktree (checked via
-#      `herdr worktree list --cwd`) or as a plain local git branch with no
-#      worktree at all.
-#
-# Idempotency: if a herdr workspace is ALREADY open on the target branch
-# (`herdr worktree list`'s `open_workspace_id` for that branch is non-null),
-# this is not treated as refusal #4 — it prints that the workspace already
-# exists and exits 0. A branch/worktree that exists with NO open workspace
-# is refusal #4 (something needs to be resolved by hand — land it or remove
-# it — before starting fresh).
-#
-# --dry-run runs every check above (including the idempotency check, so a
-# dry run against an existing workspace reports that too, not a fake plan)
-# then prints the three herdr commands it would run, fully substituted, and
-# exits 0. No herdr command that could create or change anything runs during
-# a dry run. The one placeholder is the pane id in step 2's command: that
-# value only exists once step 1 has actually run, so a dry run prints
-# `<pane-from-step-1>` in its place.
-#
-# What actually runs, in order, on a real (non-dry-run) invocation:
-#   1. herdr worktree create --cwd <repo-root> --branch <branch>
-#        --label "<TICKET-ID> <title>" --no-focus
-#      -> reads .result.root_pane.pane_id
-#   2. herdr agent start <branch> --kind claude --pane <pane> -- --model <model>
-#      If this fails with agent_not_ready, the pane is read (`herdr agent
-#      read <pane> --source visible`) for Claude Code's folder-trust dialog
-#      markers ("Is this a project you created or one you trust" / "Yes, I
-#      trust this folder") — seen on a fresh Herdr worktree on some hosts,
-#      not others. If found, `herdr agent send-keys <pane> Down
-#      Enter` answers it and the script waits (`herdr agent wait <pane>
-#      --until idle --timeout 60000`) before continuing to step 3. Any other
-#      agent_not_ready cause, or a pane with no dialog markers, aborts
-#      exactly as any other agent-start failure.
-#   3. herdr agent prompt <branch> "<standard brief>"
-#      (the brief text points at this ticket's Jira issue key, matching the
-#      session-start skill's "Dispatching a wave through a worktree-dispatch
-#      tool" section — no file path, the brief tells the agent to look the
-#      ticket up in Jira. By default this carries `--wait --until working
-#      --timeout 60000` and blocks the caller only until the agent is
-#      observed working, or dies with herdr's own error (agent_prompt_stalled
-#      / agent_blocked / timeout) if that is not seen within 60s. With
-#      --wait, it instead carries `--wait --timeout 3600000` (no --until)
-#      and blocks the caller until the agent settles (idle/done/blocked) or
-#      the hour expires. With --no-wait, it carries no --wait flag at all
-#      and the command returns as soon as the prompt is handed off, with no
-#      confirmation the agent ever started)
-#   4. <jira-api> --yes write POST /issue/<KEY>/transitions (the transition
-#      into --jira-progress-status), then raw GET /issue/<KEY>?fields=status
-#      to confirm — skipped when the issue is already in that status
-#
-# Exit codes (this plugin's land-branch.sh's own pattern):
-#   0   started cleanly, OR a workspace for this branch already exists
-#       (idempotent no-op), OR --dry-run printed its plan.
-#   1   a check failed: bad --model or --jira-progress-status, a human/mixed
-#       ticket, the branch/worktree trap, an ambiguous multiple-match, a herdr
-#       command that ran but failed partway through (worktree create/agent
-#       start/agent prompt) — message says what was and was not created so it
-#       can be cleaned up by hand — or the In Progress transition failing or
-#       not reading back (the agent is left running).
-#   2   could not evaluate: `herdr`, `jq` or `git` missing from PATH, the
-#       jira-api wrapper missing/not executable, the Jira issue unreadable or
-#       missing a `summary` field, or its executor custom field carrying an
-#       unrecognized value (neither agent/human/mixed — including unset/
-#       null), a herdr JSON response that could not be parsed, or no single
-#       live transition into the In Progress status.
-#
-# JIRA API. This plugin ships a default Jira client at
-# providers/tracker/jira/jira-api.sh (see providers/README.md and
-# land-branch.sh's own --jira-api). Point this script at it, or another
-# wrapper, the same way:
-#   --jira-api PATH  (or $ISSUES_JIRA_API) — a jira-api.sh-shaped wrapper
-#     understanding `raw GET <path>`, printing the response body on stdout.
-#
-# The executor custom field id and its three option ids are themselves
-# specific to whichever Jira instance this is pointed at — no universal
-# default exists across projects — so they are configurable, defaulting to
-# the values this script was ported with:
-#   HERDR_EXECUTOR_FIELD       default: customfield_10047
-#   HERDR_EXECUTOR_AGENT_ID    default: 10020  (unattended agent allowed)
-#   HERDR_EXECUTOR_HUMAN_ID    default: 10021  (refuse: needs a person)
-#   HERDR_EXECUTOR_MIXED_ID    default: 10022  (refuse: needs a person)
+# Exit codes:
+#   0   started cleanly, OR the workspace already existed, OR --dry-run
+#       printed its plan.
+#   1   a check failed, or a herdr command failed partway through (the
+#       message says what was and was not created), or the transition failed
+#       or did not read back (the agent is left running).
+#   2   could not evaluate: herdr, jq or git missing from PATH, the jira-api
+#       wrapper missing or not executable, the issue unreadable or missing a
+#       `summary`, an unrecognized or unset executor value, unparseable
+#       JSON, or no single live transition into the target status.
 #
 # Env:
-#   HERDR_ENV        must be "1" (see refusal #2 above). Not read for
-#                     anything else.
-#   HERDR_JIRA_PROGRESS_STATUS  see LIFECYCLE above; --jira-progress-status wins.
-#   NW_DRY_RUN       "1" behaves as --dry-run.
-#   ISSUES_JIRA_API   see JIRA API above. Export JIRA_HOST=127.0.0.1 (or
-#                     whatever env var your wrapper honours) for any test —
-#                     never point a test wrapper at a live host.
+#   ISSUES_JIRA_API   a jira-api.sh-shaped wrapper understanding
+#                     `raw GET <path>` and printing the body on stdout (or
+#                     --jira-api PATH). This plugin ships one at
+#                     providers/tracker/jira/jira-api.sh. Export
+#                     JIRA_HOST=127.0.0.1 for any test — never point a test
+#                     wrapper at a live host.
+#   HERDR_ENV         must be "1".
+#   HERDR_JIRA_PROGRESS_STATUS   --jira-progress-status wins over it.
+#   HERDR_BRIEF_TEMPLATE         overrides the brief template path.
+#   NW_DRY_RUN        "1" behaves as --dry-run.
+#   HERDR_EXECUTOR_FIELD      default: customfield_10047
+#   HERDR_EXECUTOR_AGENT_ID   default: 10020  (unattended agent allowed)
+#   HERDR_EXECUTOR_HUMAN_ID   default: 10021  (refuse: needs a person)
+#   HERDR_EXECUTOR_MIXED_ID   default: 10022  (refuse: needs a person)
+#   The executor field id and its option ids are specific to the Jira
+#   instance this is pointed at; no universal default exists.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib/kit.sh
 . "$HERE/lib/kit.sh"
 
-# stop2 — a precondition could not be evaluated at all (tool missing, file
-# unreadable, unparseable JSON). Distinct from die() (exit 1, "a check
-# failed") per this script's own exit-code contract above — same split
-# land-branch.sh's stop2 uses.
+# stop2 — exit 2: a precondition could not be evaluated at all.
 stop2() { echo "Error: $*" >&2; exit 2; }
 
 EXECUTOR_FIELD="${HERDR_EXECUTOR_FIELD:-customfield_10047}"
@@ -212,16 +98,10 @@ BRIEF_TEMPLATE="${HERDR_BRIEF_TEMPLATE:-$HERE/../../../templates/dispatch-brief.
 TIMEBOX=""
 FORBIDDEN=""
 
-# ------------------------------------------------------------------- parse
-
 TICKET_ARG=""
 MODEL="sonnet"
 DRY_RUN=0
 [ "${NW_DRY_RUN:-0}" = 1 ] && DRY_RUN=1
-# WAIT_MODE — one of "bounded" (default), "full" (--wait), "none" (--no-wait).
-# --wait/--no-wait are mutually exclusive; the case statement below applies
-# them in argv order, so the LAST one wins (last-writer, not a special-cased
-# "no-op" — see the header comment on --no-wait above).
 WAIT_MODE="bounded"
 
 while [ $# -gt 0 ]; do
@@ -324,12 +204,8 @@ cd "$REPO"
 [ -n "$JIRA_API" ] || stop2 "no Jira API wrapper — pass --jira-api PATH (or set \$ISSUES_JIRA_API); this plugin's default lives at providers/tracker/jira/jira-api.sh"
 [ -x "$JIRA_API" ] || stop2 "Jira API wrapper is missing or not executable: $JIRA_API"
 
-# ---------------------------------------------------------------- jira read
-#
-# The title and executor come from the Jira issue, never a local file.
-# stderr is captured SEPARATELY, not merged with 2>&1 — a benign stderr
-# line on an otherwise-successful read would corrupt the JSON, the same
-# trap land-branch.sh's jira_read documents.
+# stderr is captured separately, never merged with 2>&1: a benign stderr line
+# on an otherwise-successful read would corrupt the JSON.
 JIRA_ERR=$(tmpfile) || stop2 "could not create a temp file for jira-api diagnostics"
 if ! ISSUE_JSON=$("$JIRA_API" raw GET "/issue/$TICKET_UPPER?fields=summary,status,$EXECUTOR_FIELD" 2>"$JIRA_ERR"); then
     stop2 "could not read Jira issue $TICKET_UPPER (GET /issue/$TICKET_UPPER) — is it open? jira-api said:
@@ -365,18 +241,8 @@ case "$EXECUTOR" in
         ;;
 esac
 
-# ------------------------------------------------------- idempotency check
-#
-# The array lives at .result.worktrees[], `branch` is the SHORT name (no
-# refs/heads/ prefix), and the workspace id field is `open_workspace_id`,
-# which is `null` when the worktree exists but has no workspace open on it
-# right now — that is refusal #4, not idempotency. Matched on `.branch` AND
-# `.is_linked_worktree == true` together, same as land-branch.sh's own
-# workspace-removal lookup, so the repo's primary worktree ("main",
-# is_linked_worktree=false) or a same-named decoy can never match. stderr is
-# captured SEPARATELY, not merged with 2>&1 — a benign stderr line on an
-# otherwise-successful call would corrupt the JSON in $LISTING and this
-# would then report "invalid JSON" for a call that actually worked.
+# `open_workspace_id` is null when the worktree exists with no workspace open
+# — refusal #4, not idempotency. `is_linked_worktree` excludes the primary.
 LISTING_ERR=$(tmpfile) || stop2 "could not create a temp file for 'herdr worktree list' diagnostics"
 if ! LISTING=$(herdr worktree list --cwd "$REPO" 2>"$LISTING_ERR"); then
     stop2 "'herdr worktree list --cwd $REPO' failed: $(cat "$LISTING_ERR" 2>/dev/null)"
@@ -408,14 +274,10 @@ case "$MATCH_COUNT" in
         ;;
 esac
 
-# No herdr worktree at all — still check for a bare local git branch with
-# the same name (e.g. created by hand, never turned into a worktree).
 git rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null 2>&1 \
     && die "branch '$BRANCH' already exists locally (git branch --list) with no herdr worktree — resolve it by hand before retrying"
 
-# ------------------------------------------------- resolve the In Progress move
-#
-# Resolved now, before anything is created, so a workflow with no single
+# Resolved before anything is created, so a workflow with no single
 # transition into the target refuses with nothing to clean up.
 TRANSITION_ID=""
 TRANSITION_TO=""
@@ -443,14 +305,6 @@ fi
 
 LABEL="$TICKET_UPPER $TITLE"
 
-# PROMPT_ARGS / WAIT_SUFFIX — the extra herdr flags step 3 runs with
-# (PROMPT_ARGS, an array — used for the real call) and prints (WAIT_SUFFIX,
-# its string form — used for the --dry-run plan). "bounded" is the default,
-# a wait capped at 60s for the agent to be observed `working` (closes the
-# pane-readiness race without reintroducing the up-to-an-hour block); "full"
-# (--wait) restores the old settle-on-idle/done/blocked wait up to an hour;
-# "none" (--no-wait) sends the prompt and returns immediately with no
-# confirmation.
 PROMPT_ARGS=()
 case "$WAIT_MODE" in
     bounded)
@@ -466,8 +320,6 @@ case "$WAIT_MODE" in
         WAIT_SUFFIX=""
         ;;
 esac
-
-# ---------------------------------------------------------------- dry run
 
 if [ "$DRY_RUN" = 1 ]; then
     echo "Plan for $TICKET_UPPER (model: $MODEL, branch: $BRANCH):"
@@ -487,8 +339,6 @@ if [ "$DRY_RUN" = 1 ]; then
     exit 0
 fi
 
-# -------------------------------------------------------------------- run
-
 echo "Creating herdr worktree for branch '$BRANCH'..."
 CREATE_JSON=$(herdr worktree create --cwd "$REPO" --branch "$BRANCH" --label "$LABEL" --no-focus) \
     || die "'herdr worktree create' failed"
@@ -498,19 +348,11 @@ PANE=$(printf '%s' "$CREATE_JSON" | jq -r '.result.root_pane.pane_id // empty') 
 [ -n "$PANE" ] || die "'herdr worktree create' returned no .result.root_pane.pane_id — a workspace may have been half-created; check 'herdr worktree list --cwd $REPO' by hand"
 
 echo "Starting Claude (model: $MODEL) on pane $PANE..."
-# agent_not_ready can mean Claude Code is showing its folder-trust dialog on
-# a fresh worktree (observed on linux-host) rather than any
-# real startup failure. stderr is captured SEPARATELY so the detection below
-# can inspect herdr's own error text without disturbing stdout.
 START_ERR=$(tmpfile) || die "could not create a temp file for 'herdr agent start' diagnostics"
 if ! herdr agent start "$BRANCH" --kind claude --pane "$PANE" -- --model "$MODEL" 2>"$START_ERR"; then
     START_ERR_TEXT=$(cat "$START_ERR" 2>/dev/null) || START_ERR_TEXT=""
     case "$START_ERR_TEXT" in
         *agent_not_ready*)
-            # Read the pane and look for the trust dialog's own markers —
-            # detection by pane text, not by editing any Claude config file
-            # (see the ticket's Decisions: parent-directory trust does not
-            # inherit, so no config-side fix exists).
             PANE_TEXT=$(herdr agent read "$PANE" --source visible 2>/dev/null) || PANE_TEXT=""
             case "$PANE_TEXT" in
                 *"Is this a project you created or one you trust"*"Yes, I trust this folder"*)
@@ -532,13 +374,8 @@ if ! herdr agent start "$BRANCH" --kind claude --pane "$PANE" -- --model "$MODEL
 fi
 
 echo "Handing $TICKET_UPPER's brief to '$BRANCH'..."
-# Output (stdout+stderr) is captured rather than streamed, so a failure
-# carries herdr's OWN error text (agent_prompt_stalled / agent_blocked /
-# timeout) in the die message, not just a generic "failed" — the caller
-# needs to know WHICH of those it was to decide what to do next.
-# bash 3.2 (macOS default) treats "${arr[@]}" on a zero-element array as an
-# unbound-variable error under `set -u`, even though the array itself was
-# assigned empty — hence the count guard rather than a bare expansion.
+# 2>&1 is deliberate: the die message must carry herdr's own error text.
+# bash 3.2: "${arr[@]}" on an empty array errors under set -u, hence the guard.
 if [ ${#PROMPT_ARGS[@]} -gt 0 ]; then
     PROMPT_OUT=$(herdr agent prompt "$BRANCH" "$PROMPT_TEXT" "${PROMPT_ARGS[@]}" 2>&1) && PROMPT_RC=0 || PROMPT_RC=$?
 else

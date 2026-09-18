@@ -2,9 +2,7 @@
 #
 # providers/secrets/read.sh REF — read a secret by reference through the
 # `secrets` provider in effect (see providers/README.md). Thin wrapper
-# around `providers/lib/provider.sh run secrets read REF`; exists so a
-# caller that only cares about secrets does not have to know the general
-# provider-dispatch CLI.
+# around `providers/lib/provider.sh run secrets read REF`.
 #
 # REF is a dotted lowercase name (e.g. `jira.token`) that both shipped
 # implementations map to their own backing store:

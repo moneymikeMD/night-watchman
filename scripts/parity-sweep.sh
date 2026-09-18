@@ -17,26 +17,18 @@
 # file — it only reads and reports. Update the map by hand (or via a
 # parity-ticket workflow) after reading its output.
 #
-# With --source-root DIR it also runs a fourth, bottom-up pass:
-# it greps the source project's own orchestration surface — CLAUDE.md,
-# .claude/skills/*/SKILL.md, .claude/agents/*.md, .claude/settings*.json,
-# docs/scripts.md, docs/cost/README.md — for every scripts/**.sh,
-# scripts/**.py, agent, and skill it references or defines, and reports any
-# such reference with no row in the map (source column) and no match in
-# ROOT/templates/parity-allowlist.txt (source-specific capabilities this
-# plugin deliberately never ports — see that file's header) as "unmapped",
-# with the file:line of the reference. A scripts/**.sh or scripts/**.py
-# reference whose file does not actually exist under --source-root is
-# reported separately as "dangling" instead — a docs bug in the source
-# project (a prose example path, a stale doc), not a parity gap — and does
-# not affect the exit code. Hook commands in .claude/settings*.json
-# are their own reference class within this pass, extracted explicitly (via
-# jq, or a bounded grep if jq is unavailable) rather than left to however the
-# scripts/**.sh grep happens to land on the raw JSON text — a hook whose
-# command isn't a scripts/ path at all is still reported, as that literal
-# command. The row-by-row drift/new/vanished pass above can only ever find
-# drift on rows someone already thought to add; this pass is what catches a
-# capability nobody mapped in the first place (see docs/decisions.md).
+# With --source-root DIR it also runs a fourth, bottom-up pass: it greps the
+# source project's orchestration surface — CLAUDE.md, .claude/skills/*/SKILL.md,
+# .claude/agents/*.md, .claude/settings*.json, docs/scripts.md,
+# docs/cost/README.md — for every scripts/**.sh, scripts/**.py, agent and skill
+# it references or defines, and reports as "unmapped" (with file:line) any
+# reference with no row in the map's source column and no match in
+# ROOT/templates/parity-allowlist.txt. A scripts/**.sh or scripts/**.py
+# reference whose file does not exist under --source-root is reported
+# separately as "dangling" and does not affect the exit code. Hook commands in
+# .claude/settings*.json are their own reference class, extracted explicitly;
+# a hook command that is not a scripts/ path at all is still reported, as that
+# literal command.
 #
 # Usage:
 #   parity-sweep.sh [--source DIR] [--map FILE] [--root DIR] [--source-root DIR]
@@ -57,15 +49,12 @@
 # dangling bucket never affects this), 1 drift or unmapped references found
 # (any of drift/new/vanished/unmapped non-empty), 2 could not evaluate (bad
 # --source, missing/malformed map, bad --source-root).
-#
-# bash 3.2 compatible: no associative arrays, no ${var^^}, no mapfile.
 
 set -euo pipefail
 
-# pipe_ok — no-op. Documents a pipeline whose leading command (diff) exits
-# non-zero to mean "files differ", not a real failure — under `pipefail`
-# that would otherwise abort the script here instead of at the `[ ... ]`
-# check written to handle it.
+# pipe_ok — no-op marking a pipeline whose leading command (diff) exits
+# non-zero to mean "files differ", which `pipefail` would otherwise treat as
+# a failure before the `[ ... ]` check written to handle it runs.
 pipe_ok() { return 0; }
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -113,10 +102,8 @@ fail_eval() {
 [ -z "$SOURCE_ROOT" ] || [ -d "$SOURCE_ROOT" ] || fail_eval "no such --source-root directory: $SOURCE_ROOT"
 
 # A map row is SOURCE-PATH<TAB>LOCAL-PATH, LOCAL-PATH may be a literal '-'.
-# Blank lines and lines starting with '#' are comments. Anything else
-# (wrong field count) means the map itself cannot be trusted — an
-# ambiguous row is worse news than a real drift finding, so this is a
-# could-not-evaluate precondition, not a warning.
+# A wrong field count means the map cannot be trusted at all, so it is a
+# could-not-evaluate precondition rather than a warning.
 BAD_LINES="$(awk -F'\t' '
     /^[[:space:]]*$/ { next }
     /^#/ { next }
@@ -140,9 +127,6 @@ DIRS="$WORK/dirs"
 : >"$VANISHED"
 : >"$MAPPED_SET"
 
-# Build the mapped-set (dir<TAB>basename, for the "new files" check) and
-# the distinct list of mapped source directories, while walking every row
-# once for drift/vanished.
 while IFS="$(printf '\t')" read -r src local; do
     case "$src" in
         ""|"#"*) continue ;;
@@ -206,8 +190,8 @@ DANGLING="$WORK/dangling"
 
 if [ -n "$SOURCE_ROOT" ]; then
     # in_map PATH — 0 if PATH is exactly the source column of some map row.
-    # awk, not grep -F, so "scripts/dev/tool.sh" can't be satisfied by a
-    # row whose LOCAL column happens to hold that same string.
+    # awk, not grep -F, so a row whose LOCAL column holds the same string
+    # cannot satisfy it.
     in_map() {
         awk -F'\t' -v p="$1" '
             /^[[:space:]]*$/ { next }
@@ -218,8 +202,7 @@ if [ -n "$SOURCE_ROOT" ]; then
     }
 
     # allowlisted PATH — 0 if PATH matches a shell-glob pattern in
-    # templates/parity-allowlist.txt (source-specific capabilities this
-    # plugin deliberately never ports; missing file = empty allowlist).
+    # templates/parity-allowlist.txt; a missing file is an empty allowlist.
     allowlisted() {
         local path="$1" pat
         [ -f "$ALLOWLIST" ] || return 1
@@ -236,11 +219,8 @@ if [ -n "$SOURCE_ROOT" ]; then
     }
 
     # extract_hook_commands FILE — print every hook "command" value in a
-    # .claude/settings*.json file, one per line. jq when available (walks
-    # the whole tree for any object carrying a "command" key, so it does
-    # not need to track hooks.json's exact nesting); a bounded grep
-    # fallback otherwise. Malformed JSON yields nothing, not a die — the
-    # scripts/**.sh grep pass above still covers that file.
+    # .claude/settings*.json file, one per line. Malformed JSON yields
+    # nothing rather than dying; the scripts/**.sh grep pass still covers it.
     extract_hook_commands() {
         local f="$1"
         if command -v jq >/dev/null 2>&1; then
@@ -251,10 +231,8 @@ if [ -n "$SOURCE_ROOT" ]; then
         fi
     }
 
-    # The globs below assume $SOURCE_ROOT itself is free of shell glob
-    # metacharacters (*, ?, [) — true of every ordinary filesystem path;
-    # a caller passing something exotic gets a mismatched scan, not a
-    # crash, since a bad --source-root exits 2 above before this point.
+    # The globs below assume $SOURCE_ROOT is free of shell glob metacharacters
+    # (*, ?, [); an exotic path yields a mismatched scan, not a crash.
     SCANFILES="$WORK/scanfiles"
     : >"$SCANFILES"
     for f in "$SOURCE_ROOT/CLAUDE.md" "$SOURCE_ROOT/docs/scripts.md" "$SOURCE_ROOT/docs/cost/README.md"; do
@@ -267,8 +245,7 @@ if [ -n "$SOURCE_ROOT" ]; then
     REFS="$WORK/refs"
     : >"$REFS"
 
-    # Pass 1: every agent/skill file under the source tree is itself a
-    # referenced capability (its own existence is the reference — line 1).
+    # Pass 1: an agent/skill file's own existence is the reference (line 1).
     while IFS= read -r f; do
         [ -n "$f" ] || continue
         case "$f" in
@@ -280,9 +257,8 @@ if [ -n "$SOURCE_ROOT" ]; then
         esac
     done <"$SCANFILES"
 
-    # Pass 2: grep every scan file for scripts/**.sh and scripts/**.py
-    # references — this project maps hooks under scripts/dev/*.sh too (see
-    # templates/parity-map.tsv), so one pattern covers both.
+    # Pass 2: one pattern covers scripts/ and hooks/ alike — this project maps
+    # hooks under scripts/dev/*.sh too (see templates/parity-map.tsv).
     while IFS= read -r f; do
         [ -n "$f" ] || continue
         while IFS=: read -r lineno match; do
@@ -291,20 +267,15 @@ if [ -n "$SOURCE_ROOT" ]; then
         done < <(grep -noE 'scripts/[A-Za-z0-9_./-]+\.(sh|py)' "$f" 2>/dev/null || pipe_ok)
     done <"$SCANFILES"
 
-    # Pass 3: hook "command" values in .claude/settings*.json — a distinct
-    # reference class the ticket calls out by name, not left to however
-    # Pass 2's scripts/**.sh grep happens to land on the raw JSON text. A
-    # command with no scripts/ path in it (e.g. "op item create") is kept
-    # as its own literal reference, which in_map/allowlisted will never
-    # match — surfacing it as unmapped like any other hook reference.
+    # Pass 3: a command with no scripts/ path in it (e.g. "op item create") is
+    # kept as its own literal reference, so it still surfaces as unmapped.
     for f in "$SOURCE_ROOT"/.claude/settings*.json; do
         [ -f "$f" ] || continue
         while IFS= read -r cmd; do
             [ -n "$cmd" ] || continue
-            # Look up the line by the bare scripts/ path, not the full
-            # command string: JSON escaping (e.g. \"$VAR\"/scripts/x.sh)
-            # means the jq-decoded command often isn't a literal substring
-            # of the raw file text, but the path portion always is.
+            # Look up the line by the bare scripts/ path: JSON escaping means
+            # the jq-decoded command is often not a literal substring of the
+            # raw file text, but the path portion always is.
             path="$(printf '%s' "$cmd" | grep -oE 'scripts/[A-Za-z0-9_./-]+\.(sh|py)' | head -1)" || pipe_ok
             if [ -n "$path" ]; then
                 lineno="$(grep -nF -- "$path" "$f" 2>/dev/null | head -1 | cut -d: -f1)" || pipe_ok

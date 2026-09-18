@@ -1,23 +1,11 @@
 version: 2
 updates:
-  # The plugin's core is dependency-free bash, so the only things with
-  # versions to bump are the workflows themselves and the docs site below.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
 
-  # Bun is its own ecosystem, not a variant of npm (GA 2025-02-13, requires
-  # bun >= 1.1.39, i.e. the text `bun.lock` rather than the binary
-  # `bun.lockb`). The docs site is the only bun-managed directory here.
-  #
-  # The risk this carries: .github/workflows/website-deploy.yml installs with
-  # `bun install --frozen-lockfile`, which fails by design if package.json and
-  # bun.lock disagree. Two upstream bugs that produced exactly that stale-lock
-  # state (dependabot-core #15848, lockfileVersion 2 downgrade, and #13623,
-  # configVersion stripped) are fixed. The `docs-site` CI job is the structural
-  # guard anyway: it runs the same frozen install, so a PR that desyncs the two
-  # cannot go green, and cannot auto-merge.
+  # Bun is its own ecosystem, not a variant of npm; needs the text bun.lock.
   - package-ecosystem: bun
     directory: /docs/preview/website
     schedule:

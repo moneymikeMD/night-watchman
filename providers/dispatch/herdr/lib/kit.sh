@@ -1,9 +1,7 @@
 #!/bin/bash
 #
 # kit.sh — the minimal shared shell helpers night-watchman's own scripts
-# (known-issue.sh, land-branch.sh) source. Deliberately small: a
-# credential-store or host-conventions library belongs in a consuming
-# project, not in this plugin's dependency-free core. bash 3.2 compatible
+# source. Deliberately small and dependency-free. bash 3.2 compatible
 # (no associative arrays, no `${var^^}`, no `readarray`/`mapfile`).
 #
 # Usage: source this file, then call die/warn/need/show_help/tmpfile.
@@ -43,15 +41,12 @@ known_command() {
     return 1
 }
 
-# tmpfile — create a 0600 tempfile, remove it on exit. Safe to call more
-# than once in one script: each call adds its own path to the cleanup list
-# rather than replacing an earlier trap registration.
+# tmpfile — create a 0600 tempfile, removed on exit. Safe to call more than
+# once: each call appends to the cleanup list rather than replacing the trap.
 _KIT_TMPFILES=""
 _kit_cleanup() {
     [ -n "$_KIT_TMPFILES" ] || return 0
-    # shellcheck disable=SC2086  # word splitting is the point: a
-    # newline-joined list of paths, none of which are expected to contain
-    # whitespace.
+    # shellcheck disable=SC2086  # word splitting is the point
     rm -f $_KIT_TMPFILES 2>/dev/null || true
 }
 tmpfile() {

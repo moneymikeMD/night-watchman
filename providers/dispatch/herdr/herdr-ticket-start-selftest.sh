@@ -6,31 +6,23 @@
 # creates nothing — zero `herdr worktree create` / `herdr agent start` /
 # `herdr agent prompt` calls.
 #
-# Isolation: a stub `herdr` on PATH, installed fresh per scratch repo, is
-# what every scenario below runs against — never a real binary. A stub
-# `jira-api.sh`-shaped wrapper (see herdr-ticket-start.sh's own "JIRA API"
-# header section) stands in for the SUT's `--jira-api` dependency; every
-# call is logged and JIRA_HOST is pinned to 127.0.0.1 for the whole file,
-# with the stub itself refusing any other value — the same two-layer
-# isolation land-branch-jira-selftest.sh uses for its own jira mock.
+# Isolation: a stub `herdr` and a stub `jira-api.sh`-shaped wrapper on PATH,
+# installed fresh per scratch repo. Every jira-api and herdr call in this
+# file goes to a per-scenario stub — never a real binary, a real Jira
+# project, or a live host. JIRA_HOST is pinned to 127.0.0.1 for the whole
+# file and the stub itself refuses any other value.
 #
-# Each scenario builds its own scratch git repo under mktemp -d, with a
-# COPY of herdr-ticket-start.sh and lib/kit.sh, plus a per-scenario stub
-# jira-api wrapper answering whatever title/executor id the scenario needs
-# — never a real Jira issue. Per this plugin's testing-philosophy doc ("a
+# Each scenario builds its own scratch git repo under mktemp -d with a COPY
+# of the SUT and lib/kit.sh. Per this plugin's testing-philosophy doc ("a
 # scratch git repo is not isolated by default"), every scratch repo pins
 # core.hooksPath, commit.gpgsign, gpg.format and user.signingkey to values
 # inside itself so it cannot pick up this machine's global git config.
 #
 # Fail-first discipline (name-the-oracle): before this file is trusted, its
-# central assertion is run against a deliberately corrupted copy of
-# herdr-ticket-start.sh and confirmed to FAIL specific assertions, then the
-# corruption is reverted and this file is confirmed to pass again in full —
-# see the ticket's own verify block for the recorded RED/GREEN output.
-#
-# Never touches a real herdr binary, a real Jira project, or a live host —
-# every jira-api call in this file goes to the per-scenario stub, and every
-# herdr call goes to the per-scenario stub binary.
+# central assertion is run against a deliberately corrupted copy of the SUT
+# and confirmed to FAIL specific assertions, then the corruption is reverted
+# and this file is confirmed to pass again in full — see the ticket's own
+# verify block for the recorded RED/GREEN output.
 #
 # Usage: ./herdr-ticket-start-selftest.sh
 # Exit 0 if every assertion passes, 1 otherwise.
@@ -50,17 +42,12 @@ SUT_REL="providers/dispatch/herdr"
 [ -f "$SUT_SRC" ] || die "cannot find herdr-ticket-start.sh next to this selftest"
 [ -f "$KIT_SRC" ] || die "cannot find lib/kit.sh"
 
-# Pinned to loopback for the whole file — belt-and-braces alongside the
-# stub itself refusing any other value (see install_stub_jira).
+# Pinned to loopback, alongside the stub itself refusing any other value.
 export JIRA_HOST=127.0.0.1
 
-# Recorded herdr responses (fixtures/, captured 2026-09-14 on a throwaway
-# branch, see fixtures/README.md). `worktree create`: the SUT reads only
-# `.result.root_pane.pane_id`. `worktree list`: the recorded shape is kept
-# verbatim (main checkout, one linked worktree with an open workspace, one
-# with `branch: null`); only the branch NAMES are rewritten so the cases
-# below can prove the SUT's branch match is selective rather than
-# accidentally matching the first entry.
+# Recorded herdr responses (fixtures/, see fixtures/README.md). The `worktree
+# list` shape is verbatim; only branch NAMES are rewritten, so the cases prove
+# the branch match is selective, not accidentally matching the first entry.
 FIXTURES="$HERE/fixtures"
 [ -f "$FIXTURES/worktree-create.json" ] || { echo "missing fixture: $FIXTURES/worktree-create.json" >&2; exit 2; }
 [ -f "$FIXTURES/worktree-list.json" ] || { echo "missing fixture: $FIXTURES/worktree-list.json" >&2; exit 2; }
@@ -110,9 +97,8 @@ assert_contains() {
     esac
 }
 
-# assert_nonzero <desc> <rc> — the exit code must NOT be 0. Written as an
-# explicit if/else (not `[ ... ] && echo ok || echo FAIL`, SC2015) so a
-# failure in the "ok" branch's own echo can never silently fall into FAIL.
+# assert_nonzero <desc> <rc> — explicit if/else, not `[ ] && echo || echo`
+# (SC2015): a failure in the "ok" branch's echo must not fall through to FAIL.
 assert_nonzero() {
     local desc="$1" rc="$2"
     if [ "$rc" != 0 ]; then
@@ -122,8 +108,6 @@ assert_nonzero() {
         FAIL=1
     fi
 }
-
-# ------------------------------------------------------------------ fixtures
 
 # make_repo — a fresh, self-contained scratch git repo carrying a copy of
 # the SUT and lib/kit.sh.
@@ -150,37 +134,17 @@ make_repo() {
     printf '%s' "$d"
 }
 
-# Recorded tracker fixtures the stub replays (read-only; never edited here):
-# the live transitions list (transition 21 -> status 3 In Progress) and the
-# live HTTP 400 bodies the validators returned.
+# Recorded tracker fixtures the stub replays, never edited here: the live
+# transitions list (21 -> status 3) and the live HTTP 400 validator bodies.
 TRACKER_FIXTURES="$(cd "$HERE/../../tracker/jira/fixtures" && pwd)" || die "cannot find the tracker/jira fixtures directory"
 TRANSITIONS_FIXTURE="$TRACKER_FIXTURES/issue.transitions.live.json"
 REJECTED_FIXTURE="$TRACKER_FIXTURES/issue.transition.rules-rejected.txt"
 [ -r "$TRANSITIONS_FIXTURE" ] || die "cannot read $TRANSITIONS_FIXTURE"
 [ -r "$REJECTED_FIXTURE" ] || die "cannot read $REJECTED_FIXTURE"
 
-# install_stub_jira <repo> [executor-id] [title] — write the stub jira-api
-# wrapper every scenario's Jira call goes through. Speaks exactly the calls
-# herdr-ticket-start.sh makes, matched by a glob on the key:
-#   raw GET /issue/<KEY>?fields=summary,status,customfield_10047
-#   raw GET /issue/<KEY>/transitions      (replays the recorded fixture)
-#   --yes write POST /issue/<KEY>/transitions <json>
-#   raw GET /issue/<KEY>?fields=status    (read-back)
-# executor-id and title are baked into a sibling conf file:
-#   executor-id  10020 (agent, default), 10021 (human), 10022 (mixed), an
-#                arbitrary unrecognized id, or "" (customfield_10047 comes
-#                back null — the unset case).
-#   title        the fields.summary value (default: a fixed scratch title).
-# Status is stateful per repo ($repo/jira-status, written by a POST). Env
-# vars read at call time:
-#   STUB_STATUS_ID=ID       starting status id (default 10009, To Do)
-#   STUB_JIRA_FAIL=1        the issue read exits 1 with a 404-shaped message
-#   STUB_TRANSITION_FAIL=1  the POST exits 1 with the recorded HTTP 400 body
-#   STUB_READBACK_STUCK=1   the POST exits 0 but the status does not move
-#   STUB_ORDER_LOG=PATH     also append "jira <argv>" (shared with the herdr
-#                           stub, so call ORDER can be asserted)
-# Every call is logged to $STUB_JIRA_LOG. Anything else is UNEXPECTED and
-# exits 1, so a call this file did not anticipate fails loudly.
+# install_stub_jira <repo> [executor-id] [title] — the stub jira-api wrapper,
+# answering only the four calls the SUT makes, stateful per repo, logging to
+# $STUB_JIRA_LOG, and driven by the STUB_* env vars read in its body below.
 install_stub_jira() {
     local repo="$1" executor_id="${2:-10020}" title="${3:-Scratch ticket for herdr-ticket-start-selftest.sh}"
     {
@@ -246,47 +210,9 @@ EOF
     chmod +x "$repo/bin/jira-api-stub.sh"
 }
 
-# install_stub_herdr <repo> — a stub speaking exactly the four subcommands
-# herdr-ticket-start.sh calls: `worktree list`, `worktree create`,
-# `agent start`, `agent prompt`. Every invocation's argv is appended to
-# $STUB_HERDR_LOG (one line per call, newlines in the brief flattened to spaces). Behaviour is driven by
-# env vars so the same stub file serves every scenario:
-#   STUB_LIST_JSON     canned stdout for `worktree list`
-#   STUB_LIST_FAIL=1   `worktree list` exits 1 with a stderr message
-#   STUB_LIST_NOISE=1  `worktree list` prints ONE extra benign stderr line
-#                       before its JSON, on top of whatever STDOUT it
-#                       returns — proves the caller does not merge stderr
-#                       into the JSON it parses
-#   STUB_CREATE_JSON   canned stdout for `worktree create`
-#   STUB_CREATE_FAIL=1 `worktree create` exits 1
-#   STUB_START_FAIL=1  `agent start` exits 1
-#   STUB_START_TRUST_DIALOG=1
-#                      first `agent start` exits 1 with "agent_not_ready:
-#                      blocked during startup" on stderr; `agent read
-#                      --source visible` then returns the trust-dialog
-#                      markers until `agent send-keys <pane> Down Enter` is
-#                      logged, after which it returns a plain idle prompt
-#                      and `agent wait --until idle` succeeds — models the
-#                      fix's happy path
-#   STUB_START_NOT_READY_OTHER=1
-#                      `agent start` exits 1 with "agent_not_ready: blocked
-#                      during startup", but the pane shows no trust dialog
-#                      (`agent read` returns a plain idle prompt) — models
-#                      an agent_not_ready cause that is not the dialog
-#   STUB_PROMPT_FAIL=1 `agent prompt` exits 1 with a generic stub message
-#   STUB_PROMPT_STALL=1   `agent prompt` exits 1, stderr carries
-#                          "agent_prompt_stalled" (the bounded-wait shape:
-#                          an accepted submission that never left its
-#                          starting state within herdr's own timeout)
-#   STUB_PROMPT_BLOCKED=1 `agent prompt` exits 1, stderr carries
-#                          "agent_blocked" (submission rejected outright,
-#                          agent already blocked)
-#   STUB_PROMPT_TIMEOUT=1 `agent prompt` exits 1, stderr carries "timeout"
-#                          (herdr's own --timeout expired before a matching
-#                          state was observed)
-# Anything else — an unrecognised subcommand pair — logs and exits 99, so a
-# call this script did not anticipate fails loudly rather than being
-# silently accepted.
+# install_stub_herdr <repo> — a stub answering only `worktree list/create` and
+# `agent start/prompt`, logging every argv to $STUB_HERDR_LOG and driven by the
+# STUB_* env vars read in its body below. Anything else exits 99, failing loudly.
 install_stub_herdr() {
     local repo="$1"
     cat > "$repo/bin/herdr" <<'STUBEOF'
@@ -362,9 +288,8 @@ STUBEOF
     chmod +x "$repo/bin/herdr"
 }
 
-# call_count <log> <regex> — number of logged calls whose argv line starts
-# with <regex> (e.g. "worktree create"). 0, never a grep failure, if the log
-# does not exist yet or has no match.
+# call_count <log> <regex> — logged calls whose argv line starts with <regex>.
+# 0, never a grep failure, if the log is missing or has no match.
 call_count() {
     local log="$1" pattern="$2" n
     [ -f "$log" ] || { printf '0'; return 0; }
@@ -372,13 +297,9 @@ call_count() {
     printf '%s' "$n"
 }
 
-# run_sut <repo> <ticket-id> [herdr-env] [extra args...] — invoke the
-# scratch repo's copy of the SUT with the scratch bin/ prepended to PATH
-# (so its stub herdr shadows any real one), from inside the repo, with
-# --jira-api pointed at the stub jira wrapper. Prints combined
-# stdout+stderr; the caller captures $? via `||`. Passes
-# --jira-progress-status ${RUN_SUT_PROGRESS:-3} (the recorded In Progress
-# status id) unless RUN_SUT_NO_PROGRESS=1.
+# run_sut <repo> <ticket-id> [herdr-env] [args...] — run the scratch copy of the
+# SUT with the scratch bin/ first on PATH and --jira-api on the stub, printing
+# stdout+stderr. Passes ${RUN_SUT_PROGRESS:-3} unless RUN_SUT_NO_PROGRESS=1.
 run_sut() {
     local repo="$1" ticket="$2" herdr_env="$3"; shift 3
     local brief_flags=(--timebox "3 hours" --forbidden "selftest ban")
@@ -397,12 +318,7 @@ run_sut() {
     fi
 }
 
-# ------------------------------------------------------------------ scenarios
-
-# A0 — happy path, default model (sonnet). Asserts: exit 0; exactly one
-# worktree create / agent start / agent prompt call each; the logged
-# `agent start` argv carries "--model sonnet"; the default default carries
-# the BOUNDED wait, not no wait at all.
+# A0 — happy path, default model (sonnet), with the BOUNDED wait.
 scenario_happy_default_model() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: A0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -430,11 +346,8 @@ scenario_happy_default_model() {
     assert_contains "A0 stdout reports success" "$out" "started"
 }
 
-# A3 — --wait passed explicitly restores the old blocking behaviour. Same
-# shape as A0: exit code, call counts, the logged `agent prompt` argv
-# carrying "--wait --timeout 3600000" with NO --until (a settle-on-idle/
-# done/blocked wait, not the bounded default), and stdout still reports
-# success.
+# A3 — --wait restores the fully-blocking wait: "--wait --timeout 3600000"
+# with NO --until (settle on idle/done/blocked), not the bounded default.
 scenario_happy_wait_opt_in() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: A3 setup (make_repo)" >&2; FAIL=1; return; }
@@ -460,9 +373,7 @@ scenario_happy_wait_opt_in() {
     assert_contains "A3 stdout reports success" "$out" "started"
 }
 
-# A4 — --no-wait passed explicitly opts fully out of the bounded default.
-# Asserts the logged `agent prompt` argv carries no --wait flag at all
-# (symmetric with A0/A3: exit code, call counts, stdout).
+# A4 — --no-wait opts fully out: no --wait flag at all on `agent prompt`.
 scenario_happy_no_wait_opt_out() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: A4 setup (make_repo)" >&2; FAIL=1; return; }
@@ -509,9 +420,8 @@ scenario_wait_then_no_wait_precedence() {
     esac
 }
 
-# A6 — the reverse order: --no-wait then --wait must resolve to the FULL
-# wait (--wait --timeout 3600000, no --until), same as A3, proving
-# precedence is genuinely last-flag-wins and not just "no-wait always wins".
+# A6 — the reverse order resolves to the FULL wait, proving precedence is
+# genuinely last-flag-wins and not just "no-wait always wins".
 scenario_no_wait_then_wait_precedence() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: A6 setup (make_repo)" >&2; FAIL=1; return; }
@@ -542,9 +452,7 @@ scenario_happy_model_opus() {
     assert_contains "A1 agent start argv carries --model opus" "$(grep '^agent start' "$log" || true)" "--model opus"
 }
 
-# A2 — stub replays a realistic-shaped worktree-list response (several
-# unrelated worktrees present, none matching this branch), proving the SUT
-# still creates fresh cleanly against non-empty noise.
+# A2 — several unrelated worktrees present, none matching: still creates.
 scenario_happy_against_realistic_list() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: A2 setup (make_repo)" >&2; FAIL=1; return; }
@@ -559,8 +467,7 @@ scenario_happy_against_realistic_list() {
     assert_eq "A2 worktree create calls" "1" "$(call_count "$log" "worktree create")"
 }
 
-# B0 — unresolvable model: exit non-zero, no herdr call of any kind (the
-# check runs before HERDR_ENV or any herdr invocation).
+# B0 — unresolvable model: refused before HERDR_ENV or any herdr call.
 scenario_bad_model() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: B0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -575,9 +482,7 @@ scenario_bad_model() {
     assert_eq "B0 agent start calls" "0" "$(call_count "$log" "agent start")"
 }
 
-# C0 — human-executor ticket: exit non-zero, zero herdr calls of any kind
-# (the executor check runs before the idempotency check, so not even
-# `worktree list` is ever called).
+# C0 — human executor: zero herdr calls, not even `worktree list`.
 scenario_human_executor() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: C0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -605,11 +510,8 @@ scenario_mixed_executor() {
     assert_eq "C1 total herdr calls" "0" "$(wc -l < "$log" | tr -d ' ')"
 }
 
-# C2 — unrecognized executor custom-field value (an option id that is none
-# of agent=10020/human=10021/mixed=10022): this is a malformed-input case,
-# not a refused-but-understood human/mixed ticket, so it must exit 2 ("could
-# not evaluate") rather than 1 ("a check failed"). Zero herdr calls of any
-# kind, same as C0/C1.
+# C2 — an unrecognized executor id is malformed input, not a understood
+# refusal, so it exits 2 ("could not evaluate"), not 1. Zero herdr calls.
 scenario_unrecognized_executor() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: C2 setup (make_repo)" >&2; FAIL=1; return; }
@@ -623,11 +525,8 @@ scenario_unrecognized_executor() {
     assert_eq "C2 total herdr calls" "0" "$(wc -l < "$log" | tr -d ' ')"
 }
 
-# D0 — --dry-run: exit 0, zero worktree create / agent start / agent
-# prompt calls (worktree LIST is still expected — the idempotency check
-# runs even in a dry run), and the three fully-substituted commands are on
-# stdout, model included. The default plan carries the BOUNDED wait, not no
-# wait at all.
+# D0 — --dry-run: zero create/start/prompt calls, but worktree LIST is still
+# expected because the idempotency check runs even in a dry run.
 scenario_dry_run() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: D0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -702,9 +601,7 @@ scenario_dry_run_no_wait() {
     esac
 }
 
-# E0 — idempotent: a workspace is already open on this branch (per
-# `worktree list`'s .open_workspace_id). Exit 0, zero create/start/prompt
-# calls, message says so.
+# E0 — a workspace already open on this branch: exit 0, nothing created.
 scenario_idempotent_existing_workspace() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: E0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -722,9 +619,8 @@ scenario_idempotent_existing_workspace() {
     assert_contains "E0 states workspace already exists" "$out" "already exists"
 }
 
-# E1 — worktree exists but has NO open workspace (open_workspace_id is
-# absent/null): this is the branch/worktree TRAP, not idempotency — exit
-# non-zero, zero create/start/prompt calls.
+# E1 — worktree present with open_workspace_id null: the branch/worktree
+# TRAP, not idempotency — refused, nothing created.
 scenario_worktree_no_open_workspace() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: E1 setup (make_repo)" >&2; FAIL=1; return; }
@@ -774,10 +670,8 @@ scenario_ambiguous_match() {
     assert_eq "E3 worktree create calls" "0" "$(call_count "$log" "worktree create")"
 }
 
-# F0 — herdr not on PATH: exit 2 (could not evaluate). PATH deliberately
-# built from only /usr/bin:/bin, excluding both the stub bin/ and any real
-# herdr on PATH. The herdr check runs before the Jira read, so no stub
-# jira-api wrapper is needed here.
+# F0 — herdr not on PATH: exit 2. PATH is /usr/bin:/bin only, and the herdr
+# check runs before the Jira read, so no stub wrapper is needed.
 scenario_herdr_missing() {
     local repo rc
     repo=$(make_repo) || { echo "FAIL: F0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -788,9 +682,7 @@ scenario_herdr_missing() {
     assert_eq "F0 exit code is 2 (could not evaluate)" "2" "$rc"
 }
 
-# F1 — the Jira issue cannot be read (the stub answers a 404 via
-# STUB_JIRA_FAIL): exit 2, zero herdr calls (the Jira read runs before any
-# herdr invocation).
+# F1 — the issue cannot be read: exit 2, zero herdr calls.
 scenario_ticket_missing() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: F1 setup (make_repo)" >&2; FAIL=1; return; }
@@ -818,9 +710,8 @@ scenario_ticket_missing_executor() {
     assert_eq "F2 exit code is 2 (could not evaluate)" "2" "$rc"
 }
 
-# G0 — worktree list returns benign stderr noise alongside a valid JSON
-# stdout: the SUT must still parse it and proceed cleanly, proving it does
-# NOT merge stderr into the JSON it reads (a merge would corrupt it).
+# G0 — benign stderr noise alongside valid JSON stdout: the SUT must still
+# parse it, proving it does NOT merge stderr into the JSON it reads.
 scenario_list_stderr_noise_does_not_corrupt() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: G0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -853,10 +744,8 @@ scenario_create_fails() {
     assert_eq "H0 agent prompt calls" "0" "$(call_count "$log" "agent prompt")"
 }
 
-# I0/I1/I2 — the bounded default wait can fail in three distinct
-# herdr-reported shapes (agent_prompt_stalled, agent_blocked, timeout). In
-# every case: exit non-zero, and the die message carries herdr's OWN error
-# text, not just a generic "failed".
+# I0/I1/I2 — the three herdr-reported bounded-wait failures. In every case the
+# die message must carry herdr's OWN error text, not a generic "failed".
 scenario_prompt_stalled() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: I0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -899,13 +788,8 @@ scenario_prompt_timeout() {
     assert_contains "I2 die message carries herdr's timeout text" "$out" "timeout"
 }
 
-# J0 — `agent start` first reports agent_not_ready because the
-# pane is showing Claude Code's folder-trust dialog. The SUT must read the
-# pane, recognize the dialog markers, send Down+Enter exactly once, wait for
-# idle, then continue to the normal prompt/transition steps as if nothing
-# had gone wrong. Exit 0, exactly one `agent start`/`agent send-keys`/
-# `agent wait`/`agent prompt` call, and a line in stdout saying the dialog
-# was answered.
+# J0 — agent_not_ready because the pane shows Claude's folder-trust dialog:
+# the SUT reads the pane, sends Down+Enter ONCE, waits for idle, and carries on.
 scenario_trust_dialog_answered() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: J0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -928,10 +812,8 @@ scenario_trust_dialog_answered() {
     assert_contains "J0 stdout still reports success" "$out" "started"
 }
 
-# J1 — agent_not_ready for a reason OTHER than the trust dialog (the pane
-# shows a plain idle prompt, no dialog markers): the SUT must still abort
-# exactly as any other agent-start failure — exit non-zero, zero
-# send-keys/wait/prompt calls, herdr's own agent_not_ready text surfaced.
+# J1 — agent_not_ready with NO dialog markers: aborts like any other
+# agent-start failure, with zero send-keys/wait/prompt calls.
 scenario_not_ready_without_dialog() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: J1 setup (make_repo)" >&2; FAIL=1; return; }
@@ -951,8 +833,8 @@ scenario_not_ready_without_dialog() {
     assert_contains "J1 die message says no dialog was shown" "$out" "showed no folder-trust dialog"
 }
 
-# L0..L6 — the lifecycle move: In Progress after the brief
-# hand-off, resolved by target status, read back, loud on failure.
+# L0..L6 — the In Progress move after hand-off: resolved by target status,
+# read back, loud on failure.
 
 EMPTY_LIST='{"id":"cli:worktree:list","result":{"worktrees":[]}}'
 
@@ -961,9 +843,7 @@ jira_posts() {
     call_count "$1/jira.log" "--yes write POST /issue/$2/transitions"
 }
 
-# L0 — happy path: exactly one POST, carrying the transition resolved from
-# the recorded fixture (21), logged AFTER `agent prompt`, and the stub's
-# status reads back as In Progress.
+# L0 — one POST, transition 21 from the fixture, logged AFTER `agent prompt`.
 scenario_lifecycle_after_prompt() {
     local repo log order out rc
     repo=$(make_repo) || { echo "FAIL: L0 setup (make_repo)" >&2; FAIL=1; return; }
@@ -1026,8 +906,7 @@ scenario_lifecycle_already_in_progress() {
 }
 
 # L3 — the POST is rejected with the recorded HTTP 400 body: exit 1, the
-# ticket named, the tracker's own message surfaced, the agent left running
-# (one prompt, no teardown call of any kind), status unchanged.
+# tracker's own message surfaced, and the agent LEFT RUNNING (no teardown).
 scenario_lifecycle_post_rejected() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: L3 setup (make_repo)" >&2; FAIL=1; return; }
@@ -1062,8 +941,7 @@ scenario_lifecycle_readback_stuck() {
     assert_contains "L4 message says the read-back disagrees" "$out" "reads back as 'To Do'"
 }
 
-# L5 — no --jira-progress-status and no env: refused before any herdr or
-# jira call.
+# L5 — no --jira-progress-status and no env: refused before any call.
 scenario_lifecycle_missing_status_flag() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: L5 setup (make_repo)" >&2; FAIL=1; return; }
@@ -1096,8 +974,7 @@ scenario_lifecycle_no_matching_transition() {
     assert_eq "L6 transition POSTs" "0" "$(jira_posts "$repo" PROJ-996)"
 }
 
-# B0 — dry-run prints the whole brief: four headings, ticket key, timebox,
-# every --forbidden line, tracker line with the jira-api path and project.
+# B0 — dry-run prints the whole brief, headings and every substitution.
 scenario_brief_dry_run() {
     local repo out rc
     repo=$(make_repo) || { echo "FAIL: B0 setup" >&2; FAIL=1; return; }
@@ -1162,8 +1039,7 @@ scenario_brief_missing_field() {
     done
 }
 
-# B5 — with no flags, [dispatch.brief] timebox/forbidden/cloud_id and
-# [tracker.jira] project come from the repo's .night-watchman/config.toml.
+# B5 — with no flags, the brief's values come from the repo's config.toml.
 scenario_brief_config_defaults() {
     local repo out rc
     repo=$(make_repo) || { echo "FAIL: B5 setup" >&2; FAIL=1; return; }
@@ -1190,8 +1066,6 @@ scenario_brief_status_hint() {
     assert_contains "B4 names STATUS id" "$out" "STATUS id of In Progress"
     assert_contains "B4 warns off transition id" "$out" "not a transition id"
 }
-
-# ------------------------------------------------------------------------ run
 
 scenario_happy_default_model
 scenario_happy_model_opus

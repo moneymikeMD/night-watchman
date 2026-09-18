@@ -7,27 +7,6 @@
 # throwaway values, and the stub answers from fixtures/ (responses recorded
 # live, then de-identified — see each file's header).
 #
-# What is asserted:
-#   1  --dry-run / NW_DRY_RUN=1 reach neither curl nor the secrets
-#      provider, for every verb and every client subcommand.
-#   2  markdown_to_storage: headings, bullets, bold, code spans, links,
-#      and fenced code passed through verbatim (no entity escaping).
-#   3  publish-brief, project page missing: looks it up, creates it under
-#      the root page, then creates the brief under the NEW page; prints
-#      the brief's tiny-link URL.
-#   4  publish-brief, brief title already present: writes nothing, prints
-#      the existing page's URL (safe to run twice).
-#   5  children lookups follow _links.next across pages.
-#   6  post-headline: `default` and a mapped epic key resolve to their
-#      feeds; an unmapped key and a bare short key as an ARI are refused
-#      before any request; the summary is ADF and never exceeds 236
-#      characters, with the URL kept whole.
-#   7  a rejected post (success:false) exits 1 with the server's message;
-#      a protocol-level GraphQL error exits 1.
-#   8  Confluence 404 exits 1 and warns that a bad credential looks the
-#      same; the credential reaches curl only on stdin, never argv.
-#   9  the provider refuses an unknown verb naming the contract.
-#
 # Usage: providers/publish/atlassian/selftest.sh
 
 set -uo pipefail
@@ -64,7 +43,7 @@ mkdir -p "$WORK/bin"
 
 strip() { sed -n '/^---$/,$p' "$1" | tail -n +2; }
 
-# ---- fixtures (recorded responses, bodies only) ---------------------------
+# fixtures (recorded responses, bodies only)
 strip "$FIX/confluence/children.get.json"      > "$WORK/children.empty.json"
 strip "$FIX/confluence/create.success.json"    > "$WORK/create.json"
 strip "$FIX/confluence/error.404-notfound.json" > "$WORK/404.json"
@@ -75,18 +54,16 @@ strip "$FIX/townsquare/update.error.invalid-ari.json" > "$WORK/update.ari.json"
 for f in "$WORK"/*.json; do
     jq -e . >/dev/null 2>&1 < "$f" || { echo "fixture is not valid JSON: $f" >&2; exit 2; }
 done
-# A children listing that contains a page is derived from the recorded
-# create response (same page object shape the listing returns), not typed.
+# Derived from the recorded create response (same page object shape the
+# listing returns), never hand-typed.
 jq -c '{results: [ {id, status, title, spaceId} ], _links: ._links}' "$WORK/create.json" > "$WORK/children.one.json"
 CREATED_ID=$(jq -r .id "$WORK/create.json")
 CREATED_TITLE=$(jq -r .title "$WORK/create.json")
 CREATED_TINY=$(jq -r ._links.tinyui "$WORK/create.json")
 
-# ---- stub curl -------------------------------------------------------------
-# Logs argv and stdin; routes on "METHOD PATH-SUBSTRING" through
-# $STUB_ROUTES ("METHOD|substring|file|code;..."), first match wins; a
-# route may be consumed once by suffixing its file with '!' (so the same
-# path can answer differently on the second call).
+# Stub curl. Logs argv and stdin; routes on "METHOD PATH-SUBSTRING" through
+# $STUB_ROUTES ("METHOD|substring|file|code;..."), first match wins. Suffix a
+# route's file with '!' to consume it once, so a path can answer twice.
 cat > "$WORK/bin/curl" <<'CURLEOF'
 #!/bin/bash
 printf '%s\n' "$*" >> "$STUB_ARGV"
@@ -160,9 +137,8 @@ reqs() { wc -l < "$WORK/req" | tr -d ' '; }
 BRIEF="$WORK/brief.md"
 printf '## Recent Wins\n\n- 🚀 shipped **publish**\n' > "$BRIEF"
 
-# ---- 1. dry run reaches nothing -------------------------------------------
-# NW_SECRETS=op with no op on PATH: a dry run that tried to read a
-# credential would fail, so passing proves the secrets provider was skipped.
+# NW_SECRETS=op with no op on PATH: a dry run that tried to read a credential
+# would fail, so passing proves the secrets provider was skipped.
 dry() {
     : > "$WORK/req"
     OUT=$( env PATH="$WORK/bin:$PATH" NW_CONFIG="$CFG" NW_ATLASSIAN_HOST=127.0.0.1 \
@@ -193,7 +169,7 @@ for sub in whoami projects; do
     eq "dry townsquare.sh $sub exits 0 with no request" "0:0" "$RC:$(reqs)"
 done
 
-# ---- 2. markdown conversion (asserted on the dry-run request body) --------
+# markdown conversion, asserted on the dry-run request body
 MD="$WORK/md.md"
 cat > "$MD" <<'EOF'
 # Title
@@ -217,7 +193,6 @@ dry "$CONF" --markdown create --space 1 --parent 2 --title T - < "$QMD"
 QBODY=$(printf '%s\n' "$ERR" | sed -n 's/^would issue body: //p' | jq -r .body.value)
 contains "md: link URL with a double quote stays inside the attribute" 'href="https://h/?q=&quot;1&quot;"' "$QBODY"
 
-# ---- 3. publish-brief creates the project page, then the brief -----------
 run env STUB_ROUTES="GET|/pages/9001/children|$WORK/children.empty.json|200;POST|/wiki/api/v2/pages|$WORK/create.json!|200;GET|/pages/$CREATED_ID/children|$WORK/children.empty.json|200;POST|/wiki/api/v2/pages|$WORK/create.json|200" \
     "$PROVIDER" publish-brief "2026-09-14 demo Update" "$BRIEF"
 eq "publish-brief (new project page) exits 0" "0" "$RC"
@@ -229,7 +204,6 @@ eq "the project page is created under the root page" "9001:demo Project Updates"
 eq "the brief is created under the new project page" "$CREATED_ID:2026-09-14 demo Update" "$(printf '%s' "$REQ4" | jq -r '"\(.parentId):\(.title)"')"
 contains "the brief body is storage format" "<h2>Recent Wins</h2>" "$(printf '%s' "$REQ4" | jq -r .body.value)"
 
-# ---- 4. an existing brief is never overwritten ----------------------------
 PROJ_LIST="$WORK/children.proj.json"
 jq -c --arg t "demo Project Updates" '.results[0].title = $t | .results[0].id = "777"' "$WORK/children.one.json" > "$PROJ_LIST"
 BRIEF_LIST="$WORK/children.brief.json"
@@ -241,7 +215,6 @@ eq "publish-brief (brief exists) issues only the two lookups" "GET GET" "$(cut -
 eq "publish-brief (brief exists) prints the existing page's URL" "https://127.0.0.1/wiki/pages/viewpage.action?pageId=888" "$OUT"
 contains "publish-brief says it did not overwrite" "not overwriting" "$ERR"
 
-# ---- 5. pagination --------------------------------------------------------
 PAGE1="$WORK/children.page1.json"
 jq -c '.results = [] | ._links.next = "/wiki/api/v2/pages/5/children?cursor=abc"' "$WORK/children.one.json" > "$PAGE1"
 run env STUB_ROUTES="GET|cursor=abc|$WORK/children.one.json|200;GET|/pages/5/children|$PAGE1|200" \
@@ -249,7 +222,6 @@ run env STUB_ROUTES="GET|cursor=abc|$WORK/children.one.json|200;GET|/pages/5/chi
 eq "find-child follows _links.next to the second page" "0:$CREATED_ID" "$RC:$OUT"
 eq "find-child issued two requests" "2" "$(reqs)"
 
-# ---- 6. post-headline ------------------------------------------------------
 URL="https://127.0.0.1/wiki/x/ABCD"
 run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/update.ok.json|200" \
     "$PROVIDER" post-headline PROJ-12 "Shipped publishing" "$URL"
@@ -276,7 +248,6 @@ eq "a short key where an ARI belongs is refused before any request" "1:0" "$RC:$
 run env STUB_ROUTES="" "$PROVIDER" post-headline default "t" "http://insecure.test/x"
 eq "a non-https url is refused" "1:0" "$RC:$(reqs)"
 
-# ---- 7. rejected posts ------------------------------------------------------
 run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/update.adf.json|200" \
     "$PROVIDER" post-headline default "t" "$URL"
 eq "success:false exits 1" "1" "$RC"
@@ -286,7 +257,6 @@ run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/update.ari.json|200" \
 eq "a top-level GraphQL error exits 1" "1" "$RC"
 contains "the GraphQL error body is shown" "InvalidARI" "$ERR"
 
-# ---- 8. 404 and credential handling ----------------------------------------
 run env STUB_ROUTES="GET|/wiki/rest/api/user/current|$WORK/404.json|404" "$CONF" whoami
 eq "a Confluence 404 exits 1" "1" "$RC"
 contains "the 404 warns a bad credential looks the same" "INVALID credential" "$ERR"
@@ -295,7 +265,6 @@ eq "whoami prints the account" "Account:    Fixture Account" "$(printf '%s\n' "$
 not_contains "the token never reaches curl's argv" "STUB-TOKEN-XYZ" "$(cat "$WORK/argv")"
 contains "the token reaches curl on stdin" "stub-user:STUB-TOKEN-XYZ" "$(cat "$WORK/stdin")"
 
-# ---- 8b. the shared host resolver ------------------------------------------
 run env STUB_ROUTES="" "$CONF" print-host
 eq "print-host prints the resolved host with no request" "0:127.0.0.1:0" "$RC:$OUT:$(reqs)"
 run env NW_ATLASSIAN_HOST= STUB_ROUTES="" "$CONF" print-host
@@ -303,7 +272,6 @@ eq "print-host refuses a set-but-empty host override" "1" "$RC"
 run env NW_ATLASSIAN_HOST=evil.test/x STUB_ROUTES="" "$CONF" print-host
 eq "print-host refuses a host that is not a bare hostname" "1" "$RC"
 
-# ---- 9. contract ------------------------------------------------------------
 run env STUB_ROUTES="" "$PROVIDER" update-page x
 eq "an unknown verb exits 1" "1" "$RC"
 contains "the refusal names the contract" "publish-brief, post-headline" "$ERR"

@@ -1,10 +1,8 @@
 #!/bin/bash
 #
 # kit.sh — the minimal shared shell helpers night-watchman's own scripts
-# (known-issue.sh, land-branch.sh) source. Deliberately small: a
-# credential-store or host-conventions library belongs in a consuming
-# project, not in this plugin's dependency-free core. bash 3.2 compatible
-# (no associative arrays, no `${var^^}`, no `readarray`/`mapfile`).
+# source. A credential-store or host-conventions library belongs in a
+# consuming project, not in this plugin's dependency-free core.
 #
 # Usage: source this file, then call die/warn/need/show_help/tmpfile.
 
@@ -22,9 +20,8 @@ need() {
     done
 }
 
-# show_help — print the calling script's own leading '#'-comment header
-# (everything from the first line after the shebang up to the first
-# non-comment, non-blank line) with the leading '# ' stripped, then exit 0.
+# show_help — print the calling script's leading '#'-comment header (shebang to
+# the first non-comment, non-blank line) with '# ' stripped, then exit 0.
 show_help() {
     awk '
         NR == 1 && /^#!/ { next }
@@ -49,9 +46,7 @@ known_command() {
 _KIT_TMPFILES=""
 _kit_cleanup() {
     [ -n "$_KIT_TMPFILES" ] || return 0
-    # shellcheck disable=SC2086  # word splitting is the point: a
-    # newline-joined list of paths, none of which are expected to contain
-    # whitespace.
+    # shellcheck disable=SC2086  # deliberate word splitting: a newline-joined path list
     rm -f $_KIT_TMPFILES 2>/dev/null || true
 }
 tmpfile() {

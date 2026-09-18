@@ -1,83 +1,53 @@
 #!/bin/bash
 #
-# Commit already-STAGED work sitting in Herdr worktrees whose `git commit`
-# never happened — most often because the worktree's commit-signing setup
-# (commit.gpgsign plus whatever signing program is configured) was not
-# available at the moment an agent tried to commit.
-#
-# Companion to a land script, not a replacement for one: this script's only
-# job is to turn staged changes into a commit, in each worktree, using that
-# worktree's own .commit-msg.txt as the message. It never merges, pushes,
-# completes a ticket, or removes a worktree — land separately, per branch,
-# once you are ready. It also never deletes .commit-msg.txt, so a failed
-# run leaves everything exactly as found and can be re-run.
-#
-# A worktree is SKIPPED, never committed, for any of these reasons (shown in
-# the WHY column — do not assume any particular count or set of worktrees is
-# "the exception"; that state changes as worktrees are created and landed):
-#   - it is the repository's primary worktree (the owner's own main
-#     checkout, never a Herdr agent worktree)
-#   - it is in the middle of a merge, cherry-pick, revert, or rebase
-#     (MERGE_HEAD/CHERRY_PICK_HEAD/REVERT_HEAD present, or rebase-merge/
-#     rebase-apply present in its git-dir) — committing staged content there
-#     would silently fold it into that unrelated operation
-#   - its HEAD is detached — not a named Herdr branch worktree, and a commit
-#     made there is one `git checkout`/`rebase --abort` away from becoming
-#     unreachable
-#   - nothing is staged
-#   - no .commit-msg.txt exists at its root
-#   - the only staged path is .commit-msg.txt itself (nothing else to commit)
-#
-# WOULD-FAIL (--dry-run only): a whitespace-only .commit-msg.txt. `git
-# commit` refuses an empty message unconditionally, so --dry-run predicts
-# that outcome rather than claiming WOULD-COMMIT for a run that is
-# guaranteed to fail once it is not a dry run.
-#
-# Hard requirement: this script NEVER passes --no-gpg-sign, and NEVER reads
-# or writes commit.gpgsign, gpg.format, gpg.ssh.program, or any other
-# signing configuration. A commit that fails to sign is reported FAILED and
-# the script moves on to the next worktree. Signing policy belongs to the
-# owner; a script that quietly disabled it to make itself succeed would be
-# worse than no script.
-#
-# No pre-flight signing probe: whatever tool backs commit signing on a
-# given host, a probe of it is not reliably correlated with whether `git
-# commit` itself will succeed — the two can disagree in either direction.
-# Each worktree's real `git commit` is the only thing that actually knows,
-# and its failure is reported per-row below.
+# commit-staged-worktrees.sh — commit already-STAGED work sitting in Herdr
+# worktrees whose `git commit` never happened, most often because the
+# worktree's commit-signing setup was unavailable at the time. Uses each
+# worktree's own .commit-msg.txt as the message. Never merges, pushes,
+# completes a ticket, removes a worktree, or deletes .commit-msg.txt, so a
+# failed run leaves everything as found and can be re-run.
 #
 # Usage:
 #   commit-staged-worktrees.sh [--dry-run]
 #   commit-staged-worktrees.sh --help
 #
-# --dry-run discovers every worktree, checks each one for staged changes and
-# a .commit-msg.txt, and prints what WOULD be committed and where: subject
-# line, staged file count, current HEAD, and (below the table) the full
-# staged file list per worktree — so an outlier is visible before anything
-# is committed. No `git commit` runs on this path.
+# --dry-run prints what WOULD be committed and where — subject line, staged
+# file count, current HEAD, and the full staged file list per worktree — and
+# runs no `git commit`. Idempotent: a worktree with nothing staged is
+# SKIPPED, never committed empty. Never prints a secret, and never prints a
+# commit message beyond its first line.
 #
-# Idempotent: a worktree with nothing staged is SKIPPED, never committed
-# empty, so running this twice in a row is harmless — the second run just
-# reports everything already committed as SKIPPED (nothing staged).
+# A worktree is SKIPPED, never committed, for any of these (shown in the WHY
+# column):
+#   - it is the repository's primary worktree
+#   - a merge, cherry-pick, revert, or rebase is in progress
+#     (MERGE_HEAD/CHERRY_PICK_HEAD/REVERT_HEAD, or rebase-merge/rebase-apply
+#     in its git-dir) — committing there would fold into that operation
+#   - its HEAD is detached
+#   - nothing is staged
+#   - no .commit-msg.txt exists at its root
+#   - the only staged path is .commit-msg.txt itself
 #
-# Never prints a secret, and never prints a commit message body in full —
-# only its first line (the subject), which is enough for the table below.
+# WOULD-FAIL (--dry-run only): a whitespace-only .commit-msg.txt. `git
+# commit` refuses an empty message unconditionally, so that is predicted
+# rather than promised as WOULD-COMMIT.
+#
+# This script NEVER passes --no-gpg-sign, and NEVER reads or writes
+# commit.gpgsign, gpg.format, gpg.ssh.program, or any other signing
+# configuration. A commit that fails to sign is reported FAILED and the run
+# moves on to the next worktree. There is no pre-flight signing probe: a
+# probe is not reliably correlated with whether `git commit` will succeed.
 #
 # Exit codes:
 #   0   every worktree that could be evaluated was: some may still show
 #       FAILED or SKIPPED — read the table, this is not "all committed"
 #   1   at least one worktree definitively FAILED (a `git commit` that ran
-#       and failed for a reason that says something is actually wrong there
-#       — most often a signing error)
-#   2   at least one worktree could not even be evaluated (e.g. `git diff
-#       --cached` itself failed, its path had vanished since 'git worktree
-#       list' reported it, or `git commit` failed only because a concurrent
-#       process — a live Herdr agent in that worktree — held index.lock) —
-#       worse news than a known FAILED, so it takes priority when both
-#       appear; something about that worktree is unknown rather than
-#       known-bad
-#   (also 1: could not even start — not run from inside a git checkout, or
-#   `git` missing from PATH)
+#       and failed, most often a signing error), or the run could not start
+#       (not inside a git checkout, or `git` missing from PATH)
+#   2   at least one worktree could not even be evaluated (`git diff
+#       --cached` failed, its path had vanished since `git worktree list`
+#       reported it, or a concurrent process held index.lock) — takes
+#       priority over 1, because unknown is worse news than known-bad
 #
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -90,12 +60,8 @@ table() {
 }
 
 # pipe_ok — swallow a pipeline's exit status so an explicit check can report
-# the failure instead of `set -e` killing the script first. Use as:
-#     something | grep x > "$f" || pipe_ok
-#     [ -s "$f" ] || die "meaningful message"
+# the failure instead of `set -e` killing the script first.
 pipe_ok() { return 0; }
-
-# --------------------------------------------------------------------- parse
 
 DRY_RUN=0
 case "${1:-}" in
@@ -111,12 +77,8 @@ need git
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || die "not inside a git repository"
 cd "$REPO"
 
-# --------------------------------------------------------------- discovery
-#
-# `git worktree list --porcelain` from the repo root, never a hardcoded
-# worktree-directory glob — that layout is the dispatch tool's choice, not
-# something this script should assume.
-
+# `git worktree list --porcelain`, never a hardcoded worktree-directory glob:
+# that layout is the dispatch tool's choice, not this script's to assume.
 WT_PORCELAIN=$(git worktree list --porcelain 2>&1) || die "'git worktree list' failed: $WT_PORCELAIN"
 
 WT_LIST=$(tmpfile) || die "could not create temp file"
@@ -133,20 +95,13 @@ printf '%s\n' "$WT_PORCELAIN" | awk '
 ' > "$WT_LIST" || pipe_ok
 [ -s "$WT_LIST" ] || die "'git worktree list --porcelain' produced no worktrees to parse — cannot continue"
 
-# `git worktree list` always lists the repository's primary worktree first —
-# that is a documented property of the porcelain format, not an assumption
-# about $REPO (the toplevel of *this checkout*, which is a linked worktree
-# when this script is invoked from one). Read it from the same parse the
-# per-worktree loop below uses, so both agree on what "primary" means.
+# The porcelain format documents the primary worktree as the FIRST entry, so
+# it is read from here, never assumed to be $REPO (itself often a linked one).
 PRIMARY_WT=$(head -n1 "$WT_LIST" | cut -f1)
 [ -n "$PRIMARY_WT" ] || die "could not determine the primary worktree from 'git worktree list --porcelain'"
 
-# --------------------------------------------------------------- per-worktree
-#
-# Fallible, prints nothing on failure, returns:
-#   0  has staged changes (STAGED_COUNT and STAGED_LIST set)
-#   1  nothing staged
-#   2  could not evaluate (worktree missing/corrupt, git error)
+# staged_check <path> — 0 with STAGED_COUNT/STAGED_LIST set, 1 if nothing is
+# staged, 2 if it could not be evaluated. Prints nothing on failure.
 STAGED_COUNT=0
 STAGED_LIST=""
 staged_check() {
@@ -162,11 +117,9 @@ staged_check() {
     return 1
 }
 
-# in_special_state <path> — 0 and SPECIAL_STATE_WHY set if a merge,
-# cherry-pick, revert, or rebase is in progress in that worktree's own
-# git-dir (each linked worktree has its own; a shared common dir would give
-# a false positive from an unrelated worktree's in-progress operation).
-# 1 if clean, 2 if the git-dir itself could not be resolved.
+# in_special_state <path> — 0 with SPECIAL_STATE_WHY set if a merge, cherry-pick,
+# revert or rebase is live in that worktree's OWN git-dir (the shared common dir
+# would false-positive on a sibling's); 1 if clean, 2 if unresolvable.
 SPECIAL_STATE_WHY=""
 in_special_state() {
     local path="$1" gitdir
@@ -190,8 +143,8 @@ in_special_state() {
     return 1
 }
 
-# field_or_dash <value> — a blank column shifts every later column left
-# under `column -t`. Applied to every field before add_row.
+# field_or_dash <value> — a blank column shifts every later one left under
+# `column -t`, so every field goes through this before add_row.
 field_or_dash() {
     local stripped
     stripped=$(printf '%s' "$1" | tr -d '[:space:]')
@@ -216,17 +169,11 @@ while IFS="$(printf '\t')" read -r path branch; do
     [ -n "$path" ] || continue
     [ -n "$branch" ] || branch="(unknown)"
 
-    # Skip the primary worktree — only linked worktrees hold the Herdr agent
-    # work this script exists to commit. Compared against the porcelain
-    # listing's own first entry, not against $REPO (see PRIMARY_WT above).
     [ "$path" = "$PRIMARY_WT" ] && continue
 
     if [ ! -d "$path" ]; then
-        # Not known-bad: 'git worktree list' reported this path a moment
-        # ago; a Herdr agent process removing/relocating its own worktree
-        # concurrently is exactly the live-worktree condition this script is
-        # meant to run against, and nothing here says the *content* was ever
-        # in trouble. UNKNOWN, not FAILED.
+        # A concurrent agent removing its own worktree is the live condition
+        # this script runs against, so the path vanishing is UNKNOWN, not FAILED.
         add_row "$branch" "UNKNOWN" "-" "-" "worktree path '$path' does not exist — could not evaluate"
         HAD_UNKNOWN=1
         continue
@@ -260,18 +207,12 @@ while IFS="$(printf '\t')" read -r path branch; do
     fi
 
     SUBJECT=$(head -n1 "$MSG_FILE" 2>/dev/null) || SUBJECT="(could not read .commit-msg.txt)"
-    # A whitespace-only first line is blank, not present: `[ -n ]` alone
-    # passes "   " straight through, so the guard has to strip before it
-    # tests, not test the raw bytes.
+    # `[ -n ]` passes "   " through, so strip before testing, not the raw bytes.
     SUBJECT_STRIPPED=$(printf '%s' "$SUBJECT" | tr -d '[:space:]')
     [ -n "$SUBJECT_STRIPPED" ] || SUBJECT="(empty .commit-msg.txt)"
 
-    # If .commit-msg.txt is itself the only staged path, the unstage below
-    # (needed so the message file never becomes a tracked file) would leave
-    # nothing staged at all — `git commit` then fails with no useful
-    # diagnosis. Recognize it here, before either dry-run or the real commit
-    # attempt, and SKIP: there is genuinely nothing of the caller's to
-    # commit, in a worktree already reported clean otherwise.
+    # If .commit-msg.txt is the only staged path, the unstage below would empty
+    # the index and `git commit` would fail undiagnosably — so SKIP first.
     NON_MSG_STAGED=$(printf '%s\n' "$STAGED_LIST" | grep -vx '\.commit-msg\.txt' || true)
     if [ -z "$NON_MSG_STAGED" ]; then
         add_row "$branch" "SKIPPED" "$STAGED_COUNT" "$TIP" "only staged path is .commit-msg.txt itself — nothing to commit"
@@ -279,10 +220,6 @@ while IFS="$(printf '\t')" read -r path branch; do
     fi
 
     if [ "$DRY_RUN" = 1 ]; then
-        # A whitespace-only message is not a prediction of success: `git
-        # commit` refuses an empty message unconditionally, so promising
-        # WOULD-COMMIT here would contradict what the real run reports for
-        # the identical fixture.
         if [ -n "$SUBJECT_STRIPPED" ]; then
             add_row "$branch" "WOULD-COMMIT" "$STAGED_COUNT" "$TIP" "$SUBJECT"
         else
@@ -294,14 +231,9 @@ $(printf '%s\n' "$STAGED_LIST" | sed 's/^/    /')"
         continue
     fi
 
-    # If .commit-msg.txt itself ended up staged (e.g. a later `git add -A`
-    # in that worktree), unstage it before committing so it is never folded
-    # into the commit as a tracked file. Unstage only, never touch the
-    # working-tree copy — the file, and the commit it describes, must
-    # survive a failed or re-run invocation exactly as documented above. If
-    # the commit then fails for any reason, re-stage it so a failed run
-    # really does leave the index exactly as found, not permanently missing
-    # one file's staged state.
+    # Unstage .commit-msg.txt (never touching the working-tree copy) so it is
+    # not folded into the commit, and re-stage it if the commit then fails, so
+    # a failed run leaves the index exactly as found.
     UNSTAGED_MSG=0
     if printf '%s\n' "$STAGED_LIST" | grep -qx '\.commit-msg\.txt'; then
         git -C "$path" reset -q -- .commit-msg.txt 2>/dev/null || true
@@ -321,10 +253,8 @@ $(printf '%s\n' "$STAGED_LIST" | sed 's/^/    /')"
         [ -n "$FIRST_LINE" ] || FIRST_LINE="commit failed (no error output captured)"
         case "$COMMIT_ERR" in
             *index.lock*)
-                # Not known-bad: an index.lock left by a concurrent process
-                # (a live Herdr agent in this same worktree, the case this
-                # script is meant to run against) says the index could not
-                # be evaluated right now, not that anything here is wrong.
+                # A concurrent agent's index.lock means "not evaluable now",
+                # not "known-bad".
                 add_row "$branch" "UNKNOWN" "$STAGED_COUNT" "$TIP" "could not evaluate — $FIRST_LINE"
                 HAD_UNKNOWN=1
                 ;;
@@ -335,8 +265,6 @@ $(printf '%s\n' "$STAGED_LIST" | sed 's/^/    /')"
         esac
     fi
 done < "$WT_LIST"
-
-# ------------------------------------------------------------------- report
 
 echo
 if [ "$DRY_RUN" = 1 ]; then

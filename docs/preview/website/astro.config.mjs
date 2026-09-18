@@ -1,10 +1,8 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
-// Deployed to GitHub Pages by .github/workflows/website-deploy.yml, which
-// passes --site and --base from actions/configure-pages so this file
-// needs neither; a local build wants
-// `astro build --site https://<owner>.github.io --base /<repo>`.
+// The deploy workflow passes --site and --base from actions/configure-pages,
+// so a LOCAL build needs `astro build --site ... --base /<repo>` to match.
 export default defineConfig({
   integrations: [
     starlight({

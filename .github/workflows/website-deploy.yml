@@ -1,12 +1,8 @@
 name: Website Deploy
 
-# Builds the Astro Starlight docs site in docs/preview/website and deploys
-# it to GitHub Pages (Pages must be set to "GitHub Actions" as the source).
-# Runs on pushes to main that touch the site or this workflow, and on
-# demand. Merges the repo's original bun-based build with GitHub's Astro
-# Pages sample: bun does the install/build, actions/configure-pages
-# supplies --site and --base so the same config works on a project page
-# (https://<owner>.github.io/<repo>/) or a custom domain.
+# Builds docs/preview/website and deploys it to GitHub Pages; Pages must be
+# set to "GitHub Actions" as its source. configure-pages supplies --site and
+# --base, so the same astro config works on a project page or a custom domain.
 
 on:
   workflow_dispatch:

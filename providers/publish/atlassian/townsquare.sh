@@ -5,10 +5,9 @@
 # kind's `atlassian` implementation (see providers/README.md). Home
 # Projects has no REST API; its schema calls itself "Townsquare".
 #
-# Ported from a production client and trimmed to what posting a
-# headline needs: whoami, list projects (to find a feed's id), post one
-# status update. Project creation, About/Learning/Risk/Decision edits and
-# the free-form mutate passthrough are not shipped here.
+# Trimmed to what posting a headline needs: whoami, list projects (to find a
+# feed's id), post one status update. Project creation, About/Learning/Risk/
+# Decision edits and the free-form mutate passthrough are not shipped.
 #
 # Usage:
 #   townsquare.sh whoami
@@ -76,8 +75,8 @@ case "$1" in -h|--help|help) show_help ;; esac
 need curl jq column
 atl_resolve_host
 
-# api QUERY VARS — dies on transport failure, non-2xx, or top-level
-# GraphQL errors. Top-level only (redirect into a file).
+# api QUERY VARS — dies on transport failure, non-2xx, or top-level GraphQL
+# errors. Top-level only (redirect into a file), never inside $( ).
 api() {
     local query="$1" vars="$2" out code rc=0 bodyfile
     atl_load_credentials

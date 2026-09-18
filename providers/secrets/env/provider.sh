@@ -1,15 +1,13 @@
 #!/bin/bash
 #
-# providers/secrets/env/provider.sh — secrets provider backed by
-# environment variables. A stranger with no 1Password access must still be
-# able to run this repo's selftests and a first session; this is that
-# path.
+# providers/secrets/env/provider.sh — secrets provider backed by environment
+# variables, so a stranger with no 1Password access can still run this repo's
+# selftests and a first session.
 #
 # verb: read REF
 #
-# REF (a dotted lowercase name, e.g. `jira.token`) maps to an environment
-# variable name: `NW_` + REF with `.` -> `_` and every letter upper-cased.
-# `jira.token` -> `NW_JIRA_TOKEN`.
+# REF (a dotted lowercase name) maps to `NW_` + REF with `.` -> `_`, upper-
+# cased: `jira.token` -> `NW_JIRA_TOKEN`.
 #
 # Never prints the secret value anywhere but stdout: not to stderr, not in
 # an error message, not logged.

@@ -63,7 +63,6 @@ assert_not_contains() {
     esac
 }
 
-# ---------------------------------------------------------------- fixture
 
 build_fixture() {
     local root="$1"
@@ -138,7 +137,6 @@ assert_contains "oracle: script-analytics.py itself flags oneoff-widget.sh as re
     "$ORACLE_TSV" "$(printf 'scripts/oneoff-widget.sh\t2\t2\t2\t0')"
 assert_contains "oracle: flag column ends in retire?" "$ORACLE_TSV" "retire?"
 
-# ------------------------------------------------------------- dry-run
 
 LAND_STUB="$ROOT/land-branch-stub-fail.sh"
 cat > "$LAND_STUB" <<'EOS'
@@ -172,7 +170,6 @@ assert_not_contains "dry-run: docs/scripts.md has no new Retired entry yet" \
 assert_contains "dry-run: nobody-cares.md content is untouched" \
     "$(cat "$REPO/agents/nobody-cares.md")" "never mentions oneoff-widget.sh"
 
-# ---------------------------------------------------------- no candidates
 
 EMPTY_EVENTS="$ROOT/empty-events.jsonl"
 : > "$EMPTY_EVENTS"
@@ -180,7 +177,6 @@ NONE_OUT="$(cd "$REPO" && SCRIPT_ANALYTICS_PY="$SCRIPT_ANALYTICS" SCRIPTS_MD="$R
     "$RETIRE_SH" --events "$EMPTY_EVENTS" --dry-run)"
 assert_contains "no events -> no candidates, reported plainly" "$NONE_OUT" "no retire? candidates"
 
-# ------------------------------------------------------------- keep refused
 
 KEEP_ROOT="$ROOT/keep"
 KEEP_REPO="$(build_fixture "$KEEP_ROOT")"
@@ -199,7 +195,6 @@ KEEP_OUT="$(cd "$KEEP_REPO" && SCRIPT_ANALYTICS_PY="$SCRIPT_ANALYTICS" SCRIPTS_M
 assert_contains "a 'keep'-flagged script is never listed as a candidate" "$KEEP_OUT" "no retire? candidates"
 assert_not_contains "a 'keep'-flagged script's file is never named as a candidate header" "$KEEP_OUT" "oneoff-widget.sh (flag: retire?)"
 
-# --------------------------------------------------------------------- --yes
 
 YES_ROOT="$ROOT/yes"
 YES_REPO="$(build_fixture "$YES_ROOT")"
@@ -231,7 +226,6 @@ assert_contains "--yes: docs/scripts.md gained a Retired entry" \
 assert_contains "--yes: commit landed on the retire-<name> branch" \
     "$(git -C "$YES_REPO" log -1 --format=%s "retire-oneoff-widget")" "retire oneoff-widget.sh"
 
-# --------------------------------------------------------------- --yes needs --ticket
 
 YES_NOTICKET_ROOT="$ROOT/yes-noticket"
 YES_NOTICKET_REPO="$(build_fixture "$YES_NOTICKET_ROOT")"
@@ -244,7 +238,6 @@ else
     fail "--yes without --ticket should have refused"
 fi
 
-# --------------------------------------------------------------------- summary
 
 echo ""
 echo "PASS=$PASS FAIL=$FAIL"

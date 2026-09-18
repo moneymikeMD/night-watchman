@@ -8,13 +8,9 @@
 # used here is a local stub script under this test's own scratch dir,
 # never a real tracker/jira implementation.
 #
-# name-the-oracle: the semver test computes each expected next version
-# with its own small, independently-written bump function (not by calling
-# release.sh twice and diffing), and the changelog-content tests grep for
-# a literal expected string rather than re-parsing CHANGELOG.md with the
-# same logic release.sh itself uses to generate it. Test 8 corrupts the
-# input on purpose so at least one assertion has been observed to fail:
-# a check only ever seen passing has not actually been tested.
+# name-the-oracle: the semver test uses its own independently-written bump
+# function and the changelog tests grep literal strings, never release.sh's
+# own logic. Test 8 corrupts the input so an assertion is observed failing.
 #
 # Usage: scripts/release-selftest.sh [path-to-release.sh]
 # Defaults to the sibling scripts/release.sh.
@@ -50,12 +46,10 @@ write_marketplace_json() {
     fi
 }
 
-# fresh_repo NAME [PLUGIN_VERSION] — a throwaway git repo under $WORK/NAME,
-# local-only config, release.sh + lib/kit.sh installed, plugin.json at
-# PLUGIN_VERSION (default 0.1.0), marketplace.json with NO .version key
-# (this repo's own real shape today), no CHANGELOG.md. Everything
-# committed, so the tree is clean the way release.sh's preflight requires.
-# Prints the repo path.
+# fresh_repo NAME [PLUGIN_VERSION] — a throwaway git repo under $WORK/NAME with
+# release.sh + lib/kit.sh installed, plugin.json at PLUGIN_VERSION (default
+# 0.1.0), marketplace.json with NO .version key, no CHANGELOG.md, and
+# everything committed so the preflight's clean-tree check passes.
 fresh_repo() {
     local d="$WORK/$1" version="${2:-0.1.0}"
     rm -rf "$d"

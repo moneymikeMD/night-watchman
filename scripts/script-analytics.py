@@ -252,37 +252,24 @@ TICKET_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*-\d+\b")
 LINT_CMD_RE = re.compile(r"shellcheck|ruff check|lint")
 SELFTEST_CMD_RE = re.compile(r"selftest")
 FAIL_RESULT_RE = re.compile(r"SELFTEST FAILED|FAIL|found issue|error:")
-# Do NOT add re.IGNORECASE to FAIL_RESULT_RE above — it is SHARED with the
-# pre-existing lint/selftest outcome check, and a case-insensitive "fail"
-# flips outcomes store-wide the moment the bare word "fail" appears
-# anywhere in ordinary successful output (this file's own selftest output
-# does, repeatedly — "failing runs", "fails loudly"). This regex instead
-# widens ONLY the "error:" alternative, case-insensitively, and ONLY for
-# invoke's own outcome detection (build_invoke_events) — "Error: raw needs
-# a METHOD..." (capital E) would otherwise be read as a `pass` there.
-# Never applied to the lint/selftest call site.
+# Do NOT add re.IGNORECASE to FAIL_RESULT_RE above: it is SHARED with the
+# lint/selftest outcome check, and a case-insensitive "fail" flips outcomes
+# store-wide the moment the bare word appears in ordinary successful output.
+# This widens only "error:", only for build_invoke_events.
 INVOKE_ERROR_CI_RE = re.compile(r"error:", re.IGNORECASE)
 FINDING_RE = re.compile(r"(?<![A-Za-z])(CRITICAL|HIGH|MEDIUM|LOW)(?![A-Za-z])")
-# Negation words must be WHOLE words immediately preceding the token: the
-# lookbehind before "no"/"zero"/"none" and the "0" digit-boundary check
-# both guard against a negation word being a mere SUBSTRING of the
-# preceding text — e.g. "techno HIGH severity finding here" must NOT be
-# treated as negated just because "techno" ends in "no".
+# Negation words must be WHOLE words immediately preceding the token, or
+# "techno HIGH severity finding" reads as negated because "techno" ends in "no".
 NEGATION_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:no|zero|none|0)\s*$", re.IGNORECASE
 )
-# A stated count immediately before the severity token — "2 HIGH" means
-# TWO findings, not one occurrence of the word "HIGH". The digit run must
-# NOT be glued to a preceding letter/digit/underscore — "line2 HIGH" must
-# NOT read "2" as a count, since it is part of the label "line2".
+# "2 HIGH" means TWO findings. The digit run must not be glued to a preceding
+# letter/digit/underscore, or "line2 HIGH" reads "2" as a count.
 COUNT_PREFIX_RE = re.compile(r"(?<![A-Za-z0-9_])(\d+)\s*$")
 
-# A finding-shaped line, for line_is_finding_shaped(): a prose mention
-# like "the HIGH finding" or "already sent ... HIGH" must NOT count.
-# PATH_TOKEN_RE matches a "path:line — SEVERITY — ..." shape (the token
-# appearing BEFORE the severity); LIST_SEVERITY_RE matches a bare
-# bullet/heading finding line (optional list marker/bold, then the
-# severity word at line start).
+# For line_is_finding_shaped(): a prose mention like "the HIGH finding" must
+# NOT count. PATH_TOKEN_RE matches "path:line — SEVERITY — ...";
+# LIST_SEVERITY_RE matches a bare bullet/heading finding line.
 PATH_TOKEN_RE = re.compile(r"[A-Za-z0-9_./-]+\.(?:sh|py|json|md)(?::\d+)?")
 LIST_SEVERITY_RE = re.compile(r"^\s*(?:[-*\d.]+\s*)?(?:\*\*)?(?:CRITICAL|HIGH|MEDIUM|LOW)\b")
 
@@ -290,26 +277,16 @@ REVIEW_CAUSE_RE = re.compile(r"review|finding|CRITICAL|HIGH|MEDIUM|reviewer", re
 LINT_CAUSE_RE = re.compile(r"lint|shellcheck|ruff", re.IGNORECASE)
 USAGE_CAUSE_RE = re.compile(r"selftest|failed|live run|usage|error", re.IGNORECASE)
 
-# owner_wait detection — see module docstring "owner_wait events" section
-# for the full design and why the heuristic path is UNVERIFIED. A list
-# constant, not inlined into find_owner_wait_starts() below, so a future
-# adopter with a different interactive tool (a different voice-input MCP
-# server, a second approval tool, etc) can extend the trigger set without
-# editing the detection logic. Each entry is (name_prefix, note), matched
-# by str.startswith — "AskUserQuestion" (an exact tool, no siblings) and
-# "mcp__spokenly__" (a whole MCP server's tool family, so a new spokenly
-# tool needs no change here) are handled identically by the same check.
+# owner_wait detection — see the module docstring for why the heuristic path
+# is UNVERIFIED. A constant so an adopter can extend the trigger set without
+# touching the logic; (name_prefix, note) entries, matched by str.startswith.
 OWNER_WAIT_TRIGGER_PREFIXES = (
     ("AskUserQuestion", "askuser"),
     ("mcp__spokenly__", "spokenly"),
 )
-# HUMAN_STEP_RE vocabulary: phrasing for "a genuinely human remainder"
-# (sign in, install an app, click in a console, act at a registrar) plus a
-# few equivalent hand-off phrases — not an arbitrary guess, but still a
-# textual heuristic with no fixture evidence behind it (no real transcript
-# has been observed to confirm this path fires correctly). UNVERIFIED,
-# best-effort only; see docstring — this marker is deliberately kept, not
-# resolved.
+# UNVERIFIED, best-effort: a textual heuristic with no fixture evidence behind
+# it — no real transcript has been observed to confirm this path fires. This
+# marker is deliberately kept, not resolved; see the module docstring.
 HUMAN_STEP_RE = re.compile(
     r"sign in|install (?:the |an )?app|click in a console|at a registrar|"
     r"waiting on you|over to you|your turn now|need you to|"
@@ -332,16 +309,10 @@ def zero_findings():
     return {"critical": 0, "high": 0, "medium": 0, "low": 0}
 
 
-# ---------------------------------------------------- credential-shape guard
-# `record --note` lands verbatim in a caller-owned events file: a note is
-# refused if it looks credential-shaped, by two generic signals — a long
-# opaque token, or a key=value pair whose key names a common secret word.
-# This list is this script's own (deliberately not shared with a
-# project-specific redaction helper this plugin does not ship) — a
-# consuming project with its own convention can extend SECRET_WORDS
-# below. LONG_TOKEN_RE is deliberately generic (any run of 24+ id-shaped
-# characters), since a bare pasted token carries no key name to match
-# against at all.
+# `record --note` lands verbatim in a caller-owned events file, so a note is
+# refused if it looks credential-shaped: a long opaque token, or a key=value
+# pair whose key names a common secret word. LONG_TOKEN_RE is deliberately
+# generic because a bare pasted token carries no key name to match against.
 LONG_TOKEN_RE = re.compile(r"[A-Za-z0-9_-]{24,}")
 KEYVALUE_RE = re.compile(r"([A-Za-z0-9_.-]+)\s*=\s*(\S+)")
 SECRET_WORDS = (
@@ -365,9 +336,8 @@ def note_is_credential_shaped(note):
     return False
 
 
-# ------------------------------------------------------- shared numerics
-# Thin adapters over claude-cost-scan.py's own helpers, so this script's
-# own timestamp/price/cost logic stays in exactly one place in the repo.
+# Thin adapters over claude-cost-scan.py's helpers, so timestamp/price/cost
+# logic stays in one place in the repo.
 def parse_iso(text, label):
     try:
         dt = CS.parse_timestamp(text)
@@ -397,7 +367,6 @@ def usd_cost(model, tok, prices, warned_models):
     return CS.turn_cost({"model": model, "tokens": tok}, prices, warned_models)
 
 
-# ------------------------------------------------------------- JSONL reads
 def read_jsonl_lines(path, warnings=None):
     """Yield (lineno, dict) for every line in path that parses as a JSON
     object. A line that fails to parse as JSON is skipped silently
@@ -451,7 +420,6 @@ def file_timespan(path, warnings):
     return first, last
 
 
-# -------------------------------------------------------------- turn fold
 def fold_turns(path, warnings):
     """Group "type":"assistant" lines by message.id (or requestId, or —
     failing both — the line itself). Each such line carries only ITS OWN
@@ -484,10 +452,8 @@ def fold_turns(path, warnings):
             continue
         usage = msg.get("usage")
         if usage is None:
-            # A content-block line with no usage at all is normal and
-            # silent — skipped BEFORE turn_id/content are even touched, so
-            # its content blocks do NOT contribute to tool-call/text
-            # detection either.
+            # Skipped BEFORE turn_id/content are touched, so these blocks do
+            # not contribute to tool-call/text detection either.
             continue
         if not isinstance(usage, dict):
             warnings.append("%s:%d: skipped — \"usage\" is not an object" % (path, lineno))
@@ -656,25 +622,14 @@ def sum_turns(folded_turns, prices, warned_models):
     return len(folded_turns), total_tokens, total_usd, model
 
 
-# Paths named constantly as the CONVENTION being followed, not as the
-# script under work: scripts/lib/kit.sh is routinely named in a brief
-# purely as "follow this convention" / "this is the reference shape"
-# prose. Excluded from the primary-script pool unless a candidate happens
-# to be the ONLY one named at all — see extract_scripts().
+# Paths named as the CONVENTION being followed, not the script under work.
+# Excluded from the primary-script pool unless the only one named at all.
 REFERENCE_SCRIPTS = frozenset({"scripts/lib/kit.sh"})
 
 
-# ---------------------------------------------------- script-path normalization
-# `author`/`lint`/`invoke`/etc events keep whatever path string a dispatch
-# prompt, a Bash command, or a `record --script` argument happened to use
-# at the time — a bare basename ("foo.sh"), or a stale subdirectory from
-# before a script moved ("scripts/foo.sh" when the file now lives at
-# scripts/api/foo.sh) — so the SAME script lands on two different rows in
-# `report --usage`'s per-script table, each carrying only a fraction of
-# its real invocation count. Fixed by resolving every script/scripts value
-# against the REAL scripts/ and hooks/ trees on disk, by basename, both
-# going forward (at extract/record time, below) and via a one-time-but-
-# rerunnable backfill of already-written events (cmd_backfill_script_paths).
+# Events keep whatever path string a prompt or command used, so the SAME
+# script lands on two rows in `report --usage`. Every value is resolved
+# against the real scripts/ and hooks/ trees by basename.
 def discover_repo_scripts():
     """Walk the real scripts/ and hooks/ trees (this repo's two script-bar
     directories, see SCRIPT_RE above) and return (by_basename,
@@ -703,14 +658,9 @@ def discover_repo_scripts():
 
 SCRIPT_BASENAME_INDEX, SCRIPT_CANONICAL_PATHS = discover_repo_scripts()
 
-# A selftest's own file — "*-selftest.sh" (the established convention) or
-# "*.selftest.sh" (a dot instead of a dash) — excluded from `report
-# --usage`'s row set: these show up as their own scripts, never invoked by
-# anyone but their own author. See build_usage_rows() for where this is
-# applied. Deliberately NOT extended to a blanket "must currently exist on
-# disk" filter — that would also drop a script that was genuinely deleted,
-# which is a different question ("is it still there") than "is it a
-# fixture" (this filter's actual job).
+# A selftest's own file is excluded from `report --usage`'s row set; applied
+# in build_usage_rows(). Deliberately NOT extended to a blanket "must exist on
+# disk" filter, which answers a different question than "is it a fixture".
 USAGE_SELFTEST_FILE_RE = re.compile(r"[-.]selftest\.(?:sh|py)$")
 
 
@@ -733,7 +683,6 @@ def normalize_script_path(path):
     return path
 
 
-# ------------------------------------------------------------ extraction
 def extract_scripts(prompt, description):
     """Return (primary_script, scripts_sorted). After excluding an
     invoked lint command, (1) a candidate named in the description wins
@@ -751,10 +700,8 @@ def extract_scripts(prompt, description):
     for m in SCRIPT_RE.findall(prompt):
         if m.endswith("lint.sh"):
             continue
-        # Normalized to its CURRENT repo-relative location before any
-        # dedup/ordering below, so a stale path named in a prompt (a
-        # script moved directories since) lands on the SAME row as every
-        # other event for that script, not a split-off duplicate.
+        # Normalized before any dedup/ordering below, so a stale path lands on
+        # the SAME row as every other event for that script.
         m = normalize_script_path(m)
         if m not in ordered_unique:
             ordered_unique.append(m)
@@ -891,40 +838,23 @@ def find_lint_selftest_calls(folded_turns):
     return out
 
 
-# A bare SCRIPT_RE.findall() over the WHOLE command string would count a
-# path as "invoked" no matter where it appeared — inside a `grep`/`wc -l`/
-# `find` argument, a heredoc body writing fixture JSON, or prose —
-# producing invoke events for scripts that were never run at all.
-# Detection is constrained to an EXECUTABLE POSITION: the start of a shell
-# segment (the command split on &&, ||, ; and | — a heuristic, not a real
-# shell parse, but sufficient since a path embedded in a heredoc body or a
-# quoted string never starts a segment this split produces), optionally
-# preceded by `./`, or immediately following one of a fixed short list of
-# interpreters (python3, python, bash, sh) as that interpreter's very
-# first argument. A path anywhere else in the segment — a grep/wc/find
-# target, a `-m module` argument before the path, prose — does not match
-# and is correctly never treated as a run.
+# Detection is constrained to an EXECUTABLE POSITION — the start of a shell
+# segment (split on &&, ||, ; and |), optionally preceded by `./`, or as an
+# interpreter's first argument. A bare findall() over the whole command would
+# count a grep/find target or a heredoc body as an invocation.
 SEGMENT_SPLIT_RE = re.compile(r"&&|\|\||[;|]")
-# A segment prefixed by a `VAR=val` assignment, `sudo`, or
-# `timeout <duration>` — e.g. "FOO=bar scripts/api/foo.sh ...", "sudo
-# scripts/host/create-user.sh ...", "timeout 30 scripts/api/bar.sh ..." —
-# is not in an "executable position" by a bare `(?:\./)?` check, so these
-# real invocations would otherwise be undercounted. INVOKE_PREFIX consumes
-# any number of such prefix tokens (in any order/combination — "sudo
-# timeout 30 FOO=bar ...") before the executable-position check proceeds.
+# Consumes any number of `VAR=val`, `sudo` and `timeout <duration>` prefix
+# tokens, in any order, before the executable-position check — without this
+# those real invocations are undercounted.
 INVOKE_PREFIX = r"(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S+|sudo|timeout\s+\S+)\s+)*"
 INVOKE_POSITION_RE = re.compile(
     r"^\s*" + INVOKE_PREFIX + r"(?:\./)?((?:scripts|hooks)/[A-Za-z0-9_./-]+\.(?:sh|py))\b"
     r"|^\s*" + INVOKE_PREFIX + r"(?:python3?|bash|sh)\s+((?:scripts|hooks)/[A-Za-z0-9_./-]+\.(?:sh|py))\b"
 )
 
-# SELFTEST_CMD_RE (a bare "selftest" substring, used above for detecting a
-# selftest RUN inside an author transcript) is too loose for marking an
-# invoke event's own `cause` — "git diff scripts/dev/x-selftest.sh &&
-# ./scripts/api/y.sh" mentions the word "selftest" but the segment
-# actually executed is y.sh, unrelated. This checks the shape of the
-# INVOKED PATH itself, not the raw command text, so only a call that
-# actually runs a *-selftest.sh/*-selftest.py is ever marked.
+# Checks the shape of the INVOKED PATH, not the raw command text:
+# SELFTEST_CMD_RE's bare substring would mark "git diff x-selftest.sh &&
+# ./y.sh" as a selftest run when the segment executed is y.sh.
 INVOKE_SELFTEST_PATH_RE = re.compile(r"-selftest\.(?:sh|py)$")
 
 
@@ -1008,11 +938,8 @@ def build_invoke_events(jsonl_path, session_id, agent_id, agent_type, warnings, 
         tok = turn_tokens(call_turn["usage"])
         call_tokens = sum(tok.values())
         call_usd = usd_cost(call_turn["model"], tok, prices, warned_models)
-        # cause reused as a selftest marker (see module docstring "invoke
-        # events" section) — a lint-shaped command is already excluded
-        # entirely above by find_script_invocations, so no matching "lint"
-        # marker is needed here. Checked against the INVOKED PATH, not the
-        # raw command text — see INVOKE_SELFTEST_PATH_RE above.
+        # cause reused as a selftest marker; a lint-shaped command is already
+        # excluded by find_script_invocations, so no "lint" marker is needed.
         cause = "selftest" if INVOKE_SELFTEST_PATH_RE.search(primary_script) else "-"
         events.append(make_event(
             ts=call_ts, script=primary_script, scripts=scripts_sorted,
@@ -1127,7 +1054,6 @@ def build_owner_wait_events(jsonl_path, session_id, agent_id, agent_type, warnin
     return events
 
 
-# ------------------------------------------------------------- discovery
 def discover_sessions(projects_dir):
     """Return a list of (slug, session_id, session_path) for every parent
     session transcript directly under <projects_dir>/<slug>/ (i.e. NOT
@@ -1234,7 +1160,6 @@ def load_meta(meta_path, warnings):
     return data
 
 
-# --------------------------------------------------------------- events
 def make_event(ts, script, scripts, event, cause, outcome, round_, session,
                 agent_id, agent_type, model, turns, tokens, usd, duration_s,
                 findings, ticket, source, key, note):
@@ -1322,7 +1247,6 @@ def next_round(round_state, existing_events, session_id, script):
     return round_state[key]
 
 
-# ------------------------------------------------------------- extract
 def process_subagent(slug, session_id, session_path, agent_id, jsonl_path,
                       meta_path, agent_type_map, prices, warned_models,
                       warnings, round_state, existing_events):
@@ -1333,24 +1257,16 @@ def process_subagent(slug, session_id, session_path, agent_id, jsonl_path,
     0 and write nothing for a non-script agent, not error)."""
     meta = load_meta(meta_path, warnings)
 
-    # invoke events are collected for EVERY subagent transcript, regardless
-    # of agentType — a deploy-operator or investigator subagent running a
-    # script is just as real a usage signal as one run from the main
-    # thread. This must happen before the agent_type_map early-return
-    # below, which is specific to the author/review event pipeline.
+    # Collected for EVERY subagent transcript regardless of agentType, so this
+    # must precede the agent_type_map early-return below.
     invoke_events = build_invoke_events(
         jsonl_path, session_id, agent_id, meta.get("agentType") if meta else None,
         warnings, prices, warned_models,
     )
 
-    # owner_wait events are collected for EVERY subagent transcript too,
-    # for the same reason invoke_events is — an owner answering a trigger
-    # prompt inside ANY subagent is a real owner-attended interval, not
-    # only ones inside author/reviewer transcripts. Must also happen
-    # before the agent_type_map early-return below. `ticket_hint` is None
-    # here (not yet known for a non-author/reviewer transcript);
-    # build_owner_wait_events() falls back to its own best-effort scan of
-    # the transcript's own text.
+    # Same reasoning as invoke_events above, so also before the early-return.
+    # `ticket_hint` is None here; build_owner_wait_events() falls back to its
+    # own best-effort scan of the transcript text.
     owner_wait_events = build_owner_wait_events(
         jsonl_path, session_id, agent_id, meta.get("agentType") if meta else None,
         warnings,
@@ -1385,11 +1301,8 @@ def process_subagent(slug, session_id, session_path, agent_id, jsonl_path,
     primary_script, scripts_sorted = extract_scripts(prompt, description)
     ticket = extract_ticket(prompt)
     if ticket and ticket != "-":
-        # A real ticket was found in the dispatch prompt — re-derive
-        # owner_wait_events with it, in place of the "-" fallback computed
-        # above before this attribution was known (a more accurate ticket
-        # beats the transcript-text scan build_owner_wait_events() falls
-        # back to when no hint is given).
+        # Re-derive owner_wait_events with the real ticket, replacing the "-"
+        # fallback computed above before this attribution was known.
         owner_wait_events = build_owner_wait_events(
             jsonl_path, session_id, agent_id, agent_type, warnings, ticket_hint=ticket,
         )
@@ -1400,17 +1313,10 @@ def process_subagent(slug, session_id, session_path, agent_id, jsonl_path,
 
     first_ts, last_ts = file_timespan(jsonl_path, warnings)
 
-    # Resume-as-rework: a SendMessage resume of the SAME author subagent
-    # appends to the SAME transcript rather than spawning a new one, so it
-    # never produced its own author event. Detected only for attributed
-    # author transcripts — an unattributed transcript (primary_script "-")
-    # never seeds/consumes rounds at all, same as the plain author case.
-    # Each resume prompt SLICES the transcript: the author event's own
-    # turns/tokens/usd cover only the window up to the FIRST resume (not
-    # the whole transcript), and each rework event covers the window from
-    # its own resume prompt to the next resume (or the end) — so the
-    # slices sum to the same total the whole-transcript figure would have
-    # given with no resumes.
+    # Resume-as-rework: a SendMessage resume appends to the SAME transcript
+    # rather than spawning a new one, so it never produced its own author
+    # event. Each resume SLICES the transcript, so the author event covers
+    # only up to the FIRST resume and the slices sum to the whole.
     resumes = []
     if event_kind == "author" and primary_script != "-":
         for resume_ts, resume_text in find_resume_prompts(jsonl_path, warnings):
@@ -1439,11 +1345,9 @@ def process_subagent(slug, session_id, session_path, agent_id, jsonl_path,
 
     round_ = "-"
     cause = "-"
-    # Unattributed events (primary_script "-") must never seed or consume
-    # a round counter: an unattributed author event preceding a real one
-    # in the same session would otherwise corrupt that real script's round
-    # numbering. round_state is keyed by (session, script), so simply
-    # never touching it for "-" is sufficient.
+    # Unattributed events (primary_script "-") must never seed or consume a
+    # round counter, or they corrupt a real script's round numbering in the
+    # same session. round_state is keyed by (session, script).
     if event_kind == "author" and primary_script != "-":
         round_ = next_round(round_state, existing_events, session_id, primary_script)
         if round_ > 1:
@@ -1506,47 +1410,14 @@ def process_subagent(slug, session_id, session_path, agent_id, jsonl_path,
     return events + invoke_events + owner_wait_events
 
 
-# -------------------------------------------------------- status-durations
-# Derives `status_duration` events straight from
-# the Jira changelog, not from a Claude Code transcript — the one command
-# in this file that talks to the tracker at all. Read-only: every call
-# goes through `jira-api.sh raw GET` (GET/HEAD-only, redacts before
-# printing). provider.sh (the tracker seam) has no changelog verb, so this
-# calls jira-api.sh directly, the same way jira-backfill.sh does outside
-# the seam's four verbs — see providers/tracker/jira/provider.sh.
-#
-# One event per status the ticket occupied: the ticket's FIRST status
-# (before any changelog entry exists) is timed from its own `created`
-# field (a second small `raw GET /issue/<TICKET>?fields=created` call) to
-# the first changelog entry's timestamp, using that entry's own
-# `fromString` as the status name — skipped, with a one-line stderr note,
-# when `created` is unavailable, never guessed; every later status runs
-# from its own changelog entry's timestamp to the next entry's timestamp,
-# or to `--until` (default now) for the ticket's current status. No new
-# EVENT_KEYS column: `note` carries the status name, `duration_s` the
-# seconds occupied, `source` is `"jira_changelog"` (not `"transcript"` or
-# `"manual"`), and `session`/`agent_id`/`agent_type`/`script`/`cause`/
-# `model` are all `"-"` placeholders. `outcome` is ALSO reused, but not as
-# a placeholder: it carries `"closed"` for a status whose end came from a
-# real transition (immutable once written) or `"open"` for the ticket's
-# still-current status (end = `--until`, inherently provisional). `key` is
-# `status_duration:<ticket>:<status>:<entry_ts>`, idempotent the same way
-# every other event's key is EXCEPT for an `"open"` row: re-running with a
-# later `--until`, or after the ticket has since transitioned, REWRITES
-# that row in place rather than skipping it as already-present (source
-# review round 2, HIGH — plain idempotence was silently freezing an open
-# status's duration at whatever `--until` was on first observation; see
-# reconcile_status_duration_events()). This command does not paginate the
-# changelog endpoint — a ticket with more history than one page is
-# truncated to its most recent page, surfaced as a stderr warning, never
-# silently guessed past.
+# Derives `status_duration` events from the Jira changelog, read-only via
+# `jira-api.sh raw GET`. One event per status occupied; an "open" row (end =
+# `--until`) is REWRITTEN in place on re-run, or its duration would freeze at
+# whatever `--until` was first observed.
 
-# Jira REST timestamps use a colon-less numeric UTC offset, e.g.
-# "2026-09-02T00:00:00.000+0000" — datetime.fromisoformat only accepts a
-# colon-less offset since Python 3.11, and this repo's declared floor is
-# 3.9 (source review round 2, HIGH). JIRA_TZ_OFFSET_RE finds a trailing
-# 4-digit offset with no colon and inserts one before handing off to
-# parse_iso, which already handles everything else (including a bare "Z").
+# Jira REST timestamps use a colon-less UTC offset ("...+0000"), which
+# datetime.fromisoformat only accepts from Python 3.11; this repo's floor is
+# 3.9, so the colon is inserted before handing off to parse_iso.
 JIRA_TZ_OFFSET_RE = re.compile(r"([+-]\d{2})(\d{2})$")
 
 
@@ -1797,14 +1668,9 @@ def reconcile_status_duration_events(events_path, computed_events, existing_even
                 continue
             key = d.get("key")
             rewritten.append(dump_event(updates[key]) + "\n" if key in updates else line)
-        # Atomic replace (source review round 3, MEDIUM), not
-        # truncate-in-place: every other write path in this file is
-        # append-only, and a bare open(..., "w") truncates before the new
-        # content is written, leaving a window where an interruption
-        # loses the WHOLE file, not just the row being corrected. Writing
-        # to a temp file in the SAME directory (so os.replace is a
-        # same-filesystem rename, atomic on POSIX) then swapping it in
-        # closes that window.
+        # Atomic replace, not truncate-in-place: open(..., "w") truncates
+        # before writing, so an interruption loses the WHOLE file. The temp
+        # file must be in the SAME directory for os.replace to be atomic.
         dir_name = os.path.dirname(os.path.abspath(events_path)) or "."
         fd, tmp_path = tempfile.mkstemp(prefix=".script-events-", suffix=".tmp", dir=dir_name)
         try:
@@ -1841,10 +1707,7 @@ def cmd_status_durations(args):
     warnings = []
     computed_by_key = {}
 
-    # One bad ticket must not abort a multi-ticket run (source review
-    # round 2, MEDIUM: parse_jira_ts/parse_iso raising mid-loop previously
-    # did exactly that, contradicting run_jira_raw's own "never raises"
-    # claim one level up).
+    # One bad ticket must not abort a multi-ticket run.
     for ticket in args.ticket:
         try:
             transitions = fetch_status_changelog(args.jira_api, ticket, warnings)
@@ -1860,10 +1723,8 @@ def cmd_status_durations(args):
         args.events, computed_events, existing_events, args.dry_run
     )
 
-    # "already present" = status_duration events that existed BEFORE this
-    # run and were left untouched by it (neither newly appended nor
-    # updated) — not the file's raw pre-run count, which would double-count
-    # a row this run just corrected in place.
+    # "already present" counts only rows this run left untouched; the raw
+    # pre-run count would double-count a row corrected in place.
     prior_status_durations = sum(1 for e in existing_events if e.get("event") == "status_duration")
     unchanged = prior_status_durations - len(updated)
 
@@ -1914,11 +1775,9 @@ def cmd_extract(args):
     round_state = {}
 
     if args.agent_id:
-        # Targeted subagent path: resolve by glob only, never walk every
-        # session under --projects-dir (runtime target: <1s on a real
-        # store). More than one match (a rare agent_id collision across
-        # slugs) is processed as multiple batches, not a failure — see
-        # find_subagent_paths().
+        # Resolve by glob only, never walking every session under
+        # --projects-dir. An agent_id collision across slugs is processed as
+        # multiple batches, not a failure.
         matches = find_subagent_paths(args.projects_dir, args.agent_id)
         if len(matches) > 1:
             print(
@@ -1952,20 +1811,12 @@ def cmd_extract(args):
             new_events.append(ev)
 
     for slug, session_id, session_path, subagents in subagent_batches:
-        # Main-thread invoke scan: the top-level session transcript itself
-        # is not a subagent transcript at all, so it is never seen by
-        # process_subagent() below — a Bash tool_use issued directly by
-        # the main thread (agent_type "main") needs its own pass. Guarded
-        # by isfile() since a --agent-id targeted scan may match a
-        # subagent whose parent session file is missing (see
-        # process_subagent's own "parent session file not found"
-        # warning).
+        # The top-level session transcript is never seen by process_subagent(),
+        # so a main-thread Bash tool_use needs its own pass. isfile() guards a
+        # targeted scan whose parent session file is missing.
         if os.path.isfile(session_path):
             add_events(build_invoke_events(session_path, session_id, "-", "main", warnings, prices, warned_models))
-            # Main-thread owner_wait scan — same rationale as the invoke
-            # scan above: the top-level session transcript is never seen
-            # by process_subagent(), so a trigger call issued directly by
-            # the main thread needs its own pass.
+            # Main-thread owner_wait scan — same rationale as the invoke scan.
             add_events(build_owner_wait_events(session_path, session_id, "-", "main", warnings))
 
         # Chronological order matters for round assignment: sort subagents
@@ -2005,7 +1856,6 @@ def cmd_extract(args):
             print("  " + w, file=sys.stderr)
 
 
-# --------------------------------------------------------------- record
 RECORDABLE_EVENTS = ("live-run", "accepted")
 
 
@@ -2032,11 +1882,8 @@ def cmd_record(args):
             "a git-committed events file"
         )
 
-    # Normalize a bare basename or a stale subdirectory (e.g. "foo.sh" or
-    # "scripts/foo.sh" when the file now lives at scripts/api/foo.sh) to
-    # the script's CURRENT repo-relative path, the same way extract does —
-    # a manually `record`ed live-run/accepted event is exactly where this
-    # defect shows up in practice (a human typing the name they remember).
+    # Normalize the same way extract does: a manually `record`ed event is
+    # where a stale or bare path shows up in practice.
     script = normalize_script_path(args.script)
 
     ev = make_event(
@@ -2053,7 +1900,6 @@ def cmd_record(args):
     print("# record: appended %s %s for %s" % (args.event, args.outcome, script))
 
 
-# ------------------------------------------------------- backfill-script-paths
 def cmd_backfill_script_paths(args):
     """One-time (but re-runnable — a future script move needs this again)
     normalization of every already-written `script`/`scripts` value in
@@ -2127,7 +1973,6 @@ def cmd_backfill_script_paths(args):
     )
 
 
-# --------------------------------------------------------------- report
 def load_events(events_path, script_filter, since, until, warnings):
     if not os.path.isfile(events_path):
         raise ValidationError("--events file does not exist: %s" % events_path)
@@ -2156,12 +2001,8 @@ def load_events(events_path, script_filter, since, until, warnings):
     return events
 
 
-# -------------------------------------------------------------- --usage
-# A quantitative check on whether a script is actually being run — not
-# "was this script cheap to author" (the plain report above), but "is
-# anyone actually running it". Kept as an entirely separate code path from
-# cmd_report's default table so that the default `report` output is
-# untouched line-for-line by this feature.
+# Whether a script is actually being RUN, as opposed to cheap to author. A
+# separate code path so `report`'s default table stays untouched.
 def usage_flag(non_test_invokes, landing_ts, until_ts):
     """One of "keep" | "retire?" | "flag" | "-", by the following
     PRECEDENCE (there is no combining of these three independent
@@ -2250,11 +2091,8 @@ def build_usage_rows(full_events, until_ts, row_since=None, row_until=None):
         script = ev.get("script") or "-"
         if script == "-":
             continue
-        # A *-selftest.sh/*.selftest.sh file was showing up as its OWN row
-        # (invoked only by its own author's dry-run/dogfood calls, never a
-        # real usage signal) — excluded here entirely. NOT extended to a
-        # blanket "must currently exist on disk" filter — see
-        # USAGE_SELFTEST_FILE_RE's own comment for why.
+        # A selftest file is never a real usage signal — see
+        # USAGE_SELFTEST_FILE_RE.
         if USAGE_SELFTEST_FILE_RE.search(script):
             continue
         by_script.setdefault(script, []).append(ev)
@@ -2290,10 +2128,8 @@ def build_usage_rows(full_events, until_ts, row_since=None, row_until=None):
             if not any(in_row_window(e) for e in evs):
                 continue
 
-        # `evs` (lifetime) still feeds authors/accepted below for the
-        # landing date and flag — those stay lifetime regardless of the
-        # window (see docstring). `w_evs` (windowed, == evs when no
-        # window is given) feeds every OTHER column.
+        # `evs` stays lifetime and feeds the landing date and flag; `w_evs`
+        # is windowed and feeds every OTHER column.
         w_evs = [e for e in evs if in_row_window(e)]
 
         authors = [e for e in evs if e.get("event") == "author"]
@@ -2338,24 +2174,16 @@ def build_usage_rows(full_events, until_ts, row_since=None, row_until=None):
         rework_rounds = len(w_reworks)
         lint_wall_clock = sum(e.get("duration_s", 0) or 0 for e in w_lints)
 
-        # rework_ratio = usd(rework+lint+review+selftest) / usd(author) —
-        # the process-cost side (everything spent AFTER the first author
-        # round, trying to get the script right) over the authoring cost
-        # itself. Windowed: only events whose own
-        # ts falls in the window count, so a wave's rework_ratio reflects
-        # that wave's spend, not the script's lifetime spend.
+        # rework_ratio = usd(rework+lint+review+selftest) / usd(author).
+        # Windowed, so a wave's ratio reflects that wave's spend.
         author_usd = sum(e.get("usd", 0.0) or 0.0 for e in w_authors)
         rework_cost = sum(e.get("usd", 0.0) or 0.0 for e in (w_reworks + w_lints + w_reviews + w_selftests))
         rework_ratio = (rework_cost / author_usd) if author_usd else None
         total_rework_cost += rework_cost
         total_author_usd += author_usd
 
-        # landing = the script's earliest `accepted` event, falling back
-        # to its earliest `author` event when no `accepted` event is on
-        # record in the queried window — a script can have real
-        # invocations long before a manual `accepted` event was ever
-        # recorded for it. Always LIFETIME (from `evs`, not `w_evs`) — the
-        # retirement verdict must not move with the window.
+        # Earliest `accepted`, falling back to earliest `author`. Always
+        # LIFETIME: the retirement verdict must not move with the window.
         landing_ts_str = accepted[0].get("ts") if accepted else None
         if not landing_ts_str:
             author_ts_list = sorted(e.get("ts") for e in authors if e.get("ts") and e.get("ts") != "-")
@@ -2435,12 +2263,8 @@ def count_tickets_landed(full_events, since, until):
     return len(tickets)
 
 
-# ------------------------------------------------------- per-ticket cost
-# "What did THIS TICKET cost", grouped by
-# (ticket, session, agent_type) across author/review/rework events only
-# (`invoke` events always carry ticket "-", so they group nowhere).
-# Windowed on its OWN input by since/until, unlike build_usage_rows()
-# above (lifetime).
+# "What did THIS TICKET cost", grouped by (ticket, session, agent_type) across
+# author/review/rework only. Windowed, unlike build_usage_rows() above.
 def build_ticket_cost_rows(full_events, since, until):
     groups = {}
     for ev in full_events:
@@ -2471,10 +2295,8 @@ def cmd_report(args):
     warnings = []
 
     if args.usage:
-        # Deliberately NOT load_events(..., since, until, ...): --usage
-        # needs the FULL file to compute lifetime counts/landing dates
-        # correctly (see build_usage_rows() docstring) — --since/--until
-        # are passed through separately, as a row-inclusion filter only.
+        # Deliberately NOT load_events(..., since, until, ...): --usage needs
+        # the FULL file for lifetime counts, so the window is a row filter only.
         full_events = load_events(args.events, args.script, None, None, warnings)
         until_ts = until or datetime.now(timezone.utc)
         rows, window_ratio = build_usage_rows(full_events, until_ts, since, until)
@@ -2488,20 +2310,13 @@ def cmd_report(args):
         print(renderer(headers, rows))
         print("")
 
-        # owner_wait summary: total owner-attended seconds per ticket in
-        # this same --since/--until window (the wave), plus a "total" row
-        # for the wave as a whole. Computed here (not further down) so the
-        # wave-summary line below can read its total.
+        # Owner-attended seconds per ticket in this window, plus a wave total.
+        # Computed here so the wave-summary line below can read that total.
         wait_rows, wait_total = build_owner_wait_rows(full_events, since, until)
 
-        # Wave-level summary line: `window
-        # rework_ratio` is NOT new — it printed unconditionally before
-        # this ticket too, with the same lifetime value when no window is
-        # given, so it keeps printing unconditionally. `owner_wait_s` and
-        # `tickets_per_owner_hour` are new, wave-scoped concepts with no
-        # lifetime equivalent — printing them unconditionally would grow
-        # the unwindowed output by two lines it never had before, so they
-        # are gated on an actual window being given.
+        # `window rework_ratio` prints unconditionally; `owner_wait_s` and
+        # `tickets_per_owner_hour` are wave-scoped with no lifetime
+        # equivalent, so they are gated on a window actually being given.
         print("# window rework_ratio: %s" % ("%.2f" % window_ratio if window_ratio is not None else "-"))
         if since is not None or until is not None:
             owner_hours = wait_total / 3600.0
@@ -2530,12 +2345,8 @@ def cmd_report(args):
 
     events = load_events(args.events, args.script, since, until, warnings)
 
-    # `invoke` and `status_duration` events carry script="-" the same way
-    # `owner_wait` does (see docstrings above) and are excluded here for
-    # the identical reason: grouping them into this table produced a
-    # bogus all-zero `script: -` row (review round 2, HIGH).
-    # `report --usage` is the dedicated home for invoke-derived
-    # numbers; this table stays exactly as it was before either existed.
+    # `invoke` and `status_duration` carry script="-" like `owner_wait`, so
+    # grouping them here produces a bogus all-zero `script: -` row.
     by_script = {}
     for ev in events:
         if ev.get("event") in ("invoke", "status_duration"):
@@ -2554,11 +2365,8 @@ def cmd_report(args):
             key=lambda e: e.get("ts") or "",
         )
 
-        # rounds and rework_* include `rework` events alongside `author`:
-        # a resumed subagent's extra rounds of work never spawn a new
-        # author event, only a rework one, so counting authors alone
-        # would silently report rounds=1 for a script actually reworked
-        # several times.
+        # A resumed subagent's extra rounds spawn a `rework` event, never a new
+        # `author` one, so counting authors alone reports rounds=1.
         round_pool = authors + reworks
         rounds = max([e.get("round") for e in round_pool if isinstance(e.get("round"), int)], default=0)
         rework_review = sum(1 for e in round_pool if e.get("cause") == "review")
@@ -2572,10 +2380,8 @@ def cmd_report(args):
         med = sum(e.get("findings", {}).get("medium", 0) for e in reviews)
         low = sum(e.get("findings", {}).get("low", 0) for e in reviews)
 
-        # turns/tokens/usd sum author + review + rework: the author event
-        # covers only the slice up to the first resume, and each rework
-        # event covers its own slice, so all three together sum to the
-        # same total the whole (pre-resume-slicing) transcript would give.
+        # The author event covers only the slice up to the first resume and
+        # each rework its own, so the three together sum to the whole.
         countable = authors + reviews + reworks
         turns = sum(e.get("turns", 0) or 0 for e in countable)
         tokens = sum(e.get("tokens", 0) or 0 for e in countable)
@@ -2642,7 +2448,6 @@ def cmd_report(args):
             print("  " + w, file=sys.stderr)
 
 
-# ------------------------------------------------------------------ cli
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog="script-analytics.py",

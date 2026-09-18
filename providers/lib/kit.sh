@@ -2,18 +2,9 @@
 #
 # kit.sh — self-contained shared helpers for providers/, a code-identical
 # copy of this plugin's own scripts/lib/kit.sh (die/warn/need/show_help/
-# known_command/tmpfile). Identical below this header comment; the header
-# itself differs, because it has to say which directory this copy serves.
-#
-# Copied rather than referenced, same pattern as
-# providers/dispatch/herdr/lib/kit.sh: a layer that gets copied into a
-# consuming project must not depend on this plugin's own scripts/lib/
-# still being reachable at a relative path once copied out. providers/ is
-# copied out more often than an optional layer — it is the seam an
-# adopter extends — so the rule matters here most. (An earlier version dropped the
-# equivalent copy the jira tracker scripts used to carry before they
-# moved under providers/tracker/jira/ and started sourcing this file
-# directly.)
+# known_command/tmpfile). Copied rather than referenced because providers/
+# is the seam an adopter copies out, and a copied layer must not depend on
+# this plugin's scripts/lib/ still being reachable at a relative path.
 #
 # bash 3.2 compatible (no associative arrays, no `${var^^}`, no
 # `readarray`/`mapfile`).
@@ -55,15 +46,12 @@ known_command() {
     return 1
 }
 
-# tmpfile — create a 0600 tempfile, remove it on exit. Safe to call more
-# than once in one script: each call adds its own path to the cleanup list
-# rather than replacing an earlier trap registration.
+# tmpfile — create a 0600 tempfile, removed on exit. Safe to call more than
+# once: each call appends to the cleanup list rather than replacing the trap.
 _KIT_TMPFILES=""
 _kit_cleanup() {
     [ -n "$_KIT_TMPFILES" ] || return 0
-    # shellcheck disable=SC2086  # word splitting is the point: a
-    # newline-joined list of paths, none of which are expected to contain
-    # whitespace.
+    # shellcheck disable=SC2086  # word splitting is the point
     rm -f $_KIT_TMPFILES 2>/dev/null || true
 }
 tmpfile() {

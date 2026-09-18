@@ -3,14 +3,9 @@
 # herdr-agent-pane.sh — from inside a Herdr pane, split the current pane
 # and start a coding agent in the new one.
 #
-# OPTIONAL LAYER, ported from a production system (see the README's
-# "optional layers"; from the 2026-09-13 parity sweep).
-# Generic Herdr utility, no lab content: splits the current pane and hands
-# the new pane to `herdr agent start`.
-#
-# Herdr's CLI returns JSON; the new pane's id is read from
-# `.result.pane.pane_id` via jq. The agent name must be unique among
-# currently-live Herdr agents, or `herdr agent start` will refuse it.
+# Optional layer: this plugin does not ship or require Herdr. The new pane's
+# id is read from `.result.pane.pane_id`. The agent name must be unique among
+# currently-live Herdr agents, or `herdr agent start` refuses it.
 #
 # Usage:
 #   herdr-agent-pane.sh [--dir DIR] [--name NAME] [--kind KIND] \

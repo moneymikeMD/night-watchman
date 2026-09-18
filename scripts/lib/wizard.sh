@@ -2,24 +2,16 @@
 #
 # scripts/lib/wizard.sh — guided human-step library: a stages file sources
 # this, then calls stage/say/step/ask/ask_secret to walk the owner through a
-# `human_steps` procedure one screen at a time. Judgement (scoping stages
-# from a ticket's human_steps) happens once, in script-author; the resulting
-# stages file then runs with no model at all. bash 3.2 compatible.
+# `human_steps` procedure one screen at a time.
 #
 # NEVER HAND-EDIT THIS LIBRARY FROM A STAGES FILE. Author stages in a
 # sibling file (see templates/wizard-stages.sh) that sources this one.
 #
-# Design and function names are closely derived from mattpocock-skills'
-# wizard skill (MIT licensed). Adapted from mattpocock/skills wizard,
+# Adapted from mattpocock/skills wizard,
 # Copyright (c) 2026 Matt Pocock, MIT License.
 #
-# The one behaviour that must differ from upstream: no plaintext `.env` for
-# secrets. `ask_secret` pipes the value on stdin to a caller-named sink
-# command (never argv, never a temp file) and records only a REFERENCE
-# string (e.g. an op:// locator, or a bare note like "gh secret set") via
-# write_env, the writer stages otherwise use only for plain values. The raw
-# value passed to ask_secret never touches ENV_FILE or any other file this
-# library writes.
+# Differs from upstream: there is no plaintext `.env` for secrets — a raw
+# value never touches ENV_FILE or any other file this library writes.
 #
 # Usage: source this file after `set -euo pipefail`, then write stages.
 
@@ -95,12 +87,10 @@ ask() {
     printf -v "$key" '%s' "$input"
 }
 
-# ask_secret KEY "Prompt" SINK_CMD REF — hidden input, piped straight to
-# SINK_CMD on stdin (never argv, never a file, never assigned to a $KEY
-# variable a later line could echo or write_env by mistake), then records
-# REF (a locator string, never the value) via write_env under the name
-# KEY. SINK_CMD failing is non-fatal: it is recorded in SKIPPED for the
-# closing summary.
+# ask_secret KEY "Prompt" SINK_CMD REF — hidden input, piped to SINK_CMD on
+# stdin (never argv, never a file, never a variable), then records REF (a
+# locator, never the value) via write_env under KEY. A failing SINK_CMD is
+# non-fatal: it is recorded in SKIPPED for the closing summary.
 ask_secret() {
     local key="$1" prompt="$2" sink="$3" ref="$4" input
     printf '  %s%s%s ' "$BOLD" "$prompt" "$RESET"

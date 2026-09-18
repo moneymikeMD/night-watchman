@@ -1,30 +1,24 @@
 #!/bin/bash
 #
-# Assertions for provider.sh's `watch` and `stop` verbs (`start` has its
-# own selftest, herdr-ticket-start-selftest.sh — this file does not touch
-# it). The `agent get`/`agent wait`/`workspace close` canned responses
-# below are the real fixtures under fixtures/, recorded live
-# rather than authored — see this project's testing-philosophy.md
-# "fixture provenance" rule and this provider's fixtures/README.md for
-# what each file is and how it was captured. The one exception is
-# scenario S1's no-workspace_id agent shape (no live capture of that case
-# exists yet — it is the unrecorded case `stop` deliberately refuses
-# rather than guesses at); authored, called out at the point it's used.
+# Assertions for provider.sh's `watch` and `stop` verbs (`start` has its own
+# selftest, herdr-ticket-start-selftest.sh). The `agent get`/`agent wait`/
+# `workspace close` canned responses are the real fixtures under fixtures/,
+# recorded live rather than authored — see testing-philosophy.md's "fixture
+# provenance" rule and fixtures/README.md. The one exception is scenario
+# S1's no-workspace_id agent shape, authored and called out where it is used
+# because no live capture of that case exists.
 #
-# `stop` never calls `herdr pane close` — an agent with no workspace_id is
-# a stop2 refusal, not a fallback (see provider.sh's own header) — so no
-# scenario here exercises `pane close` at all.
+# `stop` never calls `herdr pane close` — an agent with no workspace_id is a
+# stop2 refusal, not a fallback — so no scenario exercises `pane close`.
 #
-# Isolation: a stub `herdr` on PATH, installed fresh per scratch dir, is
-# what every scenario runs against — never a real binary. Nothing here
-# creates a worktree, a workspace, or touches a live Herdr server.
+# Isolation: a stub `herdr` on PATH, installed fresh per scratch dir. Nothing
+# here creates a worktree or workspace, or touches a live Herdr server.
 #
-# Fail-first discipline (name-the-oracle): before this file was trusted,
-# its central assertions were run against a deliberately corrupted copy of
-# provider.sh (workspace_id lookup hardcoded to empty, forcing the stop2
-# no-workspace_id refusal to fire on every `stop` call) and confirmed to
-# FAIL scenario S0 specifically, then the corruption was reverted and this
-# file was confirmed to pass again in full.
+# Fail-first discipline (name-the-oracle): before this file was trusted, its
+# central assertions were run against a deliberately corrupted copy of
+# provider.sh (workspace_id lookup hardcoded to empty) and confirmed to FAIL
+# scenario S0 specifically, then the corruption was reverted and this file
+# was confirmed to pass again in full.
 #
 # Usage: ./provider-selftest.sh
 # Exit 0 if every assertion passes, 1 otherwise.
@@ -53,18 +47,9 @@ assert_contains() {
     esac
 }
 
-# install_stub_herdr <dir> — a stub speaking exactly the subcommands
-# provider.sh's watch/stop verbs call: `agent get`, `agent wait`,
-# `workspace close`. Every invocation's argv is appended to
-# $STUB_HERDR_LOG. Behaviour is driven by env vars:
-#   STUB_AGENT_GET_JSON     canned stdout for `agent get`
-#   STUB_AGENT_GET_FAIL=1   `agent get` exits 1 (no such agent)
-#   STUB_AGENT_WAIT_JSON    canned stdout for `agent wait`
-#   STUB_AGENT_WAIT_FAIL=1  `agent wait` exits 1
-#   STUB_WORKSPACE_CLOSE_JSON   canned stdout for `workspace close`
-#   STUB_WORKSPACE_CLOSE_FAIL=1 `workspace close` exits 1
-# An unrecognised subcommand pair (including `pane close` — provider.sh's
-# `stop` never calls it, see its header) logs and exits 99.
+# install_stub_herdr <dir> — a stub speaking only `agent get`, `agent wait` and
+# `workspace close`, logging every argv to $STUB_HERDR_LOG and driven by the
+# STUB_* env vars read in its body below. Anything else exits 99.
 install_stub_herdr() {
     local dir="$1"
     mkdir -p "$dir/bin"
@@ -109,11 +94,7 @@ AGENT_GET_JSON=$(cat "$FIXTURES/agent-get.json")
 AGENT_WAIT_JSON=$(cat "$FIXTURES/agent-wait.json")
 WORKSPACE_CLOSE_JSON=$(cat "$FIXTURES/workspace-close.json")
 
-# ------------------------------------------------------------------ watch
-
-# W0 — happy path: agent exists, wait returns its final state. Asserts
-# exactly one `agent get` and one `agent wait` call, no --until/--timeout
-# forwarded when none were passed, output is the wait JSON.
+# W0 — happy path: one `agent get`, one `agent wait`, no flags forwarded.
 scenario_watch_happy() {
     local dir log out rc
     dir=$(mktemp -d) || { echo "FAIL: W0 setup" >&2; FAIL=1; return; }
@@ -145,8 +126,7 @@ scenario_watch_forwards_flags() {
         "$(call_count "$log" "agent wait nwm-48 --until idle --until blocked --timeout 60000$")"
 }
 
-# W2 — ticket has no running agent: `agent get` fails, provider.sh dies
-# WITHOUT ever calling `agent wait`.
+# W2 — no running agent: dies WITHOUT ever calling `agent wait`.
 scenario_watch_no_agent() {
     local dir log out rc
     dir=$(mktemp -d) || { echo "FAIL: W2 setup" >&2; FAIL=1; return; }
@@ -160,8 +140,7 @@ scenario_watch_no_agent() {
     assert_eq "W2 never calls agent wait" "0" "$(call_count "$log" "agent wait")"
 }
 
-# W3 — `agent wait` itself fails (e.g. timeout): provider.sh surfaces a
-# clear failure rather than silently printing nothing.
+# W3 — `agent wait` fails: surfaced, not a silent empty print.
 scenario_watch_wait_fails() {
     local dir log out rc
     dir=$(mktemp -d) || { echo "FAIL: W3 setup" >&2; FAIL=1; return; }
@@ -175,10 +154,7 @@ scenario_watch_wait_fails() {
     assert_contains "W3 error names the failed wait" "$out" "agent wait"
 }
 
-# ------------------------------------------------------------------- stop
-
-# S0 — happy path: agent's workspace_id is used, `workspace close` is
-# called.
+# S0 — happy path: the agent's workspace_id is used for `workspace close`.
 scenario_stop_happy() {
     local dir log out rc
     dir=$(mktemp -d) || { echo "FAIL: S0 setup" >&2; FAIL=1; return; }
@@ -194,9 +170,8 @@ scenario_stop_happy() {
     assert_contains "S0 output carries close JSON" "$out" '"type":"ok"'
 }
 
-# S1 — agent has no workspace_id: refused with exit 2 (stop2 — no
-# recorded fixture for the paneless case, so this must not guess at a
-# `pane close` call). Never calls close at all.
+# S1 — no workspace_id: exit 2, never calls close. No fixture exists for the
+# paneless case, so `stop` must refuse rather than guess at `pane close`.
 scenario_stop_no_workspace_id() {
     local dir log out rc noworkspace_json
     dir=$(mktemp -d) || { echo "FAIL: S1 setup" >&2; FAIL=1; return; }
@@ -240,8 +215,6 @@ scenario_stop_close_fails() {
     assert_contains "S3 error names the failed close" "$out" "workspace close"
 }
 
-# ---------------------------------------------------------------- usage
-
 scenario_usage() {
     local out rc
     out=$("$SUT" watch 2>&1) && rc=0 || rc=$?
@@ -252,8 +225,6 @@ scenario_usage() {
     assert_eq "usage: stop with no ticket exits 1" "1" "$rc"
     assert_contains "usage: stop with no ticket names usage" "$out" "usage: provider.sh stop"
 }
-
-# ------------------------------------------------------------------ runner
 
 scenario_watch_happy
 scenario_watch_forwards_flags

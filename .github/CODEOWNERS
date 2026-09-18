@@ -1,29 +1,7 @@
-# One owner for everything, so `require_code_owner_review` on the main
-# ruleset resolves to a person — it was set before this file existed and
-# enforced nothing until 2026-09-18.
-#
-# Review requests route here automatically. The ruleset's admin bypass still
-# applies, so the owner's own merges are not gated on this.
 * @moneymikeMD
 
-# Deliberately UNOWNED (a pattern with no owner). Dependabot's action-version
-# bumps touch only these files, and a bot can neither be a code owner nor
-# satisfy a code-owner review, so owning this path would make the
-# patch/minor auto-merge policy inert.
-#
-# The tradeoff, stated plainly because it cuts the wrong way: workflow files
-# are the highest-blast-radius thing in this repo, and this exempts exactly
-# them from the code-owner gate. They are NOT ungated — the ruleset still
-# requires one approving review and a green `selftests` check on every PR,
-# and only patch/minor bumps auto-merge; a major still waits for a human.
+# Unowned: a bot cannot satisfy a code-owner review, so owning what
+# Dependabot edits would make the patch/minor auto-merge policy inert.
 /.github/workflows/
-
-# Same exemption, same reason: the docs site's dependency manifest and
-# lockfile. Dependabot updates these two files and nothing else when it bumps
-# an Astro or Starlight version, so owning them would put the patch/minor
-# auto-merge policy behind a review only a human can give.
-#
-# Scope is deliberately the two files, not the directory: everything else
-# under docs/preview/website/ is site CONTENT and stays owned.
 /docs/preview/website/package.json
 /docs/preview/website/bun.lock

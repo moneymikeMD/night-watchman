@@ -21,10 +21,6 @@
 # --file FILE   defaults to .night-watchman/wave-trail.tsv under the repo
 #               root (git rev-parse --show-toplevel).
 # --dry-run     print the row that would be appended; write nothing.
-#
-# Ported from pstack show-me-your-work log.sh, 2026-09-14.
-#
-# bash 3.2 compatible: no associative arrays, no ${var^^}, no mapfile.
 
 set -euo pipefail
 

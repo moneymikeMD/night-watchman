@@ -69,7 +69,6 @@ TOKEN_CLASSES = ("input", "output", "cache_write", "cache_read")
 PRICE_COLUMNS = ("model",) + tuple("%s_per_mtok" % c for c in TOKEN_CLASSES)
 
 
-# ------------------------------------------------------------- discovery
 def slugify_repo(path):
     """Reproduce the Claude Code CLI's transcript directory naming: the
     absolute path with every "/" and "." replaced by "-"."""
@@ -105,13 +104,11 @@ def find_session_files(projects_dir, slug, session_id):
     return sessions
 
 
-# ------------------------------------------------------------------ scan
 def parse_timestamp(text):
     if text is None:
         return None
-    # Accept a plain date or a full ISO-8601 timestamp; always treat a
-    # bare "Z" suffix as UTC, since Python's fromisoformat predates that
-    # shorthand.
+    # A bare "Z" suffix is rewritten to +00:00: Python's fromisoformat
+    # predates that shorthand.
     text = text.strip()
     if text.endswith("Z"):
         text = text[:-1] + "+00:00"
@@ -184,7 +181,6 @@ def scan_sessions(sessions, since, until):
     return turns
 
 
-# ----------------------------------------------------------------- price
 def read_prices(path):
     prices = {}
     with open(path) as f:
@@ -215,7 +211,6 @@ def turn_cost(turn, prices, warned_models):
     return sum(tokens[c] / 1_000_000.0 * rate[c] for c in TOKEN_CLASSES)
 
 
-# ------------------------------------------------------------------ group
 def group_turns(turns, prices, warned_models):
     """Return {(session, model): {"turns": n, "tokens": n, "cost": f}}."""
     groups = {}
@@ -228,7 +223,6 @@ def group_turns(turns, prices, warned_models):
     return groups
 
 
-# ----------------------------------------------------------------- render
 def render_table_rows(groups):
     rows = []
     for (session, model), g in sorted(groups.items()):
@@ -262,7 +256,6 @@ RENDERERS = {"tsv": render_tsv, "md": render_md, "json": render_json}
 HEADERS = ["session", "model", "turns", "tokens", "cost_usd"]
 
 
-# ------------------------------------------------------------------- main
 def cmd_scan(args):
     if not args.repo and not args.project_slug and not args.session:
         raise ValidationError("one of --repo, --project-slug, or --session is required")

@@ -7,29 +7,24 @@ on:
 
 jobs:
   selftests:
-    # macOS, not ubuntu: this repo targets bash 3.2 (the /bin/bash every macOS
-    # ships), and its scripts are written to that limit deliberately. A Linux
-    # runner's bash 5.x would pass code that breaks on the machines this
-    # actually runs on, and one selftest is already known to fail there
-    # (docs/known-issues/guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2.md).
+    # macOS, not ubuntu: this repo targets bash 3.2, the /bin/bash macOS ships.
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: bash version (this is the target, not an accident)
+      - name: bash version
         run: /bin/bash --version | head -1
 
       - name: install shellcheck
         run: brew install shellcheck
 
-      - name: install PyYAML (land-branch-selftest parses ticket frontmatter with it)
+      - name: install PyYAML
         run: python3 -m pip install --break-system-packages --quiet pyyaml
 
       - name: shellcheck
         run: |
           set -euo pipefail
-          # -e SC1091: several scripts source a sibling through a variable
-          # path resolved at runtime, which shellcheck cannot follow statically.
+          # SC1091: several scripts source a sibling through a runtime path.
           find hooks providers scripts -name '*.sh' \
             -not -path 'scripts/fixtures/*' -print0 \
           | xargs -0 shellcheck -x -e SC1091 -P SCRIPTDIR
@@ -40,9 +35,7 @@ jobs:
           failed=0
           while IFS= read -r t; do
             case "$t" in
-              # Quarantined: each fails one assertion for a filed, pre-existing
-              # reason. Run separately below so a real regression elsewhere is
-              # not masked by a red suite. Move back here as each is resolved.
+              # Quarantined: each fails one assertion, filed in docs/known-issues.
               ./providers/config-selftest.sh) continue ;;
               ./providers/tracker/jira/jira-workflow-apply-selftest.sh) continue ;;
             esac
@@ -61,8 +54,6 @@ jobs:
         continue-on-error: true
         run: |
           set -uo pipefail
-          # docs/known-issues.md carries an entry for each of these. They are
-          # run so a SECOND failure in the same suite is still visible.
           providers/config-selftest.sh || true
           providers/tracker/jira/jira-workflow-apply-selftest.sh || true
 
@@ -70,12 +61,8 @@ jobs:
         run: scripts/known-issue.sh lint
 
   docs-site:
-    # The docs site is the only part of this repo with third-party
-    # dependencies, and website-deploy.yml installs it with
-    # `bun install --frozen-lockfile` — which fails by design when
-    # package.json and bun.lock disagree. Running the same frozen install here
-    # means a dependency PR that desyncs the two fails BEFORE it reaches the
-    # deploy, rather than breaking the published site.
+    # Mirrors website-deploy.yml's frozen install: catches a desynced
+    # package.json/bun.lock before the deploy does.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -84,7 +71,7 @@ jobs:
         with:
           bun-version: latest
 
-      - name: frozen install (the lockfile must already agree with package.json)
+      - name: frozen install
         working-directory: docs/preview/website
         run: bun install --frozen-lockfile
 

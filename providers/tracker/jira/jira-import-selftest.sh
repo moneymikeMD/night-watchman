@@ -2,37 +2,12 @@
 #
 # Selftest for providers/tracker/jira/jira-import.sh and lib/frontmatter.py.
 # Nothing here reaches a real network: --dry-run assertions never call
-# curl, and the end-to-end assertions put a stub `curl` on PATH first (the
-# same technique jira-api-selftest.sh uses), so even NW_JIRA_HOST=127.0.0.1
-# is never actually dialed.
+# curl, and the end-to-end assertions put a stub `curl` on PATH first, so
+# even NW_JIRA_HOST=127.0.0.1 is never actually dialed.
 #
-# What is asserted:
-#   1  lib/frontmatter.py reads the fixtures/import-tickets tree (schema
-#      issues) and orders tickets ascending by the numeric suffix of id,
-#      across stage subdirectories.
-#   2  lib/frontmatter.py reads fixtures/import-dotissues (schema
-#      dotissues, flat layout).
-#   3  --dry-run creates nothing, resolves no credential, and prints one
-#      "would create" line per ticket in order, honoring --resume.
-#   4  End-to-end: a stubbed curl answers every create with 201 + a key;
-#      jira-import.sh prints "created KEY (i/total)" per ticket, in id
-#      order.
-#   5  A create that fails (a stubbed non-2xx) stops the run immediately
-#      — no later ticket is created.
-#   6  Every non-dry-run writes a manifest (the ordered id list it used).
-#      A later --resume whose first N-1 ids no longer match that manifest
-#      — the directory changed underneath it — refuses loudly before
-#      creating anything, rather than trusting the caller's position blind.
-#   7  lib/frontmatter.py normalises CRLF line endings before looking for
-#      the frontmatter fence, so a CRLF ticket file is read, not silently
-#      treated as having no frontmatter.
-#   8  A create response is still parsed correctly when the tracker
-#      wrapper emits a preamble on stderr before its JSON stdout — tested
-#      against a stand-in provider, independent of jira-api.sh.
-#
-# Every non-dry-run invocation below passes --manifest into $WORK, not the
-# committed fixtures/import-tickets tree — a manifest write must never
-# land in this repo's own fixtures.
+# Every non-dry-run below passes --manifest into $WORK, not the committed
+# fixtures/import-tickets tree: a manifest write must never land in this
+# repo's own fixtures.
 #
 # Usage: providers/tracker/jira/jira-import-selftest.sh
 
@@ -148,15 +123,13 @@ contains "e2e: prints the third created key" "created SPK-3 (3/3): SPK-3" "$OUT"
 eq "manifest: written with the ordered ids used" \
     '["SPK-1","SPK-2","SPK-3"]' "$(jq -c . "$MANIFEST_1")"
 
-# Happy path: --resume against the SAME directory, with the manifest this
-# run just wrote, is accepted (no ordering change to catch).
+# Happy path: --resume against the same directory and manifest.
 OUT=$(STUB_COUNTER_FILE="$STUB_COUNTER_FILE" STUB_FAIL_AFTER=0 \
     run_e2e "$IMPORT_SH" --project SPK --progress --resume 3 --manifest "$MANIFEST_1" "$FIXTURES/import-tickets" 2>&1); RC=$?
 eq "manifest: --resume against an unchanged directory succeeds" "0" "$RC"
 
-# Unhappy path: the tickets directory changed (position 2 is now a
-# different id) between the manifest's run and this --resume — refuse
-# before creating anything.
+# Unhappy path: the directory changed between the manifest's run and this
+# --resume, so it must refuse before creating anything.
 CHANGED_DIR="$WORK/changed-tickets"
 mkdir -p "$CHANGED_DIR/open" "$CHANGED_DIR/in-progress"
 cp "$FIXTURES/import-tickets/open/SPK-1.md" "$CHANGED_DIR/open/SPK-1.md"
@@ -168,10 +141,8 @@ ERR=$(STUB_COUNTER_FILE="$STUB_COUNTER_FILE" STUB_FAIL_AFTER=0 \
     run_e2e "$IMPORT_SH" --project SPK --resume 3 --manifest "$MANIFEST_1" "$CHANGED_DIR" 2>&1 </dev/null); RC=$?
 eq "manifest: --resume against a changed directory refuses" "1" "$RC"
 contains "manifest: names the position that no longer matches" "position 2 was 'SPK-2'" "$ERR"
-# Renaming SPK-2 -> SPK-92 doesn't just swap that one entry: sorted by
-# numeric id, SPK-92 now sorts AFTER SPK-3, so position 2 is 'SPK-3' —
-# that reshuffle is exactly the kind of silent change --resume must
-# catch, not just an id substituted in place.
+# Renaming SPK-2 to SPK-92 reshuffles rather than substitutes: by numeric
+# id it now sorts after SPK-3, so position 2 becomes SPK-3.
 contains "manifest: names the new id found there instead" "is now 'SPK-3'" "$ERR"
 
 # --resume with no manifest at all refuses too, rather than guessing.
@@ -192,14 +163,8 @@ contains "e2e: names the position to resume from" "re-run with --resume 2" "$OUT
 
 # ---- 8. a wrapper's stderr preamble must not corrupt the parsed response --
 #
-# jira-api.sh's own "about to issue:" preamble (show_request) already goes
-# to stderr on every live write, and sections 4-5 above exercise that
-# through the real jira-api.sh with a stubbed curl. This section pins the
-# same guarantee down at the tracker-provider seam itself, independent of
-# jira-api.sh: a stand-in `create` verb that prints its own preamble to
-# stderr BEFORE the JSON body. jira-import.sh's `resp=$(... 2>"$ERRFILE")`
-# must still come back with a clean response and parse .key — the source
-# project's bug (an earlier parity sweep) was exactly this getting muddled.
+# Pinned at the tracker-provider seam itself, independent of jira-api.sh:
+# a stand-in `create` that prints a preamble to stderr before its JSON.
 
 FAKEROOT="$WORK/fakeroot"
 mkdir -p "$FAKEROOT/providers/lib" "$FAKEROOT/providers/tracker/jira" "$FAKEROOT/providers/tracker/fake"
@@ -211,8 +176,8 @@ cp -r "$HERE/lib" "$FAKEROOT/providers/tracker/jira/lib"
 
 cat > "$FAKEROOT/providers/tracker/fake/provider.sh" <<'FAKEEOF'
 #!/bin/bash
-# A stand-in tracker `create` that behaves like jira-api.sh's write path:
-# a preamble on stderr, THEN the created issue's JSON on stdout.
+# Behaves like jira-api.sh's write path: a preamble on stderr, THEN the
+# created issue's JSON on stdout.
 verb="$1"; shift
 case "$verb" in
     create)

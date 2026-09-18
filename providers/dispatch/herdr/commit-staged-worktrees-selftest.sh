@@ -2,18 +2,14 @@
 #
 # Assertions for commit-staged-worktrees.sh's core safety claims: a staged
 # worktree gets committed with its own .commit-msg.txt, a clean worktree is
-# left alone, a gpgsign-lock failure is recovered by a later, successful
-# run without this script ever touching signing configuration, and the
-# repository's primary worktree is never committed regardless of what is
-# staged there.
+# left alone, a gpgsign-lock failure is recovered by a later successful run
+# without this script ever touching signing configuration, and the
+# repository's primary worktree is never committed whatever is staged there.
 #
-# Builds and destroys its own scratch git repos + worktrees under
-# `mktemp -d` (never under a fixed /tmp path) for every scenario, all with
-# commit.gpgsign explicitly set in the FIXTURE (never by the script under
-# test — it never touches that setting; see commit-staged-worktrees.sh's
-# own header). Never touches this checkout, never touches a real remote,
-# never a real host, and never a real `herdr` binary — this script has no
-# herdr dependency of its own, so none is stubbed.
+# Builds and destroys its own scratch git repos and worktrees under
+# `mktemp -d`, with commit.gpgsign set in the FIXTURE, never by the script
+# under test. Never touches this checkout, a real remote, a real host, or a
+# real `herdr` binary.
 #
 # Usage: ./commit-staged-worktrees-selftest.sh
 # Exit 0 if every assertion passes, 1 otherwise.
@@ -78,24 +74,17 @@ assert_not_contains() {
     esac
 }
 
-# row_field <branch> <field-number> <table-text> — pulls a field out of the
-# rendered table by column *position*, via awk, rather than matching a
-# literal tab: `table()` pipes through `column -t`, which re-pads with
-# spaces, so a substring check for "branch\tSTATUS" never matches the
-# rendered output and would pass vacuously whether the claim held or not.
+# row_field <branch> <field-number> <table-text> — pulls a field by column
+# POSITION via awk. `table()` pipes through `column -t`, which re-pads with
+# spaces, so a substring check for a literal tab would pass vacuously.
 row_field() {
     local branch="$1" n="$2" out="$3"
     printf '%s\n' "$out" | awk -v b="$branch" -v n="$n" '$1==b {print $n; exit}'
 }
 
-# new_base_repo — bare origin + a "primary" clone, signing off (fixture
-# setting, not the script's), one seed commit on a branch explicitly named
-# "main" (never relies on the ambient init.defaultBranch default). Prints
-# the primary clone's path.
-#
-# Every scratch repo pins core.hooksPath, commit.gpgsign, gpg.format and
-# gpg.program to values scoped to itself, so it cannot pick up this
-# machine's global git config or its real gpg/op setup.
+# new_base_repo — bare origin plus a "primary" clone on a branch explicitly
+# named "main", printing the clone's path. Pins core.hooksPath, commit.gpgsign,
+# gpg.format and gpg.program to itself, so no global git or gpg/op setup leaks in.
 new_base_repo() {
     local work bare primary
     work=$(mktemp -d "${TMPDIR:-/tmp}/cswt-selftest.XXXXXX") || return 1
@@ -130,12 +119,8 @@ run_real() {
     ( cd "$cwd" && "$SRC" "$@" )
 }
 
-# --------------------------------------------------------- 1. staged commit
-#
-# A worktree with staged changes and a .commit-msg.txt gets committed with
-# that message. Oracle: `git log` on the worktree's own branch, not the
-# script's own printed row — a mutant that prints COMMITTED without ever
-# calling `git commit` must still fail this.
+# 1. Oracle is `git log` on the worktree's own branch, not the printed row:
+# a mutant that prints COMMITTED without calling `git commit` must fail.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (staged commit)"
 WT=$(add_worktree "$PRIMARY" feature1) || die "could not add worktree (staged commit)"
@@ -159,8 +144,6 @@ assert_eq "the new commit's subject (per git log) matches .commit-msg.txt's firs
 STAGED_AFTER=$(git -C "$WT" status --porcelain --untracked-files=no)
 assert_eq "git status --porcelain shows a clean index after the commit" "" "$STAGED_AFTER"
 
-# ------------------------------------------------- 2. nothing staged: skip
-
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (nothing staged)"
 WT=$(add_worktree "$PRIMARY" feature2) || die "could not add worktree (nothing staged)"
 echo "untracked, never staged" > "$WT/untouched.txt"
@@ -176,15 +159,9 @@ assert_eq "git log gained no commit (rev-list count unchanged)" "$PRE_COUNT" "$P
 POST_STATUS=$(git -C "$WT" status --porcelain)
 assert_eq "git status --porcelain is byte-identical before and after (nothing touched)" "$PRE_STATUS" "$POST_STATUS"
 
-# ----------------------------------------------- 3. gpgsign-lock recovery
-#
-# Simulates a worktree whose earlier `git commit` failed because signing
-# was unavailable at the time (commit.gpgsign=true plus a signing helper
-# that refuses): the FIRST run must report FAILED and leave the staged
-# change and .commit-msg.txt untouched; a SECOND run, after the signing
-# helper starts succeeding (recovery, without this script ever touching
-# commit.gpgsign or any other signing config), must then commit
-# successfully — the same recovery path the source script exists for.
+# 3. gpgsign-lock recovery: the FIRST run reports FAILED and leaves the staged
+# change untouched; a SECOND, after the signing helper starts succeeding,
+# commits — without the script ever touching any signing config.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (gpgsign lock)"
 WT=$(add_worktree "$PRIMARY" feature3) || die "could not add worktree (gpgsign lock)"
@@ -195,10 +172,8 @@ GPG_LOCK_FLAG="$GPGDIR/locked"
 touch "$GPG_LOCK_FLAG"
 KEYFILE="$GPGDIR/fixture-key"
 echo "dummy-key-material" > "$KEYFILE"
-# Fixture SSH-signing helper (stands in for gpg.ssh.program): fails while
-# $GPG_LOCK_FLAG exists (simulating a locked credential/signing agent —
-# e.g. a locked 1Password-style SSH-agent integration), succeeds once the
-# flag is removed, writing the signature file git expects.
+# Fixture SSH-signing helper: fails while $GPG_LOCK_FLAG exists (a locked
+# signing agent), succeeds once removed, writing the signature git expects.
 cat > "$GPGDIR/sshsign" <<EOF
 #!/bin/bash
 if [ -e "$GPG_LOCK_FLAG" ]; then
@@ -234,9 +209,7 @@ MID_STAGED=$(git -C "$WT" status --porcelain --untracked-files=no)
 assert_eq "the staged change survives the failed attempt untouched" "$PRE_STAGED" "$MID_STAGED"
 [ -f "$WT/.commit-msg.txt" ] || { echo "FAIL: .commit-msg.txt was deleted by the failed attempt" >&2; FAIL=1; }
 
-# Recovery: the signing helper now succeeds. The script itself never
-# touched commit.gpgsign/gpg.program/user.signingkey — only the fixture
-# flag changed.
+# Recovery: only the FIXTURE flag changed, never the script's own config.
 rm -f "$GPG_LOCK_FLAG"
 
 RC2=0
@@ -255,14 +228,9 @@ assert_eq "the recovered commit's subject matches .commit-msg.txt" "feat: recove
 SIGNING_CFG_AFTER="$(git -C "$WT" config commit.gpgsign)"
 assert_eq "the script never altered commit.gpgsign itself" "true" "$SIGNING_CFG_AFTER"
 
-# ------------------------------------------------- 4. primary never touched
-#
-# Whatever is staged in the repository's OWN primary worktree, invoking the
-# script from a linked worktree must never commit it there. Oracle: git log
-# on the primary's own branch and git status --porcelain on its index —
-# neither the script's printed table nor its exit code, so a mutant that
-# silently committed the primary while still printing a clean report still
-# fails this.
+# 4. Whatever is staged in the primary worktree must never be committed. The
+# oracle is git log plus git status --porcelain on it, never the printed table,
+# so a mutant that commits the primary behind a clean report still fails.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (primary untouched)"
 echo "wip in the owner's own checkout" > "$PRIMARY/wip.txt"
@@ -283,8 +251,6 @@ POST_PRIMARY_LOG=$(git -C "$PRIMARY" log --oneline main)
 assert_eq "the primary worktree's own branch gained no commit (git log unchanged)" "$PRE_PRIMARY_LOG" "$POST_PRIMARY_LOG"
 POST_PRIMARY_STAGED=$(git -C "$PRIMARY" status --porcelain --untracked-files=no)
 assert_eq "the primary worktree's staged WIP is byte-identical, untouched" "$PRE_PRIMARY_STAGED" "$POST_PRIMARY_STAGED"
-
-# --------------------------------------------------- 5. merge in progress
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (merge in progress)"
 echo "main version" > "$PRIMARY/conflict.txt"
@@ -321,11 +287,9 @@ fi
 POST_COUNT=$(git -C "$WT" rev-list --count HEAD)
 assert_eq "no new commit landed on feature5's HEAD" "$PRE_COUNT" "$POST_COUNT"
 
-# ---------------------------------------- 6. mid-rebase (detached + special)
-#
-# During a rebase HEAD is also detached, so this checks that the special-
-# state reason ("rebase in progress") wins over the generic detached-HEAD
-# reason — ordering, not just detection.
+# 6. During a rebase HEAD is ALSO detached, so this pins that "rebase in
+# progress" WINS over the generic detached-HEAD reason — ordering, not
+# just detection.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (mid-rebase)"
 echo "main version" > "$PRIMARY/rconflict.txt"
@@ -352,12 +316,9 @@ PRE_COUNT6=$(git -C "$WT" rev-list --count HEAD 2>/dev/null || echo "<rev-parse 
 
 OUT=$(run_real "$PRIMARY" 2>&1) || true
 assert_contains "mid-rebase worktree is SKIPPED, not treated as plain detached" "$OUT" "rebase in progress"
-# Observing the effect, not just the printed word: a mutant that matches the
-# "rebase in progress" string but then falls through and commits anyway
-# (e.g. a missing `continue`) must still fail this scenario.
-# row_field keys on the table's BRANCH column, and mid-rebase HEAD is
-# detached, so the script reports this row under "(detached)", not
-# "feature6" (same as the detached-HEAD-only scenario below).
+# Observes the effect, not the printed word: a mutant matching the string but
+# falling through and committing anyway must still fail. row_field keys on the
+# BRANCH column, and mid-rebase HEAD is detached, so this row is "(detached)".
 assert_eq "feature6's row status is SKIPPED, not COMMITTED or FAILED" "SKIPPED" "$(row_field '(detached)' 2 "$OUT")"
 if [ -d "$GITDIR/rebase-merge" ] || [ -d "$GITDIR/rebase-apply" ]; then
     echo "ok: rebase-merge/rebase-apply state is still present — no commit consumed the rebase"
@@ -367,8 +328,6 @@ else
 fi
 POST_COUNT6=$(git -C "$WT" rev-list --count HEAD 2>/dev/null || echo "<rev-parse failed>")
 assert_eq "no new commit landed on feature6's HEAD during the rebase" "$PRE_COUNT6" "$POST_COUNT6"
-
-# ------------------------------------------------- 7. detached HEAD skip
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (detached HEAD)"
 WT=$(add_worktree "$PRIMARY" feature7) || die "could not add worktree (detached HEAD)"
@@ -386,8 +345,6 @@ assert_not_contains "the detached-HEAD subject never reaches a COMMITTED row" "$
 POST_COUNT=$(git -C "$WT" rev-list --count HEAD)
 assert_eq "detached HEAD gained no commit" "$PRE_COUNT" "$POST_COUNT"
 
-# ----------------------------------------------- 8. dry-run FILES/TIP/list
-
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (dry-run detail)"
 WT=$(add_worktree "$PRIMARY" feature8) || die "could not add worktree (dry-run detail)"
 echo a > "$WT/a.txt"; echo b > "$WT/b.txt"; echo c > "$WT/c.txt"
@@ -403,8 +360,6 @@ assert_contains "dry-run staged-file list includes b.txt" "$OUT" "b.txt"
 assert_contains "dry-run staged-file list includes c.txt" "$OUT" "c.txt"
 POST_COUNT=$(git -C "$WT" rev-list --count HEAD)
 assert_eq "--dry-run commits nothing" "$PRE_COUNT" "$POST_COUNT"
-
-# --------------------------------------------- 9. whitespace-only message
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (whitespace message)"
 WT=$(add_worktree "$PRIMARY" feature9) || die "could not add worktree (whitespace message)"
@@ -422,22 +377,15 @@ assert_contains "the real run agrees it was blank (git itself refuses an empty m
 REAL_STATUS9=$(row_field feature9 2 "$REAL_OUT")
 assert_eq "the real run never silently commits a blank message" "FAILED" "$REAL_STATUS9"
 
-# The discriminating check that a FAILED-only assertion above does not
-# provide: git itself refuses an empty message with or without any guard in
-# this script, so a FAILED-only assertion passes whether or not the script
-# recognises blank messages at all. What must actually hold is that
-# --dry-run's prediction is never contradicted by what the same fixture's
-# real run, verified independently through git, actually does — cross-
-# checked here against REAL_STATUS9 (git-observed truth), not against a
-# literal string this script invented.
+# git refuses an empty message with or without a guard, so a FAILED-only
+# assertion passes either way. What must hold is that --dry-run's prediction
+# matches the real run, checked against REAL_STATUS9 (git-observed truth).
 if [ "$DRY_STATUS9" = "WOULD-COMMIT" ] && [ "$REAL_STATUS9" != "COMMITTED" ]; then
     echo "FAIL: dry-run predicted WOULD-COMMIT but the real run on the identical fixture did not commit (git-verified outcome: $REAL_STATUS9) — dry-run contradicts reality" >&2
     FAIL=1
 else
     echo "ok: dry-run's prediction for feature9 is never contradicted by the real run's git-verified outcome"
 fi
-
-# ---------------------------------------------- 10. .commit-msg.txt staged
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (msg file staged)"
 WT=$(add_worktree "$PRIMARY" feature10) || die "could not add worktree (msg file staged)"
@@ -459,12 +407,9 @@ case "$STATUS_AFTER" in
         ;;
 esac
 
-# ------------------------------------------- 10b. only .commit-msg.txt staged
-#
-# If .commit-msg.txt is the ONLY staged path, unstaging it before commit
-# would empty the index and turn `git commit` into an unexplained FAILED
-# row. The script must recognise this case and SKIP before ever touching
-# the index.
+# 10b. If .commit-msg.txt is the ONLY staged path, unstaging it would empty
+# the index and turn `git commit` into an unexplained FAILED row — so the
+# script must SKIP before ever touching the index.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (msg file only staged)"
 WT=$(add_worktree "$PRIMARY" feature10b) || die "could not add worktree (msg file only staged)"
@@ -480,12 +425,9 @@ assert_eq "no commit landed" "$PRE_COUNT10B" "$POST_COUNT10B"
 STATUS_AFTER10B=$(git -C "$WT" status --porcelain -- .commit-msg.txt)
 assert_eq "the msg file's staged status is untouched — the index was never even reset" "A  .commit-msg.txt" "$STATUS_AFTER10B"
 
-# --------------------------------- 10c. failed commit restores a staged msg
-#
-# The header claims a failed run "leaves everything exactly as found and
-# can be re-run", but the unstage of .commit-msg.txt (when it was staged)
-# must be undone on a failure path — a blank message here forces `git
-# commit` to fail after the unstage has already run.
+# 10c. The header claims a failed run leaves everything as found, so the
+# unstage of .commit-msg.txt must be undone on the failure path. A blank
+# message forces `git commit` to fail after the unstage has already run.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (restore staged msg on failure)"
 WT=$(add_worktree "$PRIMARY" feature10c) || die "could not add worktree (restore staged msg on failure)"
@@ -499,15 +441,9 @@ assert_eq "the blank-message commit FAILS (not SKIPPED, not COMMITTED)" "FAILED"
 POST_STATUS10C=$(git -C "$WT" status --porcelain -- .commit-msg.txt)
 assert_eq "a failed run restores .commit-msg.txt's staged status exactly, matching the header's 'leaves everything exactly as found' claim" "$PRE_STATUS10C" "$POST_STATUS10C"
 
-# --------------------------------------- 10d. commit failure reported on stdout
-#
-# The old capture pattern (`2>&1 >/dev/null`) keeps only stderr, so a `git
-# commit` failure whose message lands on stdout (a pre-commit hook that
-# doesn't redirect) would produce a generic "no error output captured"
-# placeholder instead of the real reason. A pre-commit hook writing to its
-# own stdout is exactly that case — git does not redirect hook output
-# specially, so it reaches the same stream as everything else `git commit`
-# prints.
+# 10d. The old `2>&1 >/dev/null` capture keeps only stderr, so a `git commit`
+# failure printed on STDOUT gave "no error output captured" instead of the
+# reason — git does not redirect a pre-commit hook's output specially.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (stdout-only failure)"
 WT=$(add_worktree "$PRIMARY" feature10d) || die "could not add worktree (stdout-only failure)"
@@ -529,12 +465,8 @@ assert_eq "the hook-blocked commit is reported FAILED" "FAILED" "$(row_field fea
 assert_contains "the FAILED row's reason captures the hook's stdout-only message" "$OUT" "custom-hook-refusal"
 assert_not_contains "the placeholder is not used when a real reason exists on stdout" "$OUT" "no error output captured"
 
-# ------------------------------------------ 10e. concurrent index.lock: UNKNOWN
-#
-# An index.lock left by a concurrent process (a live Herdr agent in the
-# same worktree — the exact condition this script is meant to run against)
-# says the worktree could not be evaluated right now, not that anything
-# about it is known-bad. Must be UNKNOWN (exit 2), not FAILED (exit 1).
+# 10e. A concurrent process's index.lock (a live Herdr agent in the same
+# worktree) means "not evaluable now", not known-bad: UNKNOWN (2), not FAILED (1).
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (index.lock)"
 WT=$(add_worktree "$PRIMARY" feature10e) || die "could not add worktree (index.lock)"
@@ -551,12 +483,8 @@ rm -f "$GITDIR10E/index.lock"
 assert_eq "a concurrently-locked index is reported UNKNOWN, not FAILED" "UNKNOWN" "$(row_field feature10e 2 "$OUT")"
 assert_eq "an index.lock-only run exits 2 (could-not-evaluate), not 1" "2" "$RC10E"
 
-# ---------------------------------------- 10f. vanished worktree path: UNKNOWN
-#
-# A worktree 'git worktree list' just reported, whose directory is gone by
-# the time this script gets to it (removed by a concurrent Herdr agent), is
-# unevaluated, not known-bad — same treatment as a vanished-worktree check
-# elsewhere in this plugin.
+# 10f. A worktree `git worktree list` just reported, whose directory is gone
+# by the time the script reaches it, is unevaluated — not known-bad.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (vanished worktree)"
 WT=$(add_worktree "$PRIMARY" feature10f) || die "could not add worktree (vanished worktree)"
@@ -568,12 +496,8 @@ rm -rf "$WT"
 OUT=$(run_real "$PRIMARY" 2>&1) || true
 assert_eq "a worktree whose path vanished between listing and evaluation is UNKNOWN, not FAILED" "UNKNOWN" "$(row_field feature10f 2 "$OUT")"
 
-# ------------------------------------------- 10g. FILES count after unstage
-#
-# The FILES column must reflect the post-unstage staged count even when
-# .commit-msg.txt was unstaged before the commit, not the pre-unstage
-# count. Cross-checked against git's own view of the resulting commit, not
-# just against a second copy of the same arithmetic.
+# 10g. FILES must reflect the POST-unstage count, cross-checked against git's
+# own view of the resulting commit, not a second copy of the same arithmetic.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (FILES count after unstage)"
 WT=$(add_worktree "$PRIMARY" feature10g) || die "could not add worktree (FILES count after unstage)"
@@ -588,11 +512,8 @@ COMMITTED_PATHS10G=$(git -C "$WT" show --stat --format= --name-only HEAD)
 ACTUAL_COUNT10G=$(printf '%s\n' "$COMMITTED_PATHS10G" | grep -c '')
 assert_eq "git's own view of the commit has 2 paths, matching the FILES column" "2" "$ACTUAL_COUNT10G"
 
-# --------------------------------------------------- 11. exit code priority
-#
-# UNKNOWN (git-dir could not be resolved) takes priority over FAILED
-# (commit message file unreadable) — neither collapses into the other's
-# status word.
+# 11. UNKNOWN (git-dir unresolvable) takes priority over FAILED (message file
+# unreadable); neither collapses into the other's status word.
 
 PRIMARY=$(new_base_repo) || die "could not build scratch repo (exit codes, mixed)"
 
@@ -608,8 +529,7 @@ chmod 000 "$WT_FAIL/.commit-msg.txt"
 WT_UNKNOWN=$(add_worktree "$PRIMARY" wunknown) || die "could not add worktree (wunknown)"
 echo unknown > "$WT_UNKNOWN/u.txt"; git -C "$WT_UNKNOWN" add u.txt
 printf 'feat: unknown\n' > "$WT_UNKNOWN/.commit-msg.txt"
-# Corrupt the linked worktree's own .git file (normally "gitdir: <path>") so
-# `git -C <path> rev-parse --git-dir`, run from inside that path, fails.
+# Corrupt the worktree's own .git file so `rev-parse --git-dir` there fails.
 printf 'not a gitdir pointer\n' > "$WT_UNKNOWN/.git"
 
 RC=0
@@ -639,8 +559,6 @@ printf 'feat: ok\n' > "$WT_OK/.commit-msg.txt"
 RC=0
 run_real "$PRIMARY" >/dev/null 2>&1 || RC=$?
 assert_eq "an all-clean run exits 0" "0" "$RC"
-
-# --------------------------------------------------------------- summary
 
 if [ "$FAIL" = "0" ]; then
     echo "commit-staged-worktrees-selftest: all assertions passed"

@@ -22,10 +22,8 @@ trap 'rm -rf "$WORK"' EXIT
 
 STUBBIN="$WORK/bin"
 mkdir -p "$STUBBIN"
-# Stubs must not touch stdin: open_url's `open` call inherits the wizard's
-# own stdin (unredirected), so a stub that reads it here would drain the
-# scripted answers meant for `ask`/`ask_secret` further down the script.
-# The sink command given to ask_secret gets its own explicit pipe instead.
+# Stubs must not touch stdin: open_url's `open` inherits the wizard's own
+# unredirected stdin, so a stub reading it drains the scripted answers.
 for cmd in gh open op; do
     cat > "$STUBBIN/$cmd" <<'EOF'
 #!/bin/bash
@@ -34,10 +32,8 @@ EOF
     chmod +x "$STUBBIN/$cmd"
 done
 
-# A second PATH with gh/open stubbed but op absent, for test5: isolation
-# must stay structural (see templates/CLAUDE.md) — dropping to a bare
-# system PATH there would let open_url's `open` call reach the real
-# browser opener instead of exercising the "sink missing" path.
+# A second PATH with gh/open stubbed but op absent, for test5. Isolation stays
+# structural: a bare system PATH would let `open` reach the real browser.
 STUBBIN_NO_OP="$WORK/bin-no-op"
 mkdir -p "$STUBBIN_NO_OP"
 for cmd in gh open; do

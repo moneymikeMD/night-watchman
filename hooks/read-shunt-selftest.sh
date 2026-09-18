@@ -50,15 +50,8 @@ STATE_ROOT="$WORKDIR/state"
 STUBBIN="$WORKDIR/stubbin"
 mkdir -p "$STATE_ROOT" "$STUBBIN"
 
-# A minimal, explicit PATH containing only what read-shunt.sh and this
-# selftest actually need (jq/wc/awk/sed/env, plus bash builtins) and
-# deliberately excluding wherever the REAL `claude` binary lives on this
-# machine. Prepending a stub dir to the ambient $PATH is not enough for the
-# "claude is unreachable" scenario — the ambient $PATH still resolves the
-# real binary right behind the stub dir, which would make that test invoke
-# the real network-calling `claude -p --model haiku` (found the hard way:
-# the first run of this selftest hung past its own foreground timeout on
-# exactly this).
+# A minimal PATH that deliberately excludes wherever the real `claude` binary
+# lives: a stub dir prepended to the ambient PATH still resolves it behind.
 MINIMAL_PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
 PASS=0
@@ -66,8 +59,6 @@ FAIL=0
 
 pass() { PASS=$((PASS + 1)); echo "PASS: $1"; }
 fail() { FAIL=$((FAIL + 1)); echo "FAIL: $1"; }
-
-# --- Stub `claude` binaries --------------------------------------------------
 
 STUB_OK="$STUBBIN/claude"
 cat > "$STUB_OK" << 'EOF'
@@ -98,8 +89,6 @@ echo "should never be seen — killed by the hook's own timeout first"
 EOF
 chmod +x "$STUB_HANG"
 
-# --- Fixture files ------------------------------------------------------------
-
 mk_lines() {
   # $1 = path, $2 = line count
   awk -v n="$2" 'BEGIN { for (i = 1; i <= n; i++) print "line " i }' > "$1"
@@ -111,10 +100,6 @@ F401="$WORKDIR/f401.txt";      mk_lines "$F401" 401
 F_ZERO="$WORKDIR/zero.txt";    : > "$F_ZERO"
 F_SECRET="$WORKDIR/creds.env"; mk_lines "$F_SECRET" 900
 F_UNREADABLE="$WORKDIR/no-read.txt"; mk_lines "$F_UNREADABLE" 900; chmod 000 "$F_UNREADABLE"
-
-# --- run_hook: build a Read-tool payload and run the hook under a given
-# claude-stub directory, session id, and (optional) extra env. Prints the
-# hook's exit code on stdout as "RC=<n>" first line, then its stderr. ------
 
 run_hook() {
   # $1 = tool_name, $2 = file_path or command (per tool), $3 = session_id,
@@ -133,9 +118,6 @@ run_hook() {
   if [ -n "$_stubdir" ]; then
     _env_path="$_stubdir:$MINIMAL_PATH"
   else
-    # No stub at all: deliberately the minimal PATH, not the ambient one,
-    # so the REAL claude binary is genuinely unreachable (see MINIMAL_PATH
-    # comment above) rather than silently found further down $PATH.
     _env_path="$MINIMAL_PATH"
   fi
 
@@ -160,40 +142,19 @@ assert_rc() {
   fi
 }
 
-# =============================================================================
-# 1. Corrupt / truncated hook-input JSON -> fails open (rc=0)
-# =============================================================================
-
 OUT="$(printf '{"tool_name": "Read", "tool_in' | env PATH="$STUBBIN:$PATH" READ_SHUNT_STATE_ROOT="$STATE_ROOT" "$SCRIPT" 2>"$WORKDIR/.last_stderr"; echo "RC=$?")"
 assert_rc "truncated JSON fails open" "0" "$OUT"
 
-# =============================================================================
-# 2. Empty stdin -> fails open (rc=0)
-# =============================================================================
-
 OUT="$(printf '' | env PATH="$STUBBIN:$PATH" READ_SHUNT_STATE_ROOT="$STATE_ROOT" "$SCRIPT" 2>"$WORKDIR/.last_stderr"; echo "RC=$?")"
 assert_rc "empty stdin fails open" "0" "$OUT"
-
-# =============================================================================
-# 3. Zero-length file -> under threshold, never shunted (rc=0), stub NOT
-#    invoked (below-threshold files never reach the summariser at all)
-# =============================================================================
 
 SENT="$WORKDIR/sentinel.zero"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F_ZERO" "sess-zero" "$STUBBIN" "")"
 assert_rc "zero-length file is not shunted" "0" "$OUT"
 if [ -e "$SENT" ]; then fail "zero-length file: summariser was invoked (should not be)"; else pass "zero-length file: summariser not invoked"; fi
 
-# =============================================================================
-# 4. Unreadable line count (permission denied) -> fails open (rc=0)
-# =============================================================================
-
 OUT="$(run_hook Read "$F_UNREADABLE" "sess-unreadable" "$STUBBIN" "")"
 assert_rc "permission-denied file fails open" "0" "$OUT"
-
-# =============================================================================
-# 5. Threshold boundary: 399 / 400 / 401 lines
-# =============================================================================
 
 SENT="$WORKDIR/sentinel.399"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F399" "sess-399" "$STUBBIN" "")"
@@ -218,30 +179,18 @@ case "$(last_stderr)" in
   *) fail "401 lines: shunt stderr does not mention the escape hatch" ;;
 esac
 
-# =============================================================================
-# 6. Escape hatch: same (session, path) read again -> served unshunted (rc=0)
-# =============================================================================
-
 OUT="$(run_hook Read "$F401" "sess-401" "$STUBBIN" "")"
 assert_rc "escape hatch: second read of same file+session is unshunted" "0" "$OUT"
 
-# A DIFFERENT session reading the same file is shunted again (per-session,
-# not global, dedupe).
 SENT="$WORKDIR/sentinel.401b"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F401" "sess-401-other" "$STUBBIN" "")"
 assert_rc "escape hatch is per-session: new session re-shunts" "2" "$OUT"
-
-# =============================================================================
-# 7. Secrets path is never shunted, even huge, even first read in a fresh
-#    session — summariser must not be invoked at all.
-# =============================================================================
 
 SENT="$WORKDIR/sentinel.secret"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F_SECRET" "sess-secret" "$STUBBIN" "")"
 assert_rc "secrets-bearing .env file is never shunted" "0" "$OUT"
 if [ -e "$SENT" ]; then fail "secrets file: summariser was invoked (should NEVER be)"; else pass "secrets file: summariser never invoked"; fi
 
-# docker/env/ path form, even with an innocuous filename
 SECDIR="$WORKDIR/docker/env"; mkdir -p "$SECDIR"
 F_SECRET2="$SECDIR/stack.env.tpl"; mk_lines "$F_SECRET2" 900
 SENT="$WORKDIR/sentinel.secret2"; rm -f "$SENT"
@@ -249,12 +198,8 @@ OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F_SECRET2" "sess-secret2" "$STUBBIN
 assert_rc "docker/env/ path is never shunted" "0" "$OUT"
 if [ -e "$SENT" ]; then fail "docker/env/ path: summariser was invoked (should NEVER be)"; else pass "docker/env/ path: summariser never invoked"; fi
 
-# 7a. Case-variance directory aliasing (review finding 1, CRITICAL
-# repro): reading the SAME file through a differently-cased path to its
-# excluded directory must still exclude it. This assumes a case-insensitive,
-# case-preserving filesystem (the default macOS APFS volume this hook is
-# meant to run on — see read-shunt.sh's own header on why that's the
-# intended environment, not a portability gap).
+# 7a. Assumes a case-insensitive, case-preserving filesystem (the default
+# macOS APFS volume); on a case-sensitive one this passes vacuously.
 F_SECRET3="$SECDIR/plain-name.txt"; mk_lines "$F_SECRET3" 900
 UPPERCASED_PATH="$WORKDIR/DOCKER/ENV/plain-name.txt"
 SENT="$WORKDIR/sentinel.secret3"; rm -f "$SENT"
@@ -262,18 +207,14 @@ OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$UPPERCASED_PATH" "sess-secret3" "$S
 assert_rc "docker/env/ via a case-varied path is still excluded" "0" "$OUT"
 if [ -e "$SENT" ]; then fail "case-varied docker/env/ path: summariser was invoked (should NEVER be)"; else pass "case-varied docker/env/ path: summariser never invoked"; fi
 
-# 7b. Literal mixed-case basename, no filesystem aliasing involved at all
-# (review finding 3, HIGH repro): only three fixed case forms
-# used to be matched; this is neither of them.
+# 7b. Literal mixed-case basename, no filesystem aliasing involved.
 F_SECRET4="$WORKDIR/DbToKen-dump.txt"; mk_lines "$F_SECRET4" 900
 SENT="$WORKDIR/sentinel.secret4"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F_SECRET4" "sess-secret4" "$STUBBIN" "")"
 assert_rc "mixed-case 'DbToKen' basename is excluded" "0" "$OUT"
 if [ -e "$SENT" ]; then fail "mixed-case basename: summariser was invoked (should NEVER be)"; else pass "mixed-case basename: summariser never invoked"; fi
 
-# 7c. A symlink whose NAME is innocuous but whose TARGET is secrets-bearing
-# (review finding 2, CRITICAL repro): the exclusion has to follow
-# the symlink, not just pattern-match the name it was reached by.
+# 7c. The exclusion follows the symlink, not the name it was reached by.
 F_SECRET5="$WORKDIR/prod.env"; mk_lines "$F_SECRET5" 900
 SYMLINK_TO_SECRET="$WORKDIR/notes.txt"
 ln -sf "$F_SECRET5" "$SYMLINK_TO_SECRET"
@@ -281,13 +222,6 @@ SENT="$WORKDIR/sentinel.secret5"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$SYMLINK_TO_SECRET" "sess-secret5" "$STUBBIN" "")"
 assert_rc "innocuously-named symlink to a secrets file is excluded" "0" "$OUT"
 if [ -e "$SENT" ]; then fail "symlink to secret: summariser was invoked (should NEVER be)"; else pass "symlink to secret: summariser never invoked"; fi
-
-# =============================================================================
-# 7d. Marker-key collision resistance (review finding 4, MEDIUM
-#     repro): two DISTINCT paths that collided under the old naive
-#     `tr '/' '_'` scheme must still be tracked as two distinct shunts —
-#     reading the second must NOT be silently treated as "already shunted".
-# =============================================================================
 
 mkdir -p "$WORKDIR/coll/a" "$WORKDIR/coll/a_b"
 COLL_A="$WORKDIR/coll/a/b_c.txt";  mk_lines "$COLL_A" 900
@@ -303,21 +237,14 @@ OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$COLL_B" "sess-coll" "$STUBBIN" "")"
 assert_rc "marker-collision fixture, path B (same session): still shunted, not mistaken for A's marker" "2" "$OUT"
 if [ -e "$SENT" ]; then pass "marker-collision path B: summariser was invoked"; else fail "marker-collision path B: summariser NOT invoked — old naive key derivation would have collided with path A and wrongly skipped this"; fi
 
-# =============================================================================
-# 8. Fail-open when the haiku subprocess is unreachable
-# =============================================================================
-
-# 8a. claude not on PATH at all
 OUT="$(run_hook Read "$F401" "sess-nobin" "" "")"
 assert_rc "claude not on PATH: fails open" "0" "$OUT"
 
-# 8b. claude exits non-zero
 STUB_FAIL_DIR="$(dirname "$STUB_FAIL")"
 OUT="$(run_hook Read "$F401" "sess-failbin" "$STUB_FAIL_DIR" "")"
 assert_rc "claude exits non-zero: fails open" "0" "$OUT"
 
-# 8c. claude hangs past the timeout — bounded with a short READ_SHUNT_TIMEOUT
-# so this test itself stays fast; proves the hand-rolled kill actually fires.
+# 8c. Bounded with a short READ_SHUNT_TIMEOUT so this test stays fast.
 STUB_HANG_DIR="$(dirname "$STUB_HANG")"
 _start=$(date +%s)
 OUT="$(run_hook Read "$F401" "sess-hangbin" "$STUB_HANG_DIR" "2")"
@@ -328,10 +255,6 @@ if [ "$_elapsed" -le 10 ]; then
 else
   fail "claude hangs: hook took too long to return ($_elapsed s) — timeout/kill not working"
 fi
-
-# =============================================================================
-# 9. Bash cat-equivalent detection
-# =============================================================================
 
 SENT="$WORKDIR/sentinel.catplain"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Bash "cat $F401" "sess-catplain" "$STUBBIN" "")"
@@ -355,10 +278,6 @@ assert_rc "'cat \$VAR' (unresolved variable) is left alone" "0" "$OUT"
 
 OUT="$(run_hook Bash "grep foo $F401" "sess-grepnotcat" "$STUBBIN" "")"
 assert_rc "non-cat Bash command is left alone" "0" "$OUT"
-
-# =============================================================================
-# Summary
-# =============================================================================
 
 echo ""
 echo "read-shunt-selftest.sh: $PASS passed, $FAIL failed"

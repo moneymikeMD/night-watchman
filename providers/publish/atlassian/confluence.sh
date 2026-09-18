@@ -1,14 +1,10 @@
 #!/bin/bash
 #
-# confluence.sh — Confluence Cloud REST client (/wiki/api/v2), the system-
-# of-record half of the `publish` kind's `atlassian` implementation (see
-# providers/README.md). provider.sh's publish-brief calls it; it is also
-# runnable on its own.
-#
-# Ported from a production client and trimmed to what publishing
-# a brief needs: read, find a child page by title, create. There is no
-# update and no delete here on purpose — publishing never rewrites or
-# removes an existing page, so the paths that could are not shipped.
+# confluence.sh — Confluence Cloud REST client (/wiki/api/v2), the
+# system-of-record half of the `publish` kind's `atlassian` implementation
+# (see providers/README.md). Ships read, find-child and create only: there
+# is no update and no delete, so publishing can never rewrite or remove an
+# existing page.
 #
 # Usage:
 #   confluence.sh print-host                  # the resolved, validated site host (no request)
@@ -36,8 +32,7 @@
 # `create` prints one line: `Created page <id>: <title> (<url>)`, where
 # <url> is the page's tiny link when the response carries one.
 #
-# API facts this relies on (recorded live against a real site, see
-# fixtures/confluence/*.json for the responses):
+# API facts this relies on (recorded live, see fixtures/confluence/*.json):
 #   - An INVALID credential gets HTTP 404, the same body a missing page
 #     gets, not 401/403. Every 404 message says so.
 #   - /wiki/api/v2 has no current-user resource; whoami uses v1
@@ -176,13 +171,9 @@ children_all() {
     jq '{results: .}' < "$acc" > "$dest"
 }
 
-# markdown_to_storage — reads stdin, prints storage-format HTML. Kept
-# byte-for-byte with the client this was ported from except one escape
-# (link URLs may carry an untrusted double quote; replace_link
-# escapes it before interpolating into href="..."). One awk pass: fenced content is
-# emitted verbatim (only `]]>` is split), escaping and inline markup run on
-# non-code lines only. BSD awk has no gensub/backreferences, hence the
-# index()/substr() scanners. No single quote may appear inside the program.
+# markdown_to_storage — stdin to storage-format HTML; fenced content verbatim,
+# and replace_link escapes a double quote before href="...". BSD awk has no
+# gensub/backrefs (hence index()/substr()) and the program holds no quote.
 markdown_to_storage() {
     awk '
         function esc(s) {

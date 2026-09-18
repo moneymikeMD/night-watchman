@@ -6,16 +6,29 @@ description: Generated from every scripts/*.sh (excluding selftests) and scripts
 
 ## Top-level scripts
 
+### scripts/claude-cost-scan.py
+
+claude-cost-scan.py — scan local Claude Code JSONL transcripts and
+report per-session/per-model turns, tokens, and cost.
+
 ### scripts/claude-cost.py
 
 claude-cost.py — a small, dependency-free ledger for tracking what an
 agentic wave of work cost, in whatever unit the caller wants (dollars,
 tokens, whatever their own accounting already uses).
 
-### scripts/claude-cost-scan.py
+### scripts/comment-lint.py
 
-claude-cost-scan.py — scan local Claude Code JSONL transcripts and
-report per-session/per-model turns, tokens, and cost.
+Fail on comment blocks longer than the project's comment rule allows.
+
+```text
+Usage:
+  comment-lint.py [PATH ...]           # default: every tracked code file
+  comment-lint.py --max-block N        # cap on any comment run below the header
+  comment-lint.py --max-header N       # cap on the file header itself
+  comment-lint.py --stats              # per-file comment ratio, no pass/fail
+  comment-lint.py --selftest           # built-in fixture checks
+```
 
 ### scripts/decision-log.sh
 
@@ -114,10 +127,12 @@ Usage:
 
 ### providers/dispatch/herdr/commit-staged-worktrees.sh
 
-Commit already-STAGED work sitting in Herdr worktrees whose `git commit`
-never happened — most often because the worktree's commit-signing setup
-(commit.gpgsign plus whatever signing program is configured) was not
-available at the moment an agent tried to commit.
+commit-staged-worktrees.sh — commit already-STAGED work sitting in Herdr
+worktrees whose `git commit` never happened, most often because the
+worktree's commit-signing setup was unavailable at the time. Uses each
+worktree's own .commit-msg.txt as the message. Never merges, pushes,
+completes a ticket, removes a worktree, or deletes .commit-msg.txt, so a
+failed run leaves everything as found and can be re-run.
 
 ```text
 Usage:
@@ -139,13 +154,13 @@ Usage:
 
 ### providers/dispatch/herdr/herdr-ticket-start.sh
 
-herdr-ticket-start.sh — one command that opens a Herdr git-worktree
-workspace for an open ticket, starts a Claude agent in it PINNED to a
-chosen model, and hands it the ticket's session-start brief.
+herdr-ticket-start.sh — open a Herdr git-worktree workspace for a ticket,
+start a Claude agent in it pinned to a chosen model, and hand it the
+ticket's brief. Optional layer: this plugin does not ship or require Herdr.
 
 ```text
 Usage:
-  herdr-ticket-start.sh <ticket-id> --jira-progress-status ID [--model sonnet|opus|haiku] [--wait|--no-wait] [--dry-run]
+  herdr-ticket-start.sh <ticket-id> --jira-progress-status ID [--model sonnet|opus|haiku] [--timebox TEXT] [--forbidden TEXT]... [--wait|--no-wait] [--dry-run]
   herdr-ticket-start.sh --help
 ```
 
@@ -153,13 +168,8 @@ Usage:
 
 provider.sh — herdr's implementation of the `dispatch` provider kind
 (verbs: start, watch, stop — see ../../README.md for the contract).
-Dispatch only; the actual work for `start` is in the sibling
-herdr-ticket-start.sh, ported from a production system (see optional
-layers in README.md) and independently runnable with its
-own selftest. `watch` and `stop` are implemented here directly, against
-real recorded shapes under fixtures/ — no fixture existed for
-either verb before that ticket, per this project's fixture rule
-("fixtures are recorded, never authored").
+`start` is in the sibling herdr-ticket-start.sh, independently runnable
+with its own selftest; `watch` and `stop` are implemented here.
 
 ```text
 Usage:
@@ -174,47 +184,32 @@ Usage:
 
 provider.sh — memorygraph's implementation of the `memory` provider kind
 (verbs: store, recall — see ../../README.md for the contract). Dispatch
-only; the actual work is in the sibling scripts, each named after the
-verb it implements and independently runnable for its own selftest.
+only; the work is in the sibling script named after each verb.
 
 ### providers/memory/memorygraph/recall.sh
 
-recall.sh — the `recall` verb. memorygraph's own `recall --query` finds
-nothing for a multi-word phrase: `recall --query "jira api auth"`
-returns zero results, `recall --query "jira"` returns six. This first
-fixed that with a plain per-word fan-out; a later change ports the source
-project's rank-fusion follow-up (scripts/dev/recall.sh, one commit past
-that fork point): tokenize the query into single-noun candidates
-(stopwords and sub-3-char words dropped, deduped, capped at
---max-queries), run one `memorygraph recall --query WORD --limit N` per
-token, parse each token's prose result block, and fuse the per-token
-rankings with reciprocal rank fusion (RRF) instead of printing each
-token's raw output back to back. On the real store, tokens barely
-overlap, so ranking by match count alone degenerates to "sort by
-importance" and buries the memory that actually answers the query — RRF
-(score = sum over matching tokens of 1/(60 + rank_in_that_token)) fixes
-that by weighting each token's own relevance order. A zero-result
-multi-word recall is a malformed query, never evidence the graph is
-empty on a topic.
+recall.sh — the `recall` verb. `memorygraph recall --query` finds nothing
+for a multi-word phrase, so this tokenises the query into single-noun
+candidates (stopwords and sub-3-char words dropped, deduped, capped at
+--max-queries), runs one `memorygraph recall --query WORD --limit N` per
+token, and fuses the per-token rankings with reciprocal rank fusion
+(score = sum over matching tokens of 1/(60 + rank_in_that_token)).
 
 ### providers/memory/memorygraph/store.sh
 
-store.sh — the `store` verb: wraps `memorygraph store` with this
-project's tag conventions instead of leaving every caller to remember
-them. Every memory this plugin writes is meant to be tagged with the
-project it came from, the component it touches, and the kind of change
-it records (fix/feature/optimization/decision/...) — see the Project
-Memory Protocol this ticket ports. A caller that forgets one of those
-is how the graph fills up with memories nothing can later filter by.
+store.sh — the `store` verb: wraps `memorygraph store` so every memory is
+tagged with its project, component and kind of change, which is what makes
+the graph filterable later.
 
 ## Provider: publish/atlassian
 
 ### providers/publish/atlassian/confluence.sh
 
-confluence.sh — Confluence Cloud REST client (/wiki/api/v2), the system-
-of-record half of the `publish` kind's `atlassian` implementation (see
-providers/README.md). provider.sh's publish-brief calls it; it is also
-runnable on its own.
+confluence.sh — Confluence Cloud REST client (/wiki/api/v2), the
+system-of-record half of the `publish` kind's `atlassian` implementation
+(see providers/README.md). Ships read, find-child and create only: there
+is no update and no delete, so publishing can never rewrite or remove an
+existing page.
 
 ```text
 Usage:
@@ -266,10 +261,9 @@ Usage:
 
 ### providers/secrets/env/provider.sh
 
-providers/secrets/env/provider.sh — secrets provider backed by
-environment variables. A stranger with no 1Password access must still be
-able to run this repo's selftests and a first session; this is that
-path.
+providers/secrets/env/provider.sh — secrets provider backed by environment
+variables, so a stranger with no 1Password access can still run this repo's
+selftests and a first session.
 
 ```text
 Usage: provider.sh read REF
@@ -280,8 +274,7 @@ Usage: provider.sh read REF
 ### providers/secrets/op/provider.sh
 
 providers/secrets/op/provider.sh — secrets provider backed by 1Password,
-via the `op` CLI. This is the built-in default for the `secrets` kind
-(see providers/README.md).
+via the `op` CLI. The built-in default for the `secrets` kind.
 
 ```text
 Usage: provider.sh read REF
@@ -292,17 +285,9 @@ Usage: provider.sh read REF
 ### providers/tracker/jira/jira-agile-api.sh
 
 Client for the Jira Cloud Agile REST API (/rest/agile/1.0) — boards and
-sprints. OPTIONAL LAYER, ported from a production system (see the
-plugin's README, "Optional layers"): adopting Jira at all remains
-optional core-wide. Sibling to the plain issue-API wrapper
-(providers/tracker/jira/jira-api.sh, the one scripts/land-branch.sh's
-jira mode and --jira-api PATH / $ISSUES_JIRA_API convention already
-assume) rather than an extension of it: this script pins /rest/agile/1.0
-as a hard security boundary the same way that wrapper pins /rest/api/3 —
-a `raw`/`write` path argument
-can never be walked into a different API version by string
-concatenation. It exists to open/populate/close a Jira Sprint around a
-work block, which the plain issue API has no endpoints for at all.
+sprints. Sibling to the plain issue-API wrapper
+(providers/tracker/jira/jira-api.sh); /rest/agile/1.0 is pinned as a
+hard boundary a `raw`/`write` path argument cannot walk out of.
 
 ```text
 Usage:
@@ -353,12 +338,9 @@ Usage:
 ### providers/tracker/jira/jira-backfill.sh
 
 jira-backfill.sh — PUTs each local ticket's body (as the issue
-description), its five text/select custom fields (touches, verify,
-human_steps, appends, executor) and its Jira status, into the Jira issue
-jira-import.sh already created for it. Merges the source project's
-jira-backfill.sh (issues/ stage tree) and dotissues-jira-backfill.sh
-(chronicle .issues/ tree) into one script behind --schema
-issues|dotissues, de-identified.
+description), its six custom fields (touches, verify, human_steps,
+appends, executor, defer_until) and its Jira status, into the Jira issue
+jira-import.sh already created for it.
 
 ```text
 Usage:
@@ -374,8 +356,7 @@ per ticket in ascending numeric-id order. Starting from an EMPTY
 project, this makes the key Jira assigns land at the same number as the
 local id: local ticket id NNN -> Jira issue PROJECT-NNN. jira-backfill.sh
 and verify-jira-keys.sh both assume this holds; neither keeps or needs a
-separate id->key map. Ported from the source project's jira-import.sh,
-de-identified ("jira-import.sh is the redo path", 2026-09-09).
+separate id->key map.
 
 ```text
 Usage:
@@ -388,7 +369,7 @@ Usage:
 jira-space-create.sh — one-run bootstrap for a new Jira Space (company-
 managed, "simplified scrum classic" template): project + the six stage
 statuses + the six custom fields + those fields on every screen the
-project's issue types use.
+project's issue types use. Each step is idempotent; a re-run converges.
 
 ```text
 Usage:
@@ -399,14 +380,11 @@ Usage:
 
 ### providers/tracker/jira/jira-workflow-apply.sh
 
-One-shot fixup for a Jira company-managed project created from the
-"simplified scrum classic" template: that template ships a workflow with
-only To Do/In Progress/Done, but this plugin's stage set needs six more
-(Open, Triage, Awaiting Deployment, Deferred, Completed, Cancelled), each
-reachable from any status via a GLOBAL transition. Found 2026-09-11
-that every per-repo Jira Space created from that template lacks LAB's
-extra statuses, so issues.py mis-stages Done tickets
-(jira-unknown-status:Done) and Awaiting Deployment/Deferred are unusable.
+jira-workflow-apply.sh — adds this plugin's six stage statuses (Open,
+Triage, Awaiting Deployment, Deferred, Completed, Cancelled) and a GLOBAL
+transition into each to a Jira company-managed project's own copy of the
+"simplified scrum classic" template workflow, which ships only To Do/In
+Progress/Done. Idempotent: "already complete" exits 0 doing nothing.
 
 ```text
 Usage:
@@ -418,10 +396,7 @@ Usage:
 
 provider.sh — jira's implementation of the `tracker` provider kind
 (verbs: fetch, transition, comment, create — see ../../README.md for the
-contract). Dispatch only; the actual HTTP client is jira-api.sh, which is
-also independently runnable for the raw/write/comment/view subcommands a
-script like scripts/land-branch.sh's jira mode calls directly via
---jira-api PATH.
+contract). Dispatch only; the HTTP client is jira-api.sh.
 
 ```text
 Usage:
@@ -436,15 +411,8 @@ Usage:
 verify-jira-keys.sh — for every local ticket, fetch the Jira issue at
 PROJECT-\<numeric id> (the mapping jira-import.sh's create order
 establishes — see its header) and confirm the issue's summary equals the
-local ticket's title. Prints one line per mismatch or fetch failure, a
-final "N/M exact matches" summary, and exits 0 only when every ticket
-matched. Exits 1 for a pure title mismatch, 2 when any ticket could not
-be fetched at all — the two are different classes of "not verified" (a
-fetch failure says nothing about whether the title is right, a mismatch
-says the title is definitely wrong) and a caller scripting around this
-should be able to tell them apart. Ported from the source project's
-verify-jira-keys.sh, de-identified ("verify-jira-keys.sh --project LAB
--> 148/148 exact matches", 2026-09-09).
+local ticket's title. Prints one line per mismatch or fetch failure and a
+final "N/M exact matches" summary.
 
 ```text
 Usage:

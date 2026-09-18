@@ -1,38 +1,24 @@
 #!/bin/bash
 #
 # jira-backfill.sh — PUTs each local ticket's body (as the issue
-# description), its five text/select custom fields (touches, verify,
-# human_steps, appends, executor) and its Jira status, into the Jira issue
-# jira-import.sh already created for it. Merges the source project's
-# jira-backfill.sh (issues/ stage tree) and dotissues-jira-backfill.sh
-# (chronicle .issues/ tree) into one script behind --schema
-# issues|dotissues, de-identified.
+# description), its six custom fields (touches, verify, human_steps,
+# appends, executor, defer_until) and its Jira status, into the Jira issue
+# jira-import.sh already created for it.
 #
 # Assumes jira-import.sh created issues in ascending numeric-id order
 # starting from an empty project, so local ticket id NNN's Jira key is
 # PROJECT-NNN (see jira-import.sh's header) — no separate id->key map is
 # kept; verify-jira-keys.sh makes and checks the same assumption.
 #
-# Custom field ids are resolved BY NAME at runtime via GET /field (the
-# same technique jira-space-create.sh's field_lookup already uses), never
-# hardcoded as constants — this is what the ticket text asks for
-# ("custom field ids come from config (T5), not constants"): runtime
-# discovery gets the same property without waiting on T5's config work,
-# and matches the only other script in this directory that already needs
-# it. A field this Jira site does not have (T5 not run, or a name typo)
-# is skipped with a warning, not a fatal error — see field_id below.
+# Custom field ids are resolved BY NAME at runtime via GET /field, never
+# hardcoded. A field this Jira site does not have is skipped with a
+# warning, not a fatal error — see field_id below.
 #
-# This is NOT the `tracker` provider seam's `transition`/`comment`/
-# `create`: an arbitrary-fields issue PUT is not one of the four tracker
-# verbs (providers/README.md), so — like jira-space-create.sh — this
-# script talks to jira-api.sh directly rather than inventing a fifth verb.
+# An arbitrary-fields issue PUT is not one of the four tracker verbs, so
+# this talks to jira-api.sh directly rather than through the seam.
 #
-# Jira Cloud's PUT /issue/{key} returns 204 No Content by default (jq/
-# redact_json on that empty body is harmless — `jq .` on empty stdin exits
-# 0, prints nothing). This script still asks for the updated issue back
-# (?returnIssue=true) rather than trust a silent 204, so a caller reading
-# this script's stdout has the written fields to check against, not just
-# an exit code — confirmed live on the ZZSPK2 loop.
+# The PUT asks for ?returnIssue=true — a deliberate confirmation read, not
+# a workaround: Jira returns 204 No Content by default.
 #
 # Usage:
 #   jira-backfill.sh --project KEY DIR [--schema issues|dotissues] [--dry-run]
@@ -95,14 +81,7 @@ TICKETS_JSONL=$(python3 "$FRONTMATTER_PY" "$TICKETS_DIR" --schema "$SCHEMA") \
     || die "could not parse tickets under $TICKETS_DIR"
 [ -n "$TICKETS_JSONL" ] || die "no tickets found under $TICKETS_DIR (schema $SCHEMA)"
 
-# --------------------------------------------------------------- field discovery
-#
-# One GET /field, cached; field_id NAME below searches it in-process — no
-# second network call per ticket, matching jira-space-create.sh's
-# "one read, many lookups" shape.
-#
-# All six of jira-space-create.sh's custom fields, defer_until included
-# (script-reviewer round on 71e649c: it was silently missing).
+# One GET /field, cached; field_id NAME below searches it in-process.
 FIELD_NAMES="touches
 verify
 human_steps
@@ -110,10 +89,8 @@ appends
 executor
 defer_until"
 
-# A Jira Cloud text/textarea custom field's stored value is capped at
-# 32767 characters (a recorded precedent) — this applies to
-# `description` here. Reserve room for the pointer line appended when
-# truncating.
+# A Jira Cloud text/textarea field's stored value caps at 32767
+# characters, `description` included.
 MAX_DESC_CHARS=32767
 TRUNCATE_POINTER="[truncated — see the local ticket file for the full body]"
 
@@ -123,11 +100,9 @@ else
     ALL_FIELDS_JSON=$("$JIRA_API" raw GET /field) || die "could not read /field — cannot discover custom field ids by name"
 fi
 
-# field_id NAME -> prints the customfield id on stdout and returns 0 when
-# exactly one custom field has this name; prints NOTHING and returns 0
-# when none do (the field does not exist on this site yet — the caller
-# skips it, matching field_lookup's "absent is not a failure" rule in
-# jira-space-create.sh); warns and returns 1 when MORE THAN ONE does.
+# field_id NAME -> prints the customfield id and returns 0 when exactly one
+# custom field has this name; prints NOTHING and returns 0 when none do
+# (absent is not a failure); warns and returns 1 when more than one does.
 field_id() {
     local name="$1" count ids
     count=$(printf '%s' "$ALL_FIELDS_JSON" | jq -r --arg n "$name" \
@@ -143,18 +118,15 @@ field_id() {
 }
 
 # adf_from_text TEXT — the ADF document Jira's v3 API requires for a
-# textarea custom field's value (rejects a plain string) and for
-# `description`: one paragraph per input line. Reuses jira_comment_body's
-# builder (lib/jira-common.sh) and unwraps its {body: ...} envelope, which
-# is comment's shape, not a plain field value's.
+# textarea custom field's value (it rejects a plain string) and for
+# `description`. Unwraps jira_comment_body's {body: ...} envelope, which is
+# comment's shape, not a plain field value's.
 adf_from_text() {
     jira_comment_body "$1" | jq -c '.body'
 }
 
-# lines_field JSONLINE KEY — a frontmatter list field ('.touches',
-# '.appends', '.human_steps') joined into one newline-separated string, or
-# a frontmatter block-scalar field already stored as a string — either way,
-# what adf_from_text expects.
+# lines_field JSONLINE KEY — a frontmatter list or block-scalar field as
+# one newline-separated string, what adf_from_text expects.
 lines_field() {
     printf '%s' "$1" | jq -r --arg k "$2" '
         .[$k] as $v
@@ -164,10 +136,8 @@ lines_field() {
 }
 
 # truncate_body TEXT -> TEXT unchanged if it is at or under
-# MAX_DESC_CHARS; otherwise the longest PREFIX of whole "\n\n"-separated
-# blocks that fits alongside TRUNCATE_POINTER, plus that pointer line —
-# never a block cut in half. A single block bigger than the whole budget
-# on its own yields just the pointer line.
+# MAX_DESC_CHARS; otherwise the longest prefix of whole blank-line-
+# separated blocks that fits alongside TRUNCATE_POINTER, plus that pointer.
 truncate_body() {
     local text="$1" len
     len=$(printf '%s' "$text" | jq -Rs 'length')
@@ -183,24 +153,9 @@ truncate_body() {
           else (.acc | join("\n\n")) + "\n\n" + $pointer end'
 }
 
-# --------------------------------------------------------------- status
-#
-# stage_status_name STAGE -> the Jira status NAME a ticket in that local
-# stage belongs in, or nothing for "open" and for any stage this script
-# does not recognise (dotissues' "imported" included) — no transition is
-# attempted for those, same "not every ticket needs this" shape as
-# field_id above. "open" is deliberately left alone: a freshly created
-# issue's actual initial status is Jira's own default ("To Do" — recorded
-# live in fixtures/issue.status.live.json, NOT the custom "Open" status
-# jira-space-create.sh also creates), and this script does not try to
-# pick a winner between the two for the common case.
-#
-# Names, never ids: a transition id is per-site (see
-# jira-space-create.sh's own header on this); the six stage statuses that
-# script creates are named exactly these (Open, Triage, Awaiting
-# Deployment, Deferred, Completed, Cancelled), plus Jira's own built-in
-# "In Progress" — this is the forward direction of the same mapping
-# to-issues/scripts/issues.py's JIRA_STATUS_TO_STAGE reads backward.
+# stage_status_name STAGE -> the Jira status NAME for that local stage, or
+# nothing for "open" and any unrecognised stage. "open" is left alone: a
+# fresh issue lands on Jira's own "To Do", not the custom "Open".
 stage_status_name() {
     case "$1" in
         in-progress)         echo "In Progress" ;;
@@ -212,14 +167,9 @@ stage_status_name() {
     esac
 }
 
-# transition_issue KEY WANT_STATUS_NAME — moves KEY to WANT_STATUS_NAME if
-# it is not there already. Never hardcodes a transition id: reads the
-# issue's current status first (skip if already WANT_STATUS_NAME — an
-# idempotent re-run), then GET /issue/KEY/transitions for the live,
-# per-site list of {id, name, to.name} and matches WANT_STATUS_NAME by
-# name. A status this workflow has no direct transition into from the
-# current one is warned about and skipped, not fatal — a ticket's fields
-# still got backfilled even if its status could not be moved.
+# transition_issue KEY WANT_STATUS_NAME — move KEY there if it is not
+# already, matching by NAME against GET /issue/KEY/transitions. A status
+# with no transition from the current one warns and skips, never dies.
 transition_issue() {
     local key="$1" want="$2" current_json current tjson tid tbody
     current_json=$("$JIRA_API" raw GET "/issue/$key?fields=status" 2>"$ERRFILE") \
@@ -250,8 +200,7 @@ i=0
 FAILED=0
 TRANSITION_FAILED=0
 # Process substitution, not a `| while`: the loop body must run in THIS
-# shell, not a pipeline subshell, or FAILED's count is lost the moment the
-# loop ends and the final exit-code decision below sees nothing.
+# shell, or FAILED's count is lost when the pipeline subshell ends.
 while IFS= read -r line; do
     i=$((i + 1))
     id=$(printf '%s' "$line" | jq -r '.id // empty')
@@ -265,13 +214,8 @@ while IFS= read -r line; do
     stage=$(printf '%s' "$line" | jq -r '._stage // empty')
     target_status=$(stage_status_name "$stage")
 
-    # A PUT that OMITS a field key leaves whatever value is already
-    # stored — recorded live (a spike). A re-run after a local
-    # field was emptied must therefore send an explicit JSON null for
-    # every field THIS script owns, not skip the key, or the stale
-    # remote value never clears. Only a field genuinely absent from this
-    # Jira site (field_id found nothing) is left out — there is no id to
-    # address it by.
+    # A PUT that OMITS a field key leaves the stored value untouched, so
+    # every field this script owns sends an explicit null when empty.
     custom_parts=""
     for name in $FIELD_NAMES; do
         fid=$(field_id "$name") || continue
@@ -285,8 +229,8 @@ while IFS= read -r line; do
                 fi
                 ;;
             defer_until)
-                # A datepicker field: a plain "YYYY-MM-DD" string, never
-                # the ADF wrapper the textarea fields need.
+                # A datepicker field takes a plain "YYYY-MM-DD" string,
+                # never the ADF wrapper the textarea fields need.
                 defer_until_val=$(printf '%s' "$line" | jq -r '.defer_until // empty')
                 if [ -n "$defer_until_val" ]; then
                     part=$(jq -cn --arg id "$fid" --arg v "$defer_until_val" '{($id): $v}')
@@ -328,11 +272,8 @@ $part"
         "$JIRA_API" --dry-run write PUT "$path" "$put_body" >/dev/null 2>"$ERRFILE" \
             || { cat "$ERRFILE" >&2; die "dry-run backfill failed for $key (local id $id)"; }
         warn "would backfill ($i/$TOTAL): $key <- $id"
-        # No credential is resolved for a dry run, so there is no way to
-        # read the issue's CURRENT status here (that read needs auth) —
-        # this always names the stage's target status, even if the issue
-        # happens to be there already; the live path below is the one
-        # that actually checks and skips.
+        # A dry run resolves no credential, so the issue's current status
+        # cannot be read: this always names the stage's target status.
         [ -n "$target_status" ] && warn "would transition ($i/$TOTAL): $key -> $target_status"
         continue
     fi

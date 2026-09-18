@@ -1,38 +1,11 @@
 #!/bin/bash
 #
-# Selftest for known-issue.sh. Builds a scratch git repo per test case
-# (config LOCAL to that repo only — never touches the operator's global
-# ~/.gitconfig) and exercises the three findings from the second
-# adversarial review round:
-#
-#   1. (HIGH) `esc()` escaped only backslash and double-quote, never a
-#      literal newline, in a frontmatter value written from free text
-#      (--title/--note). A newline there split one `key: "value"` line
-#      across two physical lines, and the SECOND physical line failed the
-#      line-based frontmatter parser on the very next call — corrupting
-#      not just that entry but every later `add`/`resolve`/`lint`/
-#      `reindex` invocation against the whole corpus, since
-#      `load_all_entries` aborts on the first unparsable file.
-#   2. (HIGH) Neither `title` nor `note` was escaped for a literal '|'
-#      before being interpolated into a markdown table row. `lint`
-#      compared its "expected" index against itself (both computed by the
-#      same `build_index` call), so it could never see this class of
-#      corruption — the exact "self-check shares an oracle with the write
-#      path" failure this plugin's own name-the-oracle rule exists to
-#      catch. Fixed by escaping '|' at render time AND adding an
-#      independent row-shape check to `lint` that scans the on-disk text
-#      directly, without calling `build_index`.
-#   3. (MEDIUM) `valid_slug` was existence-only (`[ -f
-#      "$ENTRIES_DIR/$1.md" ]`), no shape check — a slug like
-#      '../../elsewhere' that happens to resolve to an existing .md file
-#      outside `$ENTRIES_DIR` passed straight through to `resolve`/
-#      `severity`, which would then rewrite that file instead of refusing
-#      on an obviously malformed slug.
+# Selftest for known-issue.sh. Builds a scratch git repo per test case, with
+# config LOCAL to that repo only, never the operator's global ~/.gitconfig.
 #
 # Usage: scripts/known-issue-selftest.sh [path-to-known-issue.sh]
-# Defaults to the sibling scripts/known-issue.sh (the current, fixed copy).
-# Pass an older revision's path (e.g. via `git show <rev>:...` into a temp
-# file) to reproduce the RED failures below against pre-fix code.
+# Defaults to the sibling scripts/known-issue.sh. Pass an older revision's
+# path to reproduce the RED failures below against pre-fix code.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -74,10 +47,7 @@ fresh_repo() {
 }
 
 # ---- test 1: a newline in --title must not corrupt the corpus for later
-# calls. The second `add` below is the actual assertion: cmd_add tail-calls
-# cmd_reindex, which re-parses EVERY entry from disk — if the first entry's
-# frontmatter was split across two physical lines by an unescaped newline,
-# this second, otherwise-unrelated add fails too.
+# calls. The SECOND add is the assertion: it re-parses every entry from disk.
 
 REPO=$(fresh_repo t1)
 set +e
@@ -127,15 +97,9 @@ else
     bad "test2: neither the escaped nor the unescaped form was found in the index — inspect $REPO/docs/known-issues.md by hand"
 fi
 
-# ---- test 3: `lint`'s row-shape check is a REAL second oracle, not just
-# another way to notice the same diff the plain equality check (actual vs.
-# what build_index would itself produce) already catches. Routing a
-# hand-corrupted index through the full `lint` CLI would not distinguish
-# the two: a hand edit makes `actual != expected` on its own, which the
-# OLD equality-only check already caught — so that alone proves nothing
-# about the NEW independent check specifically. Call the function directly
-# instead, with inputs neither check has seen before, on both a
-# well-formed row and a corrupted one it did not produce itself.
+# ---- test 3: `lint`'s row-shape check is a REAL second oracle. Routing a
+# corrupted index through the full CLI cannot show that, since a hand edit
+# already trips the equality check — so call the function directly instead.
 
 ENGINE_SRC=$(awk '/^cat > "\$ENGINE" <<.PYEOF./{flag=1;next}/^PYEOF$/{flag=0}flag' "$KNOWN_ISSUE")
 ENGINE_FILE="$WORK/engine_extracted.py"

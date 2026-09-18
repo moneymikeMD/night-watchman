@@ -1,22 +1,15 @@
 #!/bin/bash
 #
-# recall.sh — the `recall` verb. memorygraph's own `recall --query` finds
-# nothing for a multi-word phrase: `recall --query "jira api auth"`
-# returns zero results, `recall --query "jira"` returns six. This first
-# fixed that with a plain per-word fan-out; a later change ports the source
-# project's rank-fusion follow-up (scripts/dev/recall.sh, one commit past
-# that fork point): tokenize the query into single-noun candidates
-# (stopwords and sub-3-char words dropped, deduped, capped at
-# --max-queries), run one `memorygraph recall --query WORD --limit N` per
-# token, parse each token's prose result block, and fuse the per-token
-# rankings with reciprocal rank fusion (RRF) instead of printing each
-# token's raw output back to back. On the real store, tokens barely
-# overlap, so ranking by match count alone degenerates to "sort by
-# importance" and buries the memory that actually answers the query — RRF
-# (score = sum over matching tokens of 1/(60 + rank_in_that_token)) fixes
-# that by weighting each token's own relevance order. A zero-result
-# multi-word recall is a malformed query, never evidence the graph is
-# empty on a topic.
+# recall.sh — the `recall` verb. `memorygraph recall --query` finds nothing
+# for a multi-word phrase, so this tokenises the query into single-noun
+# candidates (stopwords and sub-3-char words dropped, deduped, capped at
+# --max-queries), runs one `memorygraph recall --query WORD --limit N` per
+# token, and fuses the per-token rankings with reciprocal rank fusion
+# (score = sum over matching tokens of 1/(60 + rank_in_that_token)).
+#
+# RRF rather than match count: on the real store tokens barely overlap, so
+# ranking by match count degenerates to sorting by importance and buries the
+# memory that answers the query.
 #
 # bash 3.2 compatible (no associative arrays).
 
@@ -26,9 +19,8 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../lib/kit.sh
 . "$DIR/../../lib/kit.sh"
 
-# pipe_ok — swallow a pipeline's exit status so an explicit check
-# afterward can report the failure instead of `set -e` killing the script
-# first mid-pipeline.
+# pipe_ok — swallow a pipeline's exit status so an explicit check afterward
+# can report the failure instead of `set -e` killing the script mid-pipeline.
 pipe_ok() { return 0; }
 
 usage() {
@@ -71,21 +63,16 @@ done
 
 [ -n "$query" ] || usage
 
-# ------------------------------------------------------------- tokenising
-#
-# Stopwords: plain-English function words that carry no search signal on
-# their own. Deliberately not exhaustive -- the goal is to stop "why does
-# the api fail" wasting a query on "does" and "the", not to build an NLP
-# pipeline.
+# Deliberately not exhaustive: the goal is to stop "why does the api fail"
+# wasting a query on "does" and "the", not to build an NLP pipeline.
 STOPWORDS=" a an the is are was were does do did why how what when where who \
 which for to of in on at and or but with from this that it its be been \
 being can could should would will shall not no nor so than then too very \
 about into over under again further out up down all any both each few more \
 most other some such only own same as if because until while "
 
-# Lowercase, then turn every run of non [a-z0-9] characters into a single
-# space -- strips punctuation and does word-splitting in one pass. Pure
-# POSIX tr, no bash 4 ${var,,}.
+# Lowercase, then collapse every non-[a-z0-9] run to one space: strips
+# punctuation and word-splits in one pass, with POSIX tr, not bash 4 ${var,,}.
 CANDIDATES=$(printf '%s' "$query" \
     | tr '[:upper:]' '[:lower:]' \
     | tr -c 'a-z0-9' ' ' \
@@ -107,9 +94,8 @@ for w in $CANDIDATES; do
     fi
     [ "$dupe" -eq 1 ] && continue
     words=("${words[@]-}" "$w")
-    # bash 3.2 quirk: appending to an array that was declared empty
-    # (words=()) via "${words[@]-}" can leave a leading empty element on
-    # some bash 3.2 builds; guard by only counting non-empty entries below.
+    # bash 3.2: appending via "${words[@]-}" to an array declared empty can
+    # leave a LEADING EMPTY element, hence the non-empty guards at every use.
     n_words=$((n_words + 1))
 done
 
@@ -130,22 +116,9 @@ OUTF=$(tmpfile) || die "could not create a temp file"
 ROWS=$(tmpfile) || die "could not create a temp file"
 PARSER=$(tmpfile) || die "could not create a temp file"
 
-# The prose parser. A memorygraph result block looks like:
-#   **1. Title text** (ID: uuid)
-#   Type: solution | Importance: 0.8
-#   Match: ...
-#   Content: text...
-#   Tags: a, b, c
-# Emits one TSV row per memory (id, title, type, importance, tags,
-# content, rank), then a trailing "##HEADER<TAB>expected<TAB>found" line:
-# expected is the count memorygraph's own "Found N relevant memories"
-# header claimed (0 for its "No memories found" message, -1 if neither
-# was recognised), and found is how many blocks this parser actually
-# extracted. The caller compares them -- a mismatch is a format-drift
-# signal, not a "no hits". `rank` is the block's own leading number
-# ("**1.", "**2." ...) -- memorygraph's own relevance ordering for this
-# one token's query, 1-based, and is what the RRF merge below fuses
-# across tokens.
+# Emits a TSV row per memory (id, title, type, importance, tags, content, rank)
+# then "##HEADER<TAB>expected<TAB>found" — what memorygraph's header claimed
+# vs what parsed. A mismatch, or -1, is format drift, never "no hits".
 cat > "$PARSER" <<'PERL'
 use strict;
 use warnings;
@@ -236,18 +209,9 @@ TOTAL_ROWS=$(wc -l < "$ROWS" | tr -d ' ')
 if [ "$TOTAL_ROWS" -eq 0 ]; then
     echo "0 unique memories across $n_words token(s) queried (hit: none)"
 else
-    # RRF merge: score(memory) = sum over every token that returned it of
-    # 1/(k + rank_in_that_token), k=60. Rewards ranking well in one list
-    # AND appearing in several, and degrades gracefully to "just use
-    # per-token rank" when every memory matches only one token -- the
-    # common case on a real store where tokens barely overlap. Importance
-    # is kept only as the final tiebreak among equal scores.
-    #
-    # Not a pipeline -- a single awk command with a plain output redirect
-    # -- so this deliberately does NOT use `|| pipe_ok`: `set -e` catching
-    # awk's own exit status directly is what catches awk dying partway
-    # through after already emitting some rows, which the downstream
-    # `[ -s "$MERGED" ]` check alone would not.
+    # Deliberately NOT `|| pipe_ok`: this is a single awk command, not a
+    # pipeline, and `set -e` on its own exit status is what catches awk dying
+    # partway through after already emitting rows.
     MERGED=$(tmpfile) || die "could not create a temp file"
     awk -F'\t' -v k=60 '
         {
@@ -272,10 +236,8 @@ else
         echo "$UNIQUE_COUNT unique memories across $n_words token(s) queried"
     fi
     echo ""
-    # Fields after the awk merge: rrf-score(1) matched-count(2)
-    # best-rank(3) id(4) title(5) type(6) importance(7) tags(8) content(9)
-    # then the original per-row rank(10), unused here. Sort keys: RRF
-    # score desc, importance desc (tiebreak), title asc (final tiebreak).
+    # Post-merge fields: score(1) matched(2) best-rank(3) id(4) title(5)
+    # type(6) importance(7) tags(8) content(9) orig-rank(10, unused).
     sort -t "$(printf '\t')" -k1,1gr -k7,7gr -k5,5f "$MERGED" \
         | head -n "$top" \
         | while IFS=$'\t' read -r score matched bestrank id title type importance tags content _origrank; do

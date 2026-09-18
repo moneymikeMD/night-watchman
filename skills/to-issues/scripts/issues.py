@@ -66,10 +66,8 @@ from collections import defaultdict
 
 STAGES = ["open", "in-progress", "awaiting-deployment", "completed", "cancelled"]
 DONE = ["completed", "cancelled"]
-# Anything not finished still has work left, and `awaiting-deployment` very much
-# does — the deploy itself. Leaving that stage out of planning strands it
-# between "not workable" and "not done", so any ticket depending on it can never
-# become schedulable and the planner reports a phantom dependency cycle.
+# awaiting-deployment still has work left (the deploy itself); leaving it
+# out of PENDING strands dependents and waves() reports a phantom cycle.
 PENDING = ["open", "in-progress", "awaiting-deployment"]
 WORKABLE = PENDING
 
@@ -83,20 +81,14 @@ def die(msg):
     sys.exit(1)
 
 
-# ----------------------------------------------------------------- parsing
 def parse_frontmatter(text):
     """Return (dict, body). Handles the subset tickets actually use: scalars,
     inline lists, block lists, and block scalars (| and >-)."""
     lines = text.split("\n")
     if not lines or lines[0] != "---":
         return {}, text
-    # Line-anchored, not a substring split: a block-scalar field (`outcome:
-    # |`, say) can legitimately contain a line that is just "---" inside its
-    # indented body, and a naive `text.split("---", 2)` would treat THAT as
-    # the frontmatter's closing fence — truncating the real frontmatter and
-    # dumping the rest of it into the body. Only a line that is exactly
-    # "---" (no leading/trailing whitespace, so an indented occurrence
-    # inside a block scalar never matches) closes the block.
+    # Line-anchored: a block scalar's body can legitimately contain a bare
+    # "---" line, and text.split("---", 2) would take THAT as the fence.
     end_idx = None
     for i in range(1, len(lines)):
         if lines[i] == "---":
@@ -158,13 +150,8 @@ def load_files(root):
     return tickets
 
 
-# ------------------------------------------------------------------- jira
-# Field ids below are placeholders (Jira Cloud's typical numbering for the
-# first few custom fields created on a fresh site). A real adopting project
-# must create these custom fields itself (Settings -> Issues -> Custom
-# fields: Touches, Verify, Human steps, Appends, Executor, Defer until) and
-# update the constants here to match the ids Jira assigns — they are
-# per-site, not portable.
+# Placeholder ids — Jira custom field ids are per-site. An adopting project
+# must create these fields itself and update these constants to match.
 JIRA_FIELD_TOUCHES = "customfield_10043"
 JIRA_FIELD_VERIFY = "customfield_10044"
 JIRA_FIELD_HUMAN_STEPS = "customfield_10045"
@@ -179,11 +166,8 @@ JIRA_FIELDS = ",".join([
     JIRA_FIELD_APPENDS, JIRA_FIELD_EXECUTOR, JIRA_FIELD_DEFER_UNTIL,
 ])
 
-# Jira Cloud's search endpoint: the legacy /rest/api/3/search is retired
-# (HTTP 410 Gone) on newer sites. /rest/api/3/search/jql is the current one
-# and returns {"issues": [...], "isLast": bool, ...} — no "total", pageToken
-# pagination instead of startAt. One fetch, so pagination is out of scope:
-# maxResults is set high enough to cover a typical backlog in one page.
+# The legacy /rest/api/3/search is 410 Gone on newer sites; /search/jql
+# returns no "total" and paginates by nextPageToken, not startAt.
 def _jira_jql(project_key):
     """The one JQL fetch (see JIRA_SEARCH_PATH's docstring): excludes
     Completed/Cancelled, and Done — the closed status a template-derived
@@ -198,16 +182,10 @@ JIRA_JQL = _jira_jql(JIRA_PROJECT_KEY)
 JIRA_SEARCH_PATH = "/search/jql"
 JIRA_MAX_RESULTS = 500
 
-# Jira's own statuses for the adopting project (see your Jira workflow
-# admin screen). "Triage" and "Deferred" are deliberately NOT in
-# WORKABLE/PENDING/DONE above: a Triage issue is never startable, and a
-# Deferred one (the *status*, distinct from the defer_until field) gets the
-# same treatment — parked until someone moves it, not schedulable by
-# default.
+# Triage and Deferred are deliberately absent from WORKABLE/PENDING/DONE:
+# both are parked until someone moves them, never startable.
 JIRA_STATUS_TO_STAGE = {
     "Triage": "triage",
-    # A Scrum-template board's first column is often "To Do", not "Open" —
-    # both spellings map to the open stage.
     "To Do": "open",
     "Open": "open",
     "In Progress": "in-progress",
@@ -215,9 +193,8 @@ JIRA_STATUS_TO_STAGE = {
     "Deferred": "deferred",
     "Completed": "completed",
     "Cancelled": "cancelled",
-    # Template Spaces (LAB and others) ship Done as the closed status; a
-    # project still on that template shows every closed ticket as
-    # jira-unknown-status:Done and lint-errors on each unless mapped here.
+    # Template Spaces ship Done, not Completed, as the closed status; it must
+    # also be excluded in _jira_jql() or every closed ticket comes back.
     "Done": "completed",
 }
 
@@ -279,19 +256,8 @@ def fetch_jira_json(jira_api, fixture):
     if not os.path.exists(jira_api):
         die(f"jira-api script not found at '{jira_api}'")
 
-    # Two behaviors worth knowing about on a live Jira Cloud site, neither
-    # obvious from the docs:
-    #   - a raw API wrapper that redacts bare "key" fields for safety (a
-    #     reasonable default: a stray issue key is rarely sensitive, but a
-    #     wrapper written for credential-bearing responses may redact it
-    #     anyway) will make the issue key and the issuelinks keys come back
-    #     as "<redacted>", and nothing here can be identified. The fetch
-    #     therefore passes --show-secrets. That is safe here because the
-    #     request names an explicit field list (JIRA_FIELDS) that carries no
-    #     credential-shaped data; do not widen the field list without
-    #     re-checking that.
-    #   - /rest/api/3/search/jql returns at most 100 issues per page whatever
-    #     maxResults says; pages continue via nextPageToken until isLast.
+    # --show-secrets: a wrapper that redacts bare "key" fields would blank every
+    # issue key. Safe only because JIRA_FIELDS names no credential-shaped field.
     issues = []
     token = None
     while True:
@@ -336,22 +302,15 @@ def jira_issue_to_ticket(issue):
     status = (f.get("status") or {}).get("name", "")
     stage = JIRA_STATUS_TO_STAGE.get(status)
     if stage is None:
-        # An unrecognised status is a schema drift, not something to guess
-        # at silently — treat it as never-startable (like Triage) rather
-        # than defaulting into WORKABLE, where a mis-mapped status could
-        # start showing up in `next`/`waves` without anyone deciding that.
+        # Schema drift, not something to guess at: never-startable rather than
+        # defaulting into WORKABLE, where a mis-mapped status would dispatch.
         stage = f"jira-unknown-status:{status or '(none)'}"
 
     executor_field = f.get(JIRA_FIELD_EXECUTOR)
     executor = executor_field.get("value") if isinstance(executor_field, dict) else executor_field
 
-    # Jira's standard `parent` field (Jira serves an Epic as a Task's
-    # ordinary parent, not the legacy "Epic Link" field). None when the
-    # ticket has no parent — a deliberate orphan, or one the epic-assignment
-    # step in to-issues/SKILL.md §4 missed. Only key+title are kept; the
-    # parent's own status is NOT read from here — epic status is computed
-    # from the currently-fetched children (see compute_epic_rollup), not
-    # from Jira's own epic status field.
+    # Jira serves an Epic as the Task's ordinary `parent`, not the legacy
+    # "Epic Link". Epic status is not read from here — see compute_epic_rollup.
     parent_field = f.get("parent") or {}
     epic = None
     if parent_field.get("key"):
@@ -381,9 +340,7 @@ def jira_issue_to_ticket(issue):
         "appends": _lines(f.get(JIRA_FIELD_APPENDS)),
         "executor": executor,
         "epic": epic,
-        # An Epic issue has no parent by construction — "orphan" would be a
-        # false alarm about a category it structurally can't belong to, not
-        # a real filing gap. See epic_label().
+        # An Epic has no parent by construction, so "orphan" would be a false alarm.
         "_is_epic": (f.get("issuetype") or {}).get("name") == "Epic",
         "defer_until": f.get(JIRA_FIELD_DEFER_UNTIL),
         "_path": key,
@@ -417,11 +374,8 @@ def _jira_shadow_for_blocker(inward_issue):
         "tags": [], "blocked_by": [], "touches": [], "verify": "",
         "human_steps": [], "appends": [], "executor": None, "epic": None,
         "defer_until": None, "_path": key, "_stage": stage, "_body": "",
-        # A resolution stand-in, not a real fetched ticket: it exists only so
-        # `dep in ids` and `_stage in DONE` resolve correctly for something
-        # the JQL fetch deliberately excluded. lint()/board() know to leave
-        # it out of validation and display; waves()/nxt() need no special
-        # case since its stage is never in WORKABLE.
+        # Resolution stand-in only: lint()/board() skip it, and its stage is
+        # never in WORKABLE, so waves()/nxt() need no special case.
         "_shadow": True,
     }
 
@@ -477,7 +431,6 @@ def overlap(a, b):
     return a == b or fnmatch(a, b) or fnmatch(b, a)
 
 
-# ---------------------------------------------------------------- defer_until
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -515,7 +468,6 @@ def _where(t, root):
     return path
 
 
-# -------------------------------------------------------------------- scope
 def scope(ticket_id, base_ref, tickets, cwd=None):
     """Classify every path in `git diff --name-only <base_ref>...HEAD`
     against ticket_id's touches/appends globs (the same overlap() matcher
@@ -559,7 +511,6 @@ def scope(ticket_id, base_ref, tickets, cwd=None):
     return 1 if undeclared else 0
 
 
-# -------------------------------------------------------------------- lint
 def lint(tickets, root):
     if not tickets:
         print(f"no tickets under {root}")
@@ -577,12 +528,8 @@ def lint(tickets, root):
             continue
         seen[tid].append(where)
 
-        # A shadow stand-in (see _jira_shadow_for_blocker) is not a ticket
-        # anyone filed — it exists only so a blocked_by referring to an
-        # already-Completed/Cancelled issue the JQL fetch excluded still
-        # resolves. It has no title, verify, or executor to check, by
-        # construction, so skip the checks that would otherwise flag it as a
-        # broken real ticket.
+        # A shadow stand-in has no title/verify/executor by construction — skip
+        # the checks that would otherwise flag it as a broken real ticket.
         if t.get("_shadow"):
             continue
 
@@ -593,21 +540,8 @@ def lint(tickets, root):
 
         ex = t.get("executor")
         is_epic = t.get("_is_epic")
-        # An Epic is a container (Artifact + Body only, per the ticket
-        # contract) — nobody executes an Epic directly and nobody verifies
-        # it directly; it is never startable (board/waves/next already
-        # filter epics out via _is_epic). Demanding executor/verify on an
-        # Epic the same way a Task needs them produced a false-positive
-        # error the moment NWM's first epics were filed (2026-09-11:
-        # earlier tickets flagged "no verify" despite being correctly-shaped
-        # epics) — skip both checks for epics, the same way shadow
-        # stand-ins are already skipped above.
-        #
-        # A cancelled ticket needs no executor: nobody is going to execute
-        # it, and demanding one invites a meaningless answer. A missing
-        # executor elsewhere is a warning, not an error — Jira source data
-        # can carry a null executor, and a crash or hard failure over it is
-        # worse than a flagged "?" in the output.
+        # Epics are containers and cancelled tickets need no executor; a missing
+        # executor elsewhere is a warning, not an error (Jira can carry a null).
         if stage != "cancelled" and not is_epic and not ex:
             warns.append(f"{tid}: no executor — blocks dispatch: excluded from "
                          f"`next` and every wave in `waves`, shown as [?] "
@@ -656,8 +590,6 @@ def lint(tickets, root):
         if len(paths) > 1:
             errs.append(f"{tid}: duplicated across {', '.join(paths)}")
 
-    # Collision check across everything currently workable and unblocked: these
-    # are the tickets that could legitimately run at the same moment.
     startable = [t for t in tickets if t["_stage"] in WORKABLE
                  and all(next((x for x in tickets if x.get("id") == d), {}).get("_stage") in DONE
                          for d in (t.get("blocked_by") or []))]
@@ -668,10 +600,8 @@ def lint(tickets, root):
             if clash:
                 errs.append(f"{a['id']} and {b['id']} are both startable and both "
                             f"touch {sorted(clash)} — add a blocked_by or merge them")
-            # Shared append-mostly files (changelogs, issue registers, decision
-            # logs) are touched by nearly every ticket. Treating those as hard
-            # collisions would serialise everything and defeat the point, so
-            # they are flagged for awareness and left to a trivial merge.
+            # Shared append-mostly files are touched by nearly every ticket; hard
+            # collisions there would serialise everything, so they are warnings.
             soft = {x for x in (a.get("appends") or [])
                     for y in (b.get("appends") or []) if overlap(x, y)}
             if soft:
@@ -682,15 +612,12 @@ def lint(tickets, root):
         print(f"  ERROR  {e}")
     for w in warns:
         print(f"  warn   {w}")
-    # Shadow stand-ins (see _jira_shadow_for_blocker) are not real tickets —
-    # board()'s total excludes them, so this summary must too or the two
-    # counts disagree by the number of shadows in play.
+    # Shadows excluded so this total agrees with board()'s.
     real = [t for t in tickets if not t.get("_shadow")]
     print(f"\n{len(real)} tickets, {len(errs)} errors, {len(warns)} warnings")
     return 1 if errs else 0
 
 
-# -------------------------------------------------------------------- epics
 def compute_epic_rollup(tickets):
     """epic key -> {title, status}, derived ONLY from the children present in
     `tickets` right now. Status rules are tickets-protocol/SKILL.md's:
@@ -745,26 +672,14 @@ def epic_label(t, rollup):
     return f"  epic {key} ({status}){(' ' + title) if title else ''}"
 
 
-# ------------------------------------------------------------------- waves
 def waves(tickets, root):
     by_id = {t["id"]: t for t in tickets if t.get("id")}
     rollup = compute_epic_rollup(tickets)
-    # A ticket that is itself deferred isn't ready and isn't blocked either —
-    # it simply isn't offered. Dropping it from `pending` up front keeps it
-    # out of every wave without it ever counting as a stalled dependency for
-    # something else. Its *id* stays in `by_id`/`deferred_ids` below so a
-    # dependent can still be told what it's waiting on.
+    # Deferred tickets are dropped from `pending` so they never count as a
+    # stalled dependency; their ids stay in by_id so dependents still resolve.
     deferred_ids = {t["id"] for t in tickets if is_deferred(t)}
-    # An Epic is never dispatched — it closes when its children do (see
-    # compute_epic_rollup). Excluded from `pending` the same way a deferred
-    # ticket is: it stays a real node for `by_id`/`resolved()` (an epic
-    # named in some ticket's blocked_by still resolves correctly by its own
-    # _stage).
-    # A ticket with no executor is never startable (see has_executor()) —
-    # excluded from `pending` the same way a deferred or epic ticket is.
-    # Its id stays in `by_id` via the full `tickets` list, so a dependent
-    # still resolves it correctly (never DONE, so still reported blocked
-    # rather than silently vanishing).
+    # Epics and executor-less tickets are excluded the same way: never
+    # dispatched, but still real nodes in by_id for blocked_by resolution.
     pending = [t for t in tickets
                if t["_stage"] in WORKABLE and not is_deferred(t) and not t.get("_is_epic")
                and has_executor(t)]
@@ -781,14 +696,8 @@ def waves(tickets, root):
         ready = [t for t in remaining
                  if all(d in done or resolved(d) for d in (t.get("blocked_by") or []))]
         if not ready:
-            # A ticket can be stuck for two different reasons that print
-            # identically if not told apart: a genuine cycle/missing
-            # dependency (a real bug — exit 1), or simply depending, directly
-            # or transitively, on a ticket that is deferred rather than done
-            # (expected and temporary — exit 0, once the date passes this
-            # resolves itself). Compute the second set by fixpoint, since a
-            # ticket can be stuck only via another stuck-by-deferral ticket
-            # rather than a deferred one directly.
+            # Two stuck cases print identically: a real cycle (exit 1) vs blocked
+            # only by a deferral (exit 0). Fixpoint, since deferral is transitive.
             blocked_via_deferral = set()
             changed = True
             while changed:
@@ -809,24 +718,16 @@ def waves(tickets, root):
                       + ", ".join(t["id"] for t in unresolved_tickets))
                 return 1
 
-            # Everything left is blocked purely by a deferral, directly or
-            # transitively — not a cycle. Report it after the waves that did
-            # run and stop; nothing more becomes ready until a defer_until
-            # date passes, so there is nothing left to plan this run.
+            # Blocked purely by a deferral, not a cycle — report and stop.
             stalled_on_deferral = [t for t in remaining]
             break
 
-        # Split by touch collisions so a wave is genuinely safe to run at once.
         wave, deferred, claimed = [], [], []
-        # The touches tie-break below is first-come: whoever is iterated
-        # first claims the path. Sort by numeric id so the outcome does not
-        # depend on the source's iteration order (files: ascending; Jira:
-        # newest-first by default).
+        # Sort by numeric id so the first-come touches tie-break does not depend
+        # on the source's iteration order (files ascending, Jira newest-first).
         ready = sorted(ready, key=lambda t: _numeric_id(t["id"]))
         for t in ready:
-            # Only `touches` gates a wave. `appends` is deliberately ignored
-            # here — see the note in lint(): shared logs would otherwise
-            # serialise every ticket in the repo.
+            # Only `touches` gates a wave; `appends` is ignored (see lint()).
             paths = t.get("touches") or []
             if any(overlap(p, c) for p in paths for c in claimed):
                 deferred.append(t)
@@ -871,21 +772,12 @@ def waves(tickets, root):
     return 0
 
 
-# ------------------------------------------------------------- board / next
 def board(tickets, root):
-    # STAGES first, in their fixed order (unchanged for the filesystem
-    # source); any stage the current source introduces that isn't in that
-    # fixed list (Jira's "triage"/"deferred", or an unrecognised status) is
-    # appended after, sorted, so board() still shows everything without
-    # reordering the familiar output.
-    # Shadow stand-ins (see _jira_shadow_for_blocker) are not real tickets —
-    # nobody filed them, they carry no title — so they take no part in the
-    # board a person or agent reads, only in blocked_by resolution.
+    # Unknown stages are appended after the fixed STAGES order, so board() shows
+    # everything without reordering the familiar output.
     tickets = [t for t in tickets if not t.get("_shadow")]
     rollup = compute_epic_rollup(tickets)
-    # Epics are never dispatched (see waves()/nxt()) and don't belong mixed
-    # into the per-stage rows either — they get their own heading below,
-    # with the SAME computed status a child ticket's epic_label() shows.
+    # Epics get their own heading, with the same status epic_label() shows.
     epics = [t for t in tickets if t.get("_is_epic")]
     tickets = [t for t in tickets if not t.get("_is_epic")]
     extra_stages = sorted(set(t["_stage"] for t in tickets) - set(STAGES))
@@ -896,9 +788,6 @@ def board(tickets, root):
         print(f"\n{stage}  ({len(rows)})")
         for t in sorted(rows, key=lambda x: x.get("id", "")):
             if not has_executor(t):
-                # See has_executor(): never startable, flagged in-place
-                # rather than hidden — board shows what exists, not just
-                # what is workable.
                 ex = "  [?] not startable: no executor"
             else:
                 ex = {"agent": "", "human": "  [human]", "mixed": "  [mixed]"}.get(t.get("executor"), "")
@@ -910,9 +799,8 @@ def board(tickets, root):
     if epics:
         print(f"\nEpics  ({len(epics)})")
         for t in sorted(epics, key=lambda x: x.get("id", "")):
-            # No entry in rollup means no visible child this fetch — NOT
-            # evidence the epic is Done (JIRA_JQL excludes Completed/
-            # Cancelled from the fetch; see compute_epic_rollup's docstring).
+            # No rollup entry means no visible child this fetch — NOT evidence
+            # the epic is Done; JIRA_JQL excludes Completed/Cancelled.
             status = rollup.get(t["id"], {}).get("status", "unknown (no visible children this run)")
             print(f"  {t.get('id','?'):<10} {t.get('title','')}  [{status}]")
     tickets = tickets + epics
@@ -929,10 +817,8 @@ def nxt(tickets, root):
             continue
         if is_deferred(t):
             continue
-        # An Epic is never dispatched — see the matching note in waves().
         if t.get("_is_epic"):
             continue
-        # No executor -> never startable — see has_executor().
         if not has_executor(t):
             continue
         if all(by_id.get(d, {}).get("_stage") in DONE for d in (t.get("blocked_by") or [])):
@@ -948,7 +834,6 @@ def nxt(tickets, root):
 CMDS = {"lint": lint, "waves": waves, "board": board, "next": nxt}
 
 
-# ---------------------------------------------------------------- selftest
 def _no_executor_fixture():
     """Two in-memory tickets in the ticket shape load_files()/load_jira()
     both produce: one with executor unset (title/body only, no executor
@@ -1135,7 +1020,6 @@ def _scope_selftest():
     return failures
 
 
-# ----------------------------------------------------------------- CLI glue
 def parse_args(argv):
     """issues.py <cmd> [dir] [--source files|jira] [--jira-api PATH]
     [--jira-project KEY] [--fixture PATH]. Flags may appear in any order
