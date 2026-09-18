@@ -1,7 +1,19 @@
-# Every path, one owner. This repo is a solo project; the entry exists so
-# `require_code_owner_review` on the main ruleset has something to resolve
-# against — it was set before this file existed, and enforced nothing.
+# One owner for everything, so `require_code_owner_review` on the main
+# ruleset resolves to a person — it was set before this file existed and
+# enforced nothing until 2026-09-18.
 #
-# Review requests are routed here automatically. The admin bypass on the
-# ruleset still applies, so the owner's own merges are not gated on it.
+# Review requests route here automatically. The ruleset's admin bypass still
+# applies, so the owner's own merges are not gated on this.
 * @moneymikeMD
+
+# Deliberately UNOWNED (a pattern with no owner). Dependabot's action-version
+# bumps touch only these files, and a bot can neither be a code owner nor
+# satisfy a code-owner review, so owning this path would make the
+# patch/minor auto-merge policy inert.
+#
+# The tradeoff, stated plainly because it cuts the wrong way: workflow files
+# are the highest-blast-radius thing in this repo, and this exempts exactly
+# them from the code-owner gate. They are NOT ungated — the ruleset still
+# requires one approving review and a green `selftests` check on every PR,
+# and only patch/minor bumps auto-merge; a major still waits for a human.
+/.github/workflows/
