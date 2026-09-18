@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented here.
 
+## [0.8.0](https://github.com/moneymikeMD/night-watchman/compare/v0.7.2...v0.8.0) (2026-09-18)
+
+
+### Features
+
+* **dispatch:** start verb hands the agent a complete brief ([daeaa9a](https://github.com/moneymikeMD/night-watchman/commit/daeaa9ad4407557e801f2c2cc1ed72c786ec5221))
+
+
+### Bug Fixes
+
+* **dispatch:** brief refusal before any tracker/herdr call; test and document [dispatch.brief] ([3fb6ecf](https://github.com/moneymikeMD/night-watchman/commit/3fb6ecf2d673d2f617e214fb4d2ed53331258b56))
+* **guard-fs-writes:** make per-segment scan state re-entrant ([573acb3](https://github.com/moneymikeMD/night-watchman/commit/573acb335c88ee4c61a85cc52e56491f73160c5c))
+* **guard-fs-writes:** silence frame-push stderr noise, frame arrays and _sct_seg, propagate body status ([a49b068](https://github.com/moneymikeMD/night-watchman/commit/a49b0689bac4944f262c545b8a2c939456704f17))
+* **known-issues:** resolve committed merge-conflict markers in _manifest.json ([0bd58ba](https://github.com/moneymikeMD/night-watchman/commit/0bd58ba8cd94f9ba4b9522d0c945c734690ae33e))
+
 ## [0.7.2] - 2026-09-15
 - docs site: in-page links were root-absolute (`/guides/...`) and 404ed under the GitHub Pages base path `/night-watchman/`; all 20 content links are now relative, verified by a build-time scan of every internal href
 - no logic changes in the core product
