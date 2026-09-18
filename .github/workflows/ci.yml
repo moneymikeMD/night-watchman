@@ -22,6 +22,9 @@ jobs:
       - name: install shellcheck
         run: brew install shellcheck
 
+      - name: install PyYAML (land-branch-selftest parses ticket frontmatter with it)
+        run: python3 -m pip install --break-system-packages --quiet pyyaml
+
       - name: shellcheck
         run: |
           set -euo pipefail
