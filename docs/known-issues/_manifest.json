@@ -10,6 +10,7 @@
   "issues-py-lint-accepts-a-comma-separated-single-line-touches-field-in-jira-mode-scope-then-reports-every-changed-file-undeclared": "d796cc9f24587baa70dd294e1c1101fa803a88647186868cf1bc2c3c3d9424b4",
   "issues-py-lint-source-jira-reports-a-cross-project-blocked-by-e-g-nwm-68-blocked-by-lab-227-as-does-not-exist": "82062c3de3652985a4782401208f5c94251e12db37d7298abc9f557342ccb2e0",
   "issues-py-next-treats-awaiting-deployment-tickets-as-startable-in-jira-mode": "9e4a7eaf9138f4e67b09f6c825592564103636e7eda9f144023cc41b5301343e",
+  "known-issues-manifest-json-hashes-disagree-with-every-entry-file-so-the-force-mode-tamper-check-is-meaningless-directory-wide": "2282505b647e7705f243ea292bc22b4e4b333a6be35908ccf24c2acb69993e83",
   "land-branch-sh-lint-cmd-is-word-split-not-shell-evaluated": "04e4c4ea1eb976ab99928f5fcfc8511e30757d9f06154e3cb5cfc5a7cc2bfdeb",
   "nwm-workflow-previous-status-validator-on-completed-refuses-the-normal-in-progress-to-completed-path-it-counts-only-statuses-before-the-current-one": "03897e810fca84114138c788efba5aa6bb85b8a4baed1df5a3726bce01a45989",
   "release-sh-calls-the-tracker-fetch-verb-with-a-since-tag-but-tracker-fetch-takes-an-issue-key-changelog-always-degrades-to-the-placeholder-line": "591c97a7ae4a1189d297e8d1285b7c8767455f9f164834b6feef82fa53fc17c6",
