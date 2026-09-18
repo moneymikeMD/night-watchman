@@ -1,10 +1,7 @@
 {
   "dispatch-herdr-start-the-60s-reached-working-wait-fails-when-several-agents-are-started-back-to-back-agent-left-idle-with-no-brief": "b7eb04164d6846179e270af37d4c3928dcc6d59e39ee5fee2b91d82e4aa5c5f7",
-<<<<<<< HEAD
-  "guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2": "6cc63d5ccf995295708df80960d2fef09b8c99515421804404808481c25202bd",
-=======
   "dispatch-start-fails-agent-not-ready-on-claude-s-folder-trust-dialog-in-a-fresh-herdr-worktree": "f06080122f9aaa8be8b7b7e1464dada3ec954cf8c87806b72d7a6896b378283b",
->>>>>>> main
+  "guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2": "6cc63d5ccf995295708df80960d2fef09b8c99515421804404808481c25202bd",
   "guard-fs-writes-sh-at-user-scope-blocks-git-stash-in-every-repo-s-main-worktree-not-just-this-plugin-s": "df312269f5aea31fbf7df4d6c6b567b7bb87729804d43a3d960c64a8d3f90d1a",
   "guard-fs-writes-sh-false-positives-on-redirect-looking-text-inside-quoted-strings": "8b0ddcfdf8388ea1f0f12078097e287bd2919cd3a3b0fd5a8ff456a33238d821",
   "guard-fs-writes-sh-quoted-ssh-scp-rsync-mosh-payload-mis-split-on-unescaped": "b6f2a4baa8793f0dfc400aac8377454d1f37bdb4ca033653d8fb0d4d621a4a6a",
