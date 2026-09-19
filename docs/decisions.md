@@ -185,3 +185,60 @@ byte-identical to what `reindex` would produce right now.
 
 Recorded here on 2026-09-18 during a comment audit of `scripts/`; the
 reasoning previously lived only as a prose essay in that script's header.
+
+## 2026-09-19 — E6 sequencing: migrate the cost scripts first, then make them model-aware in ai-toolkit
+
+NWM-119 (record the orchestrator's model and effort per wave, so the ledger
+shows what Fable costs against Opus-at-high-effort) and NWM-129 (move
+`claude-cost.py` and `claude-cost-scan.py` to the public `ai-toolkit`) both
+change the same file. Yesterday's handoff flagged the sequencing as unmade
+and warned against running them in parallel.
+
+Owner decision: migrate first. NWM-129 lands, and NWM-119's change is then
+made in `ai-toolkit` against the migrated script. The `Blocks` link was
+reversed to match — NWM-129 now blocks NWM-119, where it previously ran the
+other way.
+
+The reasoning is that NWM-119's change is to the generic half. Reading a
+transcript's model and effort metadata and splitting spend per model is
+something any repo running Claude Code sessions wants; it is not a
+night-watchman feature. Doing it here first would mean writing generic code
+into a private repo and then moving it a ticket later, which is the same
+mistake NWM-126 was filed to correct for `comment-lint.py`. What stays here
+is the product half: the ledger file, `docs/cost.md`'s prose, and the
+`cost-reviewer` agent.
+
+NWM-119's `touches` was corrected while making this change. It listed
+`scripts/claude-cost.py` (about to leave the repo) plus `docs/cost/README.md`
+and `docs/cost/reviews/`, neither of which exists — the real layout is a
+single `docs/cost.md`. It now names only what this repo will still own.
+
+### 2026-09-19 — NWM-123 was undispatchable because its contract lived in prose, not in fields
+
+NWM-123 (the guard hook blocks `git` inside an agent's own worktree, and is
+bypassable with `/usr/bin/git`) was excluded from `issues.py next` and from
+every wave, and could never be dispatched. The cause was not a missing
+decision: the ticket's description ended with `verify:` and `executor: agent`
+written as prose in the body, while the structured fields those names refer
+to were both empty. `issues.py` reads the fields, so the ticket looked
+contract-less.
+
+Lifting both into their fields made it startable. This is worth naming as a
+failure mode rather than a one-off typo: a ticket captured from a
+conversation — here, reported across from homelab LAB-241 — carries its
+contract as sentences, and nothing rejects it. `issues.py lint` reported the
+project clean while one ticket in it was permanently undispatchable, because
+an empty field is not a lint error. The tool-side net that does exist (no
+executor means never startable) prevents a bad dispatch but is silent about
+the ticket being stranded.
+
+The verify clause was also strengthened while it was open. It now asserts
+stderr as well as exit codes, and adds a PATH-shadowing shim case, so the
+fix cannot pass by refusing everything — the failure mode a guard fix is
+most likely to have.
+
+Sequencing: NWM-113, NWM-123 and NWM-122 all edit `hooks/guard-fs-writes.sh`.
+They were chained `113 → 123 → 122` rather than left parallel. NWM-123 is
+placed second, ahead of NWM-122's frame-stack refactor decision, because a
+guard a subagent can route around is the highest-severity item in the set and
+should not wait behind a refactor.
