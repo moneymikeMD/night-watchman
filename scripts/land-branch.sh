@@ -18,10 +18,9 @@
 #           Every transition is resolved BY TARGET STATUS and READ BACK
 #           afterwards; zero or more than one match is refused, never guessed.
 #
-# LIFECYCLE. In Progress from dispatch, Awaiting Deployment before landing,
-# Completed after landing; this script drives the last two moves, and
-# --no-complete runs only the first. A file-mode ticket in open/ or
-# cancelled/, or a jira issue in any other status, is refused.
+# LIFECYCLE. In Progress from dispatch; this script moves the ticket to
+# Awaiting Deployment before landing and Completed after (--no-complete: only
+# the first). A ticket in open/ or cancelled/, or any other jira status, is refused.
 #
 # Usage:
 #   land-branch.sh <branch> <ticket-id> [--dry-run]
@@ -33,14 +32,12 @@
 #   land-branch.sh <branch> <ticket-id> --no-complete [--dry-run] [--note "text"] [--tracker file|jira] ...
 #   land-branch.sh --help
 #
-# INTEGRATION WORKTREE. The merge, lint, completion and push run in
-# `<parent-of-the-main-worktree>/<repo-basename>-land` (e.g. `~/code/foo` ->
-# `~/code/foo-land`), never in the invoking tree, which is never mutated.
-# Every run resets it to origin/<target-branch>, discarding prior local
-# commits and untracked debris; a dirty one is refused unless --reset-land is
-# passed, and a concurrent run is refused by a lock at `<worktree>.lock`.
-# The main worktree is NOT fast-forwarded after a successful push — the final
-# summary prints the `git -C <main-worktree> pull --ff-only` to run by hand.
+# INTEGRATION WORKTREE. Merge, lint, completion and push run in
+# `<parent-of-the-main-worktree>/<repo-basename>-land`, never in the invoking
+# tree. Every run resets it to origin/<target-branch>; a dirty one is refused
+# unless --reset-land is passed, and a concurrent run is refused by the lock
+# at `<worktree>.lock`. The main worktree is NOT fast-forwarded after the push;
+# the summary prints the `git pull --ff-only` to run by hand.
 #
 # Exit codes:
 #   0   landed cleanly
@@ -71,9 +68,8 @@
 #   LAND_BRANCH_HANDOFF_FILE          closing-state path; unreadable = no closing state.
 #   LAND_BRANCH_ORCHESTRATOR_PANE     override the orchestrator pane id.
 #   LAND_BRANCH_EXECUTOR_FIELD        jira executor field (customfield_10047).
-#   --reset-land                      (flag only) discards uncommitted changes
-#                                     in the integration worktree before
-#                                     syncing. Never touches the invoking tree.
+#   --reset-land                      (flag only) discard uncommitted changes in
+#                                     the integration worktree before syncing.
 #
 # Optional layer: with HERDR_ENV=1 and `herdr` on PATH, a successful landing
 # also removes the herdr worktree workspace matching this branch by name.
