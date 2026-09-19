@@ -566,6 +566,45 @@ else
     ok "testJC2: a failed closing-state write exits 1 loudly, keeps the landing, and leaves the worker's pane alone"
 fi
 
+# ---- NWM-134 testJG1: HERDR_ENV=1 with no hand-off must leave the tracker and
+# origin identical to an unset run; commit dates are pinned so SHAs match.
+
+export GIT_AUTHOR_DATE="2026-01-02T03:04:05Z" GIT_COMMITTER_DATE="2026-01-02T03:04:05Z"
+fresh_jira_repo jg1a 3 10009 >/dev/null
+closing_stub jg1a
+set +e
+# shellcheck disable=SC2086  # STATUS_FLAGS is a fixed flag list
+(cd "$WORK/jg1a" && HERDR_ENV=1 PATH="$WORK/jg1a.bin:$PATH" STUB_HERDR_LOG="$WORK/jg1a.herdr.log" \
+    JIRA_MOCK_STATE="$WORK/jg1a.jira-state.json" JIRA_MOCK_BARE="$WORK/jg1a.git" \
+    ./scripts/land-branch.sh work PROJ-1 --tracker jira --jira-api "$JIRA_MOCK" $STATUS_FLAGS --jira-done-status 10014) \
+    >"$WORK/jg1a.out" 2>&1
+RC_A=$?
+set -e
+fresh_jira_repo jg1b 3 10009 >/dev/null
+run_land jg1b --jira-done-status 10014
+RC_B=$RC
+unset GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+STATE_A="$WORK/jg1a.jira-state.json"
+STATE_B="$WORK/jg1b.jira-state.json"
+TREE_A=$(git -C "$WORK/jg1a.git" rev-parse "main^{tree}") || TREE_A=a-unreadable
+TREE_B=$(git -C "$WORK/jg1b.git" rev-parse "main^{tree}") || TREE_B=b-unreadable
+if [ "$RC_A" -ne 0 ] || [ "$RC_B" -ne 0 ]; then
+    bad "testJG1: exits differ from 0 (HERDR_ENV=1: $RC_A, unset: $RC_B):
+$(tail -8 "$WORK/jg1a.out")"
+elif [ "$(comment_count "$STATE_A")" != "1" ] || grep -q "Closing state" "$STATE_A"; then
+    bad "testJG1: HERDR_ENV=1 with no hand-off wrote a closing-state comment ($(comment_count "$STATE_A") comments)"
+elif ! cmp -s "$STATE_A" "$STATE_B"; then
+    bad "testJG1: tracker state differs from the HERDR_ENV-unset run:
+$(diff "$STATE_A" "$STATE_B" || true)"
+elif [ "$TREE_A" != "$TREE_B" ] || [ "${#TREE_A}" -ne 40 ]; then
+    bad "testJG1: origin trees differ ($TREE_A vs $TREE_B)"
+elif grep -q "^pane send-text" "$WORK/jg1a.herdr.log"; then
+    bad "testJG1: orchestrator notified with no hand-off:
+$(cat "$WORK/jg1a.herdr.log")"
+else
+    ok "testJG1: HERDR_ENV=1 without a hand-off leaves the jira tracker and origin byte-identical to HERDR_ENV unset"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]

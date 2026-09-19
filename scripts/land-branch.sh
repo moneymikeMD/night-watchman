@@ -18,10 +18,9 @@
 #           Every transition is resolved BY TARGET STATUS and READ BACK
 #           afterwards; zero or more than one match is refused, never guessed.
 #
-# LIFECYCLE. In Progress from dispatch, Awaiting Deployment before landing,
-# Completed after landing; this script drives the last two moves, and
-# --no-complete runs only the first. A file-mode ticket in open/ or
-# cancelled/, or a jira issue in any other status, is refused.
+# LIFECYCLE. In Progress from dispatch; this script moves the ticket to
+# Awaiting Deployment before landing and Completed after (--no-complete: only
+# the first). A ticket in open/ or cancelled/, or any other jira status, is refused.
 #
 # Usage:
 #   land-branch.sh <branch> <ticket-id> [--dry-run]
@@ -33,14 +32,12 @@
 #   land-branch.sh <branch> <ticket-id> --no-complete [--dry-run] [--note "text"] [--tracker file|jira] ...
 #   land-branch.sh --help
 #
-# INTEGRATION WORKTREE. The merge, lint, completion and push run in
-# `<parent-of-the-main-worktree>/<repo-basename>-land` (e.g. `~/code/foo` ->
-# `~/code/foo-land`), never in the invoking tree, which is never mutated.
-# Every run resets it to origin/<target-branch>, discarding prior local
-# commits and untracked debris; a dirty one is refused unless --reset-land is
-# passed, and a concurrent run is refused by a lock at `<worktree>.lock`.
-# The main worktree is NOT fast-forwarded after a successful push — the final
-# summary prints the `git -C <main-worktree> pull --ff-only` to run by hand.
+# INTEGRATION WORKTREE. Merge, lint, completion and push run in
+# `<parent-of-the-main-worktree>/<repo-basename>-land`, never in the invoking
+# tree. Every run resets it to origin/<target-branch>; a dirty one is refused
+# unless --reset-land is passed, and a concurrent run is refused by the lock
+# at `<worktree>.lock`. The main worktree is NOT fast-forwarded after the push;
+# the summary prints the `git pull --ff-only` to run by hand.
 #
 # Exit codes:
 #   0   landed cleanly
@@ -67,17 +64,16 @@
 #                                     if present, else skipped with a warning).
 #   LAND_BRANCH_COAUTHOR              optional Co-Authored-By trailer.
 #   LAND_BRANCH_SESSION               optional Claude-Session trailer.
-#   LAND_BRANCH_ACK_WAIT_S            closing-state ack wait, s (default 10).
-#   LAND_BRANCH_HANDOFF_FILE          override the closing-state path.
+#   LAND_BRANCH_ACK_WAIT_S            wait for scripts/land-ack.sh, s (default 10).
+#   LAND_BRANCH_HANDOFF_FILE          closing-state path; unreadable = no closing state.
 #   LAND_BRANCH_ORCHESTRATOR_PANE     override the orchestrator pane id.
 #   LAND_BRANCH_EXECUTOR_FIELD        jira executor field (customfield_10047).
-#   --reset-land                      (flag only) discards uncommitted changes
-#                                     in the integration worktree before
-#                                     syncing. Never touches the invoking tree.
+#   --reset-land                      (flag only) discard uncommitted changes in
+#                                     the integration worktree before syncing.
 #
 # Optional layer: with HERDR_ENV=1 and `herdr` on PATH, a successful landing
 # also removes the herdr worktree workspace matching this branch by name.
-# Closing state (NWM-120): docs/decisions.md, 2026-09-18.
+# Closing state (NWM-120, gated on a hand-off file by NWM-134): docs/decisions.md.
 
 set -euo pipefail
 # shellcheck source=lib/kit.sh
@@ -459,12 +455,12 @@ CLOSING_TEXT=""
 CLOSING_MARK=""
 ORCH_PANE="${LAND_BRANCH_ORCHESTRATOR_PANE:-}"
 if [ "${HERDR_ENV:-}" = "1" ]; then
-    CLOSING=1
     HANDOFF_FILE="${LAND_BRANCH_HANDOFF_FILE:-}"
     WORKER_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$BRANCH" '/^worktree /{p=substr($0,10)} $1=="branch" && $2==b {print p}') || WORKER_WT=""
     if [ -z "$HANDOFF_FILE" ] && [ -n "$WORKER_WT" ]; then
         HANDOFF_FILE="$WORKER_WT/.night-watchman/closing-state.md"
     fi
+    [ -n "$HANDOFF_FILE" ] && [ -r "$HANDOFF_FILE" ] && CLOSING=1
 
     # handoff_section HEADING — body of `## HEADING` in the handoff file,
     # trimmed of blank edges; empty when the file or section is absent.
@@ -566,7 +562,11 @@ else
 fi
 echo "  4. git push origin HEAD:$TARGET_BRANCH (from the integration worktree; '$MAIN_WORKTREE' is not fast-forwarded automatically)"
 if [ "${HERDR_ENV:-}" = "1" ]; then
-    echo "  5. (HERDR_ENV=1) write the worker's closing state durably ('${HANDOFF_FILE:-no handoff file found}', executor '${EXECUTOR:-unknown}'), read it back, notify the orchestrator best-effort (pane '${ORCH_PANE:-none}')"
+    if [ "$CLOSING" = 1 ]; then
+        echo "  5. (HERDR_ENV=1) write the worker's closing state durably ('$HANDOFF_FILE', executor '${EXECUTOR:-unknown}'), read it back, notify the orchestrator best-effort (pane '${ORCH_PANE:-none}')"
+    else
+        echo "  5. (HERDR_ENV=1) no hand-off file found for '$BRANCH' — no closing state is written and nobody is notified"
+    fi
     echo "  6. remove the herdr worktree workspace for branch '$BRANCH' (HERDR_ENV=1), then git branch -d '$BRANCH'"
 else
     echo "  5. git branch -d '$BRANCH' (HERDR_ENV not set — no worktree removal)"
@@ -998,8 +998,7 @@ if [ "$CLOSING" = 1 ] && [ -z "$CLOSING_FAILED" ]; then
     elif ! command -v herdr >/dev/null 2>&1; then
         warn "no 'herdr' on PATH — orchestrator pane $ORCH_PANE was not notified; closing state is in the tracker"
     else
-        herdr pane send-text "$ORCH_PANE" "$TICKET_ID landed; closing state is in the tracker ($CLOSING_MARK). Acknowledge with: touch '$ACK_FILE'" >/dev/null 2>&1 \
-            && herdr pane send-keys "$ORCH_PANE" enter >/dev/null 2>&1 || true
+        herdr_notify "$ORCH_PANE" "$TICKET_ID landed; closing state is in the tracker ($CLOSING_MARK). Acknowledge with: $(cd "$(dirname "$0")" && pwd)/land-ack.sh '$ACK_FILE'" || true
         ACK_BOUND_S="${LAND_BRANCH_ACK_WAIT_S:-10}"
         ACK_WAITED_S=0
         while [ "$ACK_WAITED_S" -lt "$ACK_BOUND_S" ] && [ ! -e "$ACK_FILE" ]; do

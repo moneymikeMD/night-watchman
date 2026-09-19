@@ -18,3 +18,4 @@ docs/preview/website/.astro/
 
 # per-wave decision trail; a working artifact for the wave, not project history
 .night-watchman/wave-trail.tsv
+.night-watchman/closing-state.md

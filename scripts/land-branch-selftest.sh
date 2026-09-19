@@ -75,6 +75,7 @@ fresh_repo() {
         git remote add origin "$d.git"
         cp "$LAND_BRANCH" scripts/land-branch.sh
         cp "$KIT" scripts/lib/kit.sh
+        cp "$HERE/land-ack.sh" scripts/land-ack.sh
         cp "$ISSUES_PY" skills/to-issues/scripts/issues.py
         chmod +x scripts/land-branch.sh
         printf '%s' "$ticket_body" > issues/in-progress/PROJ-1.md
@@ -804,7 +805,13 @@ case "$1 $2" in
         echo "stub herdr: agent not found" >&2
         exit 1
         ;;
-    "pane send-text"|"pane send-keys")
+    "pane send-text")
+        if [ "${STUB_ORCH_ACKS:-0}" = 1 ] && [ "$3" = orch1 ]; then
+            eval "${4##*Acknowledge with: }" >/dev/null
+        fi
+        exit 0
+        ;;
+    "pane send-keys")
         exit 0
         ;;
     "agent send-keys")
@@ -947,7 +954,7 @@ closing_run() {
     (cd "$REPO" && HERDR_ENV=1 PATH="$REPO/bin:$PATH" \
         STUB_HERDR_LOG="$STUB_HERDR_LOG" STUB_AGENT_ALIVE="$REPO/bin/alive" \
         LAND_BRANCH_HANDOFF_FILE="${handoff:+$WORK/$name.handoff/closing-state.md}" \
-        LAND_BRANCH_ACK_WAIT_S=1 "$@" \
+        env LAND_BRANCH_ACK_WAIT_S=1 "$@" \
         ./scripts/land-branch.sh work PROJ-1) >"$WORK/$name.out" 2>&1
     RC=$?
     set -e
@@ -1030,6 +1037,107 @@ elif grep -q "Closing state" "$WORK/t26.ticket" 2>/dev/null; then
     bad "test26: closing state written although HERDR_ENV is unset"
 else
     ok "test26: without HERDR_ENV the landing carries no closing state (unchanged)"
+fi
+
+# ---- NWM-134 test 27: HERDR_ENV=1 with NO hand-off file must produce the same
+# landed ticket, byte for byte, as the same run with HERDR_ENV unset. Dates are
+# pinned so both runs mint identical commits.
+
+export GIT_AUTHOR_DATE="2026-01-02T03:04:05Z" GIT_COMMITTER_DATE="2026-01-02T03:04:05Z"
+for MODE in complete nocomplete; do
+    EXTRA=""
+    [ "$MODE" = nocomplete ] && EXTRA="--no-complete --note pinned-note"
+    REPO=$(fresh_repo "t27a-$MODE" "$TICKET_OK")
+    install_stub_herdr_exit "$REPO"
+    STUB_HERDR_LOG="$WORK/t27a-$MODE.herdr.log"; : > "$STUB_HERDR_LOG"
+    set +e
+    # shellcheck disable=SC2086
+    (cd "$REPO" && HERDR_ENV=1 PATH="$REPO/bin:$PATH" STUB_HERDR_LOG="$STUB_HERDR_LOG" \
+        STUB_AGENT_ALIVE="$REPO/bin/alive" ./scripts/land-branch.sh work PROJ-1 $EXTRA) >"$WORK/t27a-$MODE.out" 2>&1
+    RC_A=$?
+    set -e
+    REPO_A="$REPO"
+    REPO=$(fresh_repo "t27b-$MODE" "$TICKET_OK")
+    set +e
+    # shellcheck disable=SC2086
+    (cd "$REPO" && ./scripts/land-branch.sh work PROJ-1 $EXTRA) >"$WORK/t27b-$MODE.out" 2>&1
+    RC_B=$?
+    set -e
+    TREE_A=$(git -C "$(land_bare_of "$REPO_A")" rev-parse "main^{tree}") || TREE_A=a-unreadable
+    TREE_B=$(git -C "$(land_bare_of "$REPO")" rev-parse "main^{tree}") || TREE_B=b-unreadable
+    if [ "$RC_A" -ne 0 ] || [ "$RC_B" -ne 0 ]; then
+        bad "test27 ($MODE): exits differ from 0 (HERDR_ENV=1: $RC_A, unset: $RC_B):
+$(tail -8 "$WORK/t27a-$MODE.out")"
+    elif [ "$TREE_A" != "$TREE_B" ] || [ "${#TREE_A}" -ne 40 ]; then
+        bad "test27 ($MODE): HERDR_ENV=1 with no hand-off changed the landed tree ($TREE_A vs $TREE_B)"
+    elif git -C "$(land_bare_of "$REPO_A")" grep -q "Closing state" main -- issues; then
+        bad "test27 ($MODE): closing-state block emitted with no hand-off"
+    elif grep -q "^pane send-text" "$WORK/t27a-$MODE.herdr.log"; then
+        bad "test27 ($MODE): orchestrator notified with no hand-off:
+$(cat "$WORK/t27a-$MODE.herdr.log")"
+    else
+        ok "test27 ($MODE): HERDR_ENV=1 without a hand-off lands byte-identically to HERDR_ENV unset"
+    fi
+done
+unset GIT_AUTHOR_DATE GIT_COMMITTER_DATE
+
+# ---- test 28: a real hand-off still emits the block (gate's other direction),
+# and the orchestrator running the named consumer acknowledges the landing.
+
+closing_run t28 "$TICKET_OK" yes STUB_ORCH_ACKS=1
+land_fetch "$REPO" main issues/completed/PROJ-1.md "$WORK/t28.ticket" || true
+if [ "$RC" -ne 0 ]; then
+    bad "test28 (ack consumer): exit $RC, expected 0:
+$(tail -15 "$WORK/t28.out")"
+elif ! grep -q "Closing state (closing-state:PROJ-1:" "$WORK/t28.ticket" 2>/dev/null; then
+    bad "test28: hand-off present but no closing-state block in the landed ticket"
+elif ! grep -q "orchestrator acknowledged the closing state" "$WORK/t28.out"; then
+    bad "test28: consumer ran but the landing did not see the ack:
+$(cat "$WORK/t28.out")"
+elif grep -q "did not acknowledge" "$WORK/t28.out"; then
+    bad "test28: acked landing still warned of no ack"
+elif ! grep -q "^pane send-text orch1 .*Acknowledge with: .*/land-ack.sh '" "$STUB_HERDR_LOG"; then
+    bad "test28: notification does not name land-ack.sh:
+$(cat "$STUB_HERDR_LOG")"
+else
+    ok "test28: hand-off present -> block emitted; the named land-ack.sh consumer completes the ack round trip"
+fi
+
+# ---- test 29: land-ack.sh itself creates only nw-ack-* files.
+
+ACKDIR="$WORK/t29"; mkdir -p "$ACKDIR"
+if ! "$HERE/land-ack.sh" "$ACKDIR/nw-ack-PROJ-1-abc" >/dev/null || [ ! -e "$ACKDIR/nw-ack-PROJ-1-abc" ]; then
+    bad "test29: land-ack.sh did not create a well-named ack file"
+elif "$HERE/land-ack.sh" "$ACKDIR/other-file" >/dev/null 2>&1 || [ -e "$ACKDIR/other-file" ]; then
+    bad "test29: land-ack.sh created or accepted a file not named nw-ack-*"
+elif "$HERE/land-ack.sh" >/dev/null 2>&1; then
+    bad "test29: land-ack.sh with no argument exited 0"
+else
+    ok "test29: land-ack.sh creates nw-ack-* files and refuses anything else"
+fi
+
+# ---- test 30: a worker writing its hand-off file must not dirty its worktree,
+# or land-branch.sh's clean-tree precondition refuses before reading it. The
+# path is read out of land-branch.sh; a $LAND_BRANCH_HANDOFF_FILE elsewhere is
+# the caller's concern.
+
+HANDOFF_REL=$(grep -o '\.night-watchman/closing-state\.md' "$LAND_BRANCH" | head -1)
+GI_REPO="$WORK/t30"
+git init -q -b main "$GI_REPO"
+cp "$HERE/../.gitignore" "$GI_REPO/.gitignore"
+git -C "$GI_REPO" add .gitignore
+git -C "$GI_REPO" -c user.email=t@example.invalid -c user.name=selftest -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q -m init
+if [ -n "$HANDOFF_REL" ]; then
+    mkdir -p "$GI_REPO/$(dirname "$HANDOFF_REL")"
+    printf '## Findings\n- x\n' > "$GI_REPO/$HANDOFF_REL"
+fi
+if [ -z "$HANDOFF_REL" ]; then
+    bad "test30: land-branch.sh names no closing-state.md path to check"
+elif [ -n "$(git -C "$GI_REPO" status --porcelain)" ]; then
+    bad "test30: writing $HANDOFF_REL dirties the worktree:
+$(git -C "$GI_REPO" status --porcelain)"
+else
+    ok "test30: a hand-off file at $HANDOFF_REL leaves git status --porcelain empty"
 fi
 
 echo
