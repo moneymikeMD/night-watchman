@@ -40,6 +40,12 @@ known_command() {
     return 1
 }
 
+# herdr_notify PANE TEXT — type TEXT into a herdr pane and press enter. 0 only
+# if both herdr calls succeeded; callers treat a failure as a warning.
+herdr_notify() {
+    herdr pane send-text "$1" "$2" >/dev/null 2>&1 && herdr pane send-keys "$1" enter >/dev/null 2>&1
+}
+
 # tmpfile — create a 0600 tempfile, remove it on exit. Safe to call more
 # than once in one script: each call adds its own path to the cleanup list
 # rather than replacing an earlier trap registration.
