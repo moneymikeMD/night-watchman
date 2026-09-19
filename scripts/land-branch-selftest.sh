@@ -26,6 +26,8 @@ KIT="$HERE/lib/kit.sh"
 [ -r "$ISSUES_PY" ] || { echo "cannot read $ISSUES_PY" >&2; exit 2; }
 [ -r "$KIT" ] || { echo "cannot read $KIT" >&2; exit 2; }
 
+unset HERDR_ENV HERDR_PANE_ID LAND_BRANCH_ORCHESTRATOR_PANE LAND_BRANCH_HANDOFF_FILE
+
 PASS=0
 FAIL=0
 ok()  { echo "ok - $1"; PASS=$((PASS + 1)); }
@@ -802,7 +804,7 @@ case "$1 $2" in
         echo "stub herdr: agent not found" >&2
         exit 1
         ;;
-    "pane send-text")
+    "pane send-text"|"pane send-keys")
         exit 0
         ;;
     "agent send-keys")
@@ -909,6 +911,125 @@ elif ! grep -q "^worktree remove" "$STUB_HERDR_LOG"; then
 $(cat "$STUB_HERDR_LOG")"
 else
     ok "test22: a hung worker is logged, not left blocking the landing — its workspace is still removed"
+fi
+
+# ---- NWM-120: closing state. The stub logs every herdr call in order; the
+# durable write is the completion commit on origin, so "write precedes exit"
+# is asserted as: the landed ticket carries the marker AND the orchestrator
+# notification (pane orch1) is logged before the worker's /exit and removal.
+
+write_handoff() {
+    mkdir -p "$1"
+    cat > "$1/closing-state.md" <<'HEOF'
+orchestrator-pane: orch1
+
+## Human run list
+1. run the migration by hand
+
+## Left undone
+- the port, out of scope
+
+## Findings
+- probable auth bypass in the caddy site
+HEOF
+}
+
+closing_run() {
+    local name="$1" ticket="$2" handoff="$3"; shift 3
+    REPO=$(fresh_repo "$name" "$ticket")
+    install_stub_herdr_exit "$REPO"
+    : > "$REPO/bin/alive"
+    STUB_HERDR_LOG="$WORK/$name.herdr.log"
+    : > "$STUB_HERDR_LOG"
+    [ -z "$handoff" ] || write_handoff "$WORK/$name.handoff"
+    BEFORE_MAIN=$(git -C "$WORK/$name.git" rev-parse main)
+    set +e
+    (cd "$REPO" && HERDR_ENV=1 PATH="$REPO/bin:$PATH" \
+        STUB_HERDR_LOG="$STUB_HERDR_LOG" STUB_AGENT_ALIVE="$REPO/bin/alive" \
+        LAND_BRANCH_HANDOFF_FILE="${handoff:+$WORK/$name.handoff/closing-state.md}" \
+        LAND_BRANCH_ACK_WAIT_S=1 "$@" \
+        ./scripts/land-branch.sh work PROJ-1) >"$WORK/$name.out" 2>&1
+    RC=$?
+    set -e
+}
+
+first_line() { grep -n "$1" "$2" | head -1 | cut -d: -f1; }
+
+# ---- test 23: agent ticket, notification never acknowledged -> still lands
+# (exit 0) with a warning; closing state is in the landed ticket; ordering.
+
+closing_run t23 "$TICKET_OK" yes
+land_fetch "$REPO" main issues/completed/PROJ-1.md "$WORK/t23.ticket" || true
+NOTIFY_LN=$(first_line "^pane send-text orch1" "$STUB_HERDR_LOG")
+EXIT_LN=$(first_line "^pane send-text p1 /exit" "$STUB_HERDR_LOG")
+REMOVE_LN=$(first_line "^worktree remove" "$STUB_HERDR_LOG")
+if [ "$RC" -ne 0 ]; then
+    bad "test23 (closing state, no ack): exit $RC, expected 0:
+$(tail -15 "$WORK/t23.out")"
+elif ! grep -q "did not acknowledge within 1s" "$WORK/t23.out"; then
+    bad "test23: no unacknowledged-notification warning:
+$(cat "$WORK/t23.out")"
+elif ! grep -q "probable auth bypass" "$WORK/t23.ticket" 2>/dev/null || ! grep -q "Landed: yes, merge commit" "$WORK/t23.ticket"; then
+    bad "test23: landed ticket does not carry the closing state:
+$(cat "$WORK/t23.ticket" 2>/dev/null)"
+elif [ -z "$NOTIFY_LN" ] || [ -z "$EXIT_LN" ] || [ -z "$REMOVE_LN" ] || [ "$NOTIFY_LN" -gt "$EXIT_LN" ] || [ "$EXIT_LN" -gt "$REMOVE_LN" ]; then
+    bad "test23: order is not notify($NOTIFY_LN) < exit($EXIT_LN) < remove($REMOVE_LN):
+$(cat "$STUB_HERDR_LOG")"
+else
+    ok "test23: closing state lands with the ticket before notify < exit < remove; an unacknowledged notification only warns"
+fi
+
+# ---- test 24: mixed ticket with no run list -> refused, exit 2, nothing
+# mutated (origin main unchanged, no herdr call made).
+
+TICKET_MIXED=${TICKET_OK/executor: agent/executor: mixed}
+closing_run t24 "$TICKET_MIXED" ""
+if [ "$RC" -ne 2 ]; then
+    bad "test24 (mixed, no run list): exit $RC, expected 2:
+$(tail -10 "$WORK/t24.out")"
+elif [ "$(git -C "$WORK/t24.git" rev-parse main)" != "$BEFORE_MAIN" ]; then
+    bad "test24: origin main moved although the landing was refused"
+elif [ -s "$STUB_HERDR_LOG" ]; then
+    bad "test24: herdr was called on a refused landing:
+$(cat "$STUB_HERDR_LOG")"
+elif ! grep -q "no '## Human run list' was found" "$WORK/t24.out"; then
+    bad "test24: refusal does not name the missing run list:
+$(cat "$WORK/t24.out")"
+else
+    ok "test24: a mixed-executor ticket with no run list is refused before anything is mutated (exit 2)"
+fi
+
+# ---- test 25: mixed ticket WITH a run list -> the run list is in the landed
+# ticket.
+
+closing_run t25 "$TICKET_MIXED" yes
+land_fetch "$REPO" main issues/completed/PROJ-1.md "$WORK/t25.ticket" || true
+if [ "$RC" -ne 0 ]; then
+    bad "test25 (mixed, run list): exit $RC, expected 0:
+$(tail -10 "$WORK/t25.out")"
+elif ! grep -q "1. run the migration by hand" "$WORK/t25.ticket" 2>/dev/null; then
+    bad "test25: run list missing from the landed ticket:
+$(cat "$WORK/t25.ticket" 2>/dev/null)"
+else
+    ok "test25: a mixed-executor ticket lands with its human run list in the durable write"
+fi
+
+# ---- test 26: without HERDR_ENV nothing changes — no closing state in the
+# outcome, no notification.
+
+REPO=$(fresh_repo t26 "$TICKET_OK")
+set +e
+(cd "$REPO" && LAND_BRANCH_HANDOFF_FILE=/nonexistent ./scripts/land-branch.sh work PROJ-1) >"$WORK/t26.out" 2>&1
+RC=$?
+set -e
+land_fetch "$REPO" main issues/completed/PROJ-1.md "$WORK/t26.ticket" || true
+if [ "$RC" -ne 0 ]; then
+    bad "test26 (no HERDR_ENV): exit $RC:
+$(tail -10 "$WORK/t26.out")"
+elif grep -q "Closing state" "$WORK/t26.ticket" 2>/dev/null; then
+    bad "test26: closing state written although HERDR_ENV is unset"
+else
+    ok "test26: without HERDR_ENV the landing carries no closing state (unchanged)"
 fi
 
 echo

@@ -197,6 +197,11 @@ PROMPT_TEXT=${PROMPT_TEXT//@MODEL@/$MODEL}
 PROMPT_TEXT=${PROMPT_TEXT//@TRACKER@/$TRACKER_LINE}
 PROMPT_TEXT=${PROMPT_TEXT//@TIMEBOX@/$TIMEBOX}
 PROMPT_TEXT=${PROMPT_TEXT//@FORBIDDEN@/$FORBIDDEN}
+ORCH_PANE_ID="${HERDR_PANE_ID:-}"
+PROMPT_TEXT="$PROMPT_TEXT
+
+## CLOSING STATE
+Before you stop, write \`.night-watchman/closing-state.md\` in your worktree (do not commit it) with \`## Human run list\` (required if this ticket's executor is human or mixed), \`## Left undone\` and \`## Findings\` sections: what you deliberately left undone and why, and anything you noticed but did not act on, including outside this ticket's scope.${ORCH_PANE_ID:+ Add the line \`orchestrator-pane: $ORCH_PANE_ID\` so landing can notify the orchestrator.} land-branch.sh writes it to the tracker and confirms the write before your session ends."
 
 REPO=$(git rev-parse --show-toplevel 2>/dev/null) || stop2 "not inside a git repository"
 cd "$REPO"
