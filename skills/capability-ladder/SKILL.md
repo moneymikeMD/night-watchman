@@ -28,6 +28,42 @@ beats fan-out — if one script can process every unit in a single pass, run
 it; don't brief several agents to hand-apply what the script would do.
 (Ported from pstack `principle-build-the-lever`, 2026-09-14.)
 
+## MCP: a surface over rung 1, not a rung of its own
+
+A script can also be given a typed, callable surface: a local MCP server —
+an ordinary stdio process, no deployed backend required — whose tools shell
+out to `gh`, `git`, or `docker`. This sits *beside* rung 1, never above or
+below it. Above would say it holds more judgement than a script; it holds
+none. Below would say it replaces a script; it must not, since a server
+that owns behaviour can't be retired without a rewrite. The script stays
+the artifact — a bare terminal, CI, a cheap model, reviewable once. MCP is
+only its signature — schema-validated parameters, call by name, a distinct
+`tool_name` in tool analytics.
+
+The premise that used to rule this out is stale: tool schemas are deferred
+in this harness, so an unused tool costs one name in a list, not a schema
+in context. A 2026-09-19 session observed roughly 230 deferred tool names,
+about 100 of them `tokensave_*`, with only five carrying eager schemas. The
+dominant cost of a crowded tool list is picking the wrong one, not tokens —
+an argument for narrow, per-domain servers, not against surfacing at all.
+
+Reach for the surface only when *both* hold, otherwise stay a script:
+
+- A coherent family of operations shares a domain model — not one script,
+  one call.
+- The `Bash` bucket genuinely isn't good enough: analytics need per-tool
+  granularity a shell command can't produce, or a curated API would
+  replace repeated, near-identical invocations.
+
+Scope one server per domain, enabled per project, never installed
+globally — a global server puts every project's tools in every other
+project's name list. The server holds no logic: every tool is a thin
+dispatcher over a script that already works standalone, so exposing it
+stays reversible. That also bounds the hazard — a tool that can reach an
+action its underlying script can't, or that carries a flag bypassing a
+check the script enforces, is a permission bypass wearing an interface,
+not an improved one.
+
 ## 2. An agent
 
 Use when the work needs judgement but is bounded and repeatable enough to
