@@ -10,7 +10,7 @@ jobs:
     # macOS, not ubuntu: this repo targets bash 3.2, the /bin/bash macOS ships.
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: bash version
         run: /bin/bash --version | head -1
@@ -63,7 +63,7 @@ jobs:
   comment-lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: python3 scripts/comment-lint.py
 
   docs-site:
@@ -71,7 +71,7 @@ jobs:
     # package.json/bun.lock before the deploy does.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
