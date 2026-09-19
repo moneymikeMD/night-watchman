@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here.
 
+## [0.9.1](https://github.com/moneymikeMD/night-watchman/compare/v0.9.0...v0.9.1) (2026-09-19)
+
+
+### Bug Fixes
+
+* **ci:** trim land-branch.sh's file header back under the 80-line cap ([857ec4d](https://github.com/moneymikeMD/night-watchman/commit/857ec4d2ef7bcda8e8a989debaceb2d12aada5f4))
+* **guard-fs-writes:** match the binary a command word resolves to ([5c04dcc](https://github.com/moneymikeMD/night-watchman/commit/5c04dcc57038b49dbb43bcc6bf0c29243b7b3e3f))
+* **guard-fs-writes:** resolve command heads only in command position ([d85ac5d](https://github.com/moneymikeMD/night-watchman/commit/d85ac5ddbf130ed5d44f1ca09eb57a0fb70f6a57))
+
 ## [0.9.0](https://github.com/moneymikeMD/night-watchman/compare/v0.8.0...v0.9.0) (2026-09-19)
 
 
