@@ -93,7 +93,7 @@ else
     bad "scripts.mdx should contain a ### scripts/fake-script.py section from its docstring header"
 fi
 
-for name in agents skills scripts hooks config ethos-seed evidence index; do
+for name in agents skills scripts hooks config ethos-seed evidence faq index; do
     if [ ! -f "$OUT/$name.mdx" ]; then
         bad "$name.mdx was not generated"
     elif diff -u "$EXPECTED/$name.mdx" "$OUT/$name.mdx" >"$WORK/$name.diff" 2>&1; then
