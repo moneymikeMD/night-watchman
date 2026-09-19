@@ -86,3 +86,10 @@ if [ ! -f "$FILE" ]; then
 fi
 
 printf '%s\n' "$ROW" >> "$FILE"
+
+# negative test line 1: this block is six lines, the cap is four
+# negative test line 2: this block is six lines, the cap is four
+# negative test line 3: this block is six lines, the cap is four
+# negative test line 4: this block is six lines, the cap is four
+# negative test line 5: this block is six lines, the cap is four
+# negative test line 6: this block is six lines, the cap is four
