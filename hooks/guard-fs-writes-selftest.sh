@@ -86,6 +86,22 @@ git -C "$FAKE_WORKTREE" commit -q -m "seed"
 FAKE_LINKED_WORKTREE="$SCRATCH/fake-linked-worktree"
 git -C "$FAKE_WORKTREE" worktree add -q -b guard-selftest-branch "$FAKE_LINKED_WORKTREE" >/dev/null
 
+# A second, UNRELATED repo (no worktree relationship to FAKE_WORKTREE at
+# all): WO-023 fix 2 makes every worktree of the SAME repo an allowed root,
+# so a test that wants to discriminate "payload .cwd used, not process cwd"
+# or "the worktree set is per-repo" needs a tree this genuinely isn't one of.
+OTHER_REPO="$SCRATCH/other-repo"
+mkdir -p "$OTHER_REPO"
+git -C "$OTHER_REPO" init -q
+git -C "$OTHER_REPO" config core.hooksPath "$NOHOOKS_DIR"
+git -C "$OTHER_REPO" config commit.gpgsign false
+git -C "$OTHER_REPO" config gpg.format ""
+git -C "$OTHER_REPO" config user.email "guard-selftest@example.invalid"
+git -C "$OTHER_REPO" config user.name "guard-fs-writes-selftest"
+: > "$OTHER_REPO/seed.txt"
+git -C "$OTHER_REPO" add seed.txt
+git -C "$OTHER_REPO" commit -q -m "seed"
+
 run_guard() {
   # $1 = cwd to invoke the guard from, $2 = command text. Prints the exit
   # code; the guard's own stderr is discarded.
@@ -169,17 +185,22 @@ HEREDOC_CMD="$(printf "cat <<'EOF'\nsome doc text mentions 1 > /etc/passwd as pr
 GOT="$(run_guard "$FAKE_WORKTREE" "$HEREDOC_CMD")"
 assert_exit "allows a heredoc whose body merely mentions a redirect-looking string (finding 4)" 0 "$GOT"
 
-# Both targets are ABSOLUTE and the two worktrees are distinct real
-# directories: a relative target, or a non-git process cwd, would trivially
-# self-allow whether or not .cwd is read, and so would not discriminate.
+# Both targets are ABSOLUTE and OTHER_REPO shares no worktree relationship
+# with FAKE_WORKTREE: a sibling worktree of the SAME repo would not
+# discriminate here, since WO-023 fix 2 now allows those on its own,
+# regardless of which cwd (payload or process) resolved the worktree set.
 
 PAYLOAD_CWD_INSIDE="$(jq -cn --arg cwd "$FAKE_WORKTREE" --arg tgt "$FAKE_WORKTREE/leftover-dir" '{cwd:$cwd,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:("rm -rf " + $tgt)}}')"
-GOT="$(run_guard_payload "$FAKE_LINKED_WORKTREE" "$PAYLOAD_CWD_INSIDE")"
-assert_exit "uses payload .cwd (FAKE_WORKTREE) to allow a target under it, even though the guard's own process cwd is the DIFFERENT FAKE_LINKED_WORKTREE (finding 6)" 0 "$GOT"
+GOT="$(run_guard_payload "$OTHER_REPO" "$PAYLOAD_CWD_INSIDE")"
+assert_exit "uses payload .cwd (FAKE_WORKTREE) to allow a target under it, even though the guard's own process cwd is the UNRELATED OTHER_REPO (finding 6)" 0 "$GOT"
 
-PAYLOAD_CWD_OUTSIDE="$(jq -cn --arg cwd "$FAKE_LINKED_WORKTREE" --arg tgt "$FAKE_WORKTREE/leftover-dir" '{cwd:$cwd,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:("rm -rf " + $tgt)}}')"
+PAYLOAD_CWD_OUTSIDE="$(jq -cn --arg cwd "$OTHER_REPO" --arg tgt "$FAKE_WORKTREE/leftover-dir" '{cwd:$cwd,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:("rm -rf " + $tgt)}}')"
 GOT="$(run_guard_payload "$FAKE_WORKTREE" "$PAYLOAD_CWD_OUTSIDE")"
-assert_exit "uses payload .cwd (FAKE_LINKED_WORKTREE) to block a target under the DIFFERENT FAKE_WORKTREE, even though the guard's own process cwd IS FAKE_WORKTREE (finding 6)" 2 "$GOT"
+assert_exit "uses payload .cwd (OTHER_REPO) to block a target under the UNRELATED FAKE_WORKTREE, even though the guard's own process cwd IS FAKE_WORKTREE (finding 6)" 2 "$GOT"
+
+PAYLOAD_CWD_SIBLING="$(jq -cn --arg cwd "$FAKE_LINKED_WORKTREE" --arg tgt "$FAKE_WORKTREE/leftover-dir" '{cwd:$cwd,hook_event_name:"PreToolUse",tool_name:"Bash",tool_input:{command:("rm -rf " + $tgt)}}')"
+GOT="$(run_guard_payload "$FAKE_WORKTREE" "$PAYLOAD_CWD_SIBLING")"
+assert_exit "WO-023 fix 2: payload .cwd in the LINKED worktree allows a target in the SAME repo's main worktree, even via the payload-.cwd path (was a false positive)" 0 "$GOT"
 
 GOT="$(run_guard "$FAKE_WORKTREE" "echo hi 2>/dev/null")"
 assert_exit "allows 'echo hi 2>/dev/null' (device allowlist)" 0 "$GOT"
@@ -496,15 +517,47 @@ assert_exit "allows herdr agent prompt whose quoted brief contains angle-bracket
 GOT="$(run_guard "$FAKE_WORKTREE" 'echo hello > /etc/nwm113-unquoted')"
 assert_exit "blocks the same redirect when unquoted (NWM-113 counterpart)" 2 "$GOT"
 
-# KNOWN-FAILING (MEDIUM known issue, quoted operators split before tokenising):
-# wanted 0, today 2. Flips to FAIL once fixed so the pin gets updated.
+# WO-023 fix 1 resolves the MEDIUM known issue this used to be pinned
+# KNOWN-FAILING for: quoted operators no longer split before tokenising.
 # shellcheck disable=SC2016 # literal: raw pre-expansion command text
 GOT="$(run_guard "$FAKE_WORKTREE" 'grep -E "foo|>$HOME/x" file.txt')"
-if [ "$GOT" = 2 ]; then
-  pass "KNOWN-FAILING: quoted alternation next to > is still blocked (oracle: exit code 2, wanted 0; see MEDIUM known issue)"
-else
-  fail "known-failing case now returns $GOT: the MEDIUM known issue may be fixed, update this pin and resolve it"
-fi
+assert_exit "allows quoted alternation next to a quoted > (WO-023 fix 1, known issue resolved)" 0 "$GOT"
+
+# WO-023 fix 1: scan_command_text's segment splitter is now quote-aware, so a
+# quoted ; && || | earlier in the same quoted word than a quoted > no longer
+# tears the word apart and reads the > as a real redirect (the ticket's own
+# reproduction shapes).
+GOT="$(run_guard "$FAKE_WORKTREE" 'echo "alpha beta > /etc/passwd gamma"')"
+assert_exit "allows a quoted > with no operator before it (WO-023 fix 1 baseline)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" 'echo "alpha; beta > /etc/passwd gamma"')"
+assert_exit "allows a quoted ';' before a quoted '>' (WO-023 fix 1, was a false positive)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" 'echo "alpha | beta > /etc/passwd gamma"')"
+assert_exit "allows a quoted '|' before a quoted '>' (WO-023 fix 1, was a false positive)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" 'echo "alpha && beta > /etc/passwd gamma"')"
+assert_exit "allows a quoted '&&' before a quoted '>' (WO-023 fix 1, was a false positive)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" 'echo "alpha || beta > /etc/passwd gamma"')"
+assert_exit "allows a quoted '||' before a quoted '>' (WO-023 fix 1, was a false positive)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" 'echo "alpha; beta gamma"')"
+assert_exit "allows a quoted ';' with no redirect at all (WO-023 fix 1 sanity, no split harm)" 0 "$GOT"
+
+# True-positive counterparts: the same operators UNQUOTED are real shell
+# syntax, and a genuinely outside redirect after them must still block.
+GOT="$(run_guard "$FAKE_WORKTREE" "echo hi; echo bye > $NOT_WORKTREE_NOT_SCRATCH/x")"
+assert_exit "still blocks an UNQUOTED ';' before a real outside redirect (WO-023 fix 1 regression)" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "echo hi | echo bye > $NOT_WORKTREE_NOT_SCRATCH/x")"
+assert_exit "still blocks an UNQUOTED '|' before a real outside redirect (WO-023 fix 1 regression)" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "echo hi && echo bye > $NOT_WORKTREE_NOT_SCRATCH/x")"
+assert_exit "still blocks an UNQUOTED '&&' before a real outside redirect (WO-023 fix 1 regression)" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "echo hi > $NOT_WORKTREE_NOT_SCRATCH/x")"
+assert_exit "still blocks a bare outside redirect with no operator at all (WO-023 fix 1 regression, ticket's own true-positive case)" 2 "$GOT"
 
 # NWM-123: the guard must match the binary a word RESOLVES to, not the name it
 # was typed under. Every assertion below pins the exit code AND the stderr, so
@@ -615,6 +668,33 @@ if [ -n "$RM_ABS" ]; then
   PATH="$SHIM_DIR:$PATH" assert_block "still blocks 'xargs zap' — the xargs TARGET is a command position too (NWM-123 review)" \
     "$FAKE_WORKTREE" "xargs zap" "xargs invokes rm on stdin-sourced arguments"
 fi
+
+# WO-023 fix 2: WORKTREE is now the whole worktree SET of the repo at cwd
+# (`git worktree list`), not just the one member cwd itself sits in, so a
+# write into a sibling worktree of the SAME repo is recognised as the
+# agent's own tree regardless of which member cwd drifted to.
+
+assert_allow "allows appending into the LINKED worktree when cwd is the repo's MAIN worktree (WO-023 fix 2, was a false positive)" \
+  "$FAKE_WORKTREE" "echo x >> $FAKE_LINKED_WORKTREE/wo023.log"
+
+assert_allow "allows appending into the MAIN worktree when cwd is a LINKED worktree of the same repo (WO-023 fix 2, was a false positive)" \
+  "$FAKE_LINKED_WORKTREE" "echo x >> $FAKE_WORKTREE/wo023.log"
+
+# True-positive counterparts: a genuinely outside target, and an unrelated
+# repo's worktree, must still block — the fix widens to "this repo's
+# worktree set", never to "everything reachable from cwd".
+
+assert_block "still blocks appending outside both worktrees from the MAIN worktree (WO-023 fix 2 regression)" \
+  "$FAKE_WORKTREE" "echo x >> $NOT_WORKTREE_NOT_SCRATCH/wo023.log" "target outside worktree and scratchpad"
+
+assert_block "still blocks appending outside both worktrees from a LINKED worktree (WO-023 fix 2 regression)" \
+  "$FAKE_LINKED_WORKTREE" "echo x >> $NOT_WORKTREE_NOT_SCRATCH/wo023.log" "target outside worktree and scratchpad"
+
+assert_block "still blocks a write into an UNRELATED repo's worktree from this repo's main worktree (WO-023 fix 2, the set is per-repo, not global)" \
+  "$FAKE_WORKTREE" "echo x >> $OTHER_REPO/wo023.log" "target outside worktree and scratchpad"
+
+assert_block "still blocks appending into a sibling worktree when cwd is NOT a git repo at all (WO-023 fix 2, the no-repo fallback is unchanged, not widened)" \
+  "$NOT_WORKTREE_NOT_SCRATCH" "echo x >> $FAKE_LINKED_WORKTREE/wo023.log" "target outside worktree and scratchpad"
 
 echo
 echo "$N assertion(s), $((N - FAIL)) passed" >&2

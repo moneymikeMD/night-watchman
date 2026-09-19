@@ -1,53 +1,45 @@
 ---
-title: "guard-fs-writes.sh: quoted ssh/scp/rsync/mosh payload mis-split on unescaped ;/&&/||/|"
-heading_raw: "guard-fs-writes.sh: quoted ssh/scp/rsync/mosh payload mis-split on unescaped ;/&&/||/| — MEDIUM"
+title: "guard-fs-writes.sh: quoted-operator mis-split on unescaped ;/&&/||/| hit ANY quoted argument, not just ssh/scp/rsync/mosh payloads"
+heading_raw: "guard-fs-writes.sh: quoted-operator mis-split on unescaped ;/&&/||/| hit ANY quoted argument, not just ssh/scp/rsync/mosh payloads — MEDIUM"
 severity: MEDIUM
-status: open
+status: resolved
+resolved: 2026-09-19
 qualifiers: []
-note: "false positive (and a milder false-negative) for quoted remote payloads containing shell operators; the ssh-opacity fix does not cover this shape"
-tickets: []
+note: "widened from ssh/scp/rsync/mosh payloads to any quoted argument of any command; fixed in WO-023"
+tickets: ["WO-023"]
 slug: guard-fs-writes-sh-quoted-ssh-scp-rsync-mosh-payload-mis-split-on-unescaped
 ---
 
-scan_command_text splits the RAW command text into segments on
+scan_command_text split the RAW command text into segments on
 `;`/`&&`/`||`/`|` (via a sed pass) BEFORE any quote-aware tokenization
-happens. This means a quoted remote payload to ssh/scp/rsync/mosh that
-itself contains one of those four operators is torn apart at the
-operator, even though it is inside a quoted string.
+happened. This entry originally scoped the bug to a quoted remote payload
+passed to ssh/scp/rsync/mosh, but the root cause was in the shared entry
+point every command goes through — it hit ANY quoted argument of ANY
+command.
 
-Confirmed reproduction (run from a worktree, guard-fs-writes.sh as of
-that earlier fix):
+General reproduction (no ssh involved):
+
+    echo "alpha; beta > /etc/passwd gamma"
+
+The quoted `;` split the word before tokenizing; the second fragment
+started mid-string with no quote state, and the `>` inside it read as a
+real redirect. That is the ordinary shape of a `memorygraph store
+--content`, a `known-issue.sh add --body`, or a commit message containing
+both a semicolon and a greater-than sign — not an exotic remote-command
+shape.
+
+Original (narrower) reproduction, still one instance of the same bug:
 
     ssh host "cd /tmp && rm -rf /etc/passwd"
 
-splits into two segments — `ssh host "cd /tmp ` and ` rm -rf /etc/passwd"`
-— and the second is then scanned as ITS OWN top-level command, with `rm`
-as that segment's own command word. Two observed failure directions:
+split into `ssh host "cd /tmp ` and ` rm -rf /etc/passwd"`, the second
+scanned as its own top-level command with `rm` as its command word — the
+genuinely remote `rm -rf /etc/passwd` was blocked as if local, or (the
+milder false-negative direction, unchanged by the fix below — see WO-023's
+own "Out of scope") a mis-split fragment that looked like an
+inside-worktree path was silently allowed instead.
 
-  - The genuinely remote `rm -rf /etc/passwd` gets BLOCKED as if it were a
-    real local `rm -rf /etc/passwd` — exactly the class of false positive
-    that fix exists to remove, still present for any quoted remote payload
-    that happens to contain `;`/`&&`/`||`/`|`.
-  - If the mis-split fragment's target instead LOOKS like an inside-
-    worktree relative path, it is silently allowed as if it were a real
-    local operation — not a security hole in the strict sense (nothing
-    unsafe actually runs locally), but a case where the hook's verdict no
-    longer means what its own header claims.
-
-`ssh host "cd /tmp; git stash drop"` was also reproduced allowed (0) for
-the wrong reason: NOT because the quoted-word rule made it inert (it did
-not — the segment splitter still tore it at the `;`), but because the
-second fragment `git stash drop"` happens to land in a LINKED worktree
-context in the reproduction session, which is separately allowed by the
-existing linked-worktree exception. A main-worktree reproduction of the
-same shape would need re-checking against the actual failure mode, not
-assumed identical to the `&&` case above.
-
-Left unfixed: fixing this means making scan_command_text's segment
-splitter quote-aware (skip splitting inside a quoted span), which is a
-change to the shared entry point every re-execution context and the
-top-level command both go through — larger and riskier than that fix's own
-scope (the ssh/scp/rsync/mosh command-word opacity fix). Workaround until
-fixed: avoid `;`/`&&`/`||`/`|` inside a quoted ssh/scp/rsync/mosh remote
-command string, or use the `!` prefix to bypass the hook for that one
-command.
+Fixed in WO-023: scan_command_text's segment splitter is now quote-aware
+(`split_unquoted_segments`) — a separator inside a single- or
+double-quoted span is data, never a boundary. `\;` (find's escaped -exec
+terminator) still stays literal outside quotes, unchanged.
