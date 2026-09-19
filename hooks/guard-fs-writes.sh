@@ -40,10 +40,13 @@
 # segment's own command word its argv is opaque, though an unquoted trailing
 # LOCAL redirect on that line is still checked.
 #
-# Broad roots: with no git repo at cwd, WORKTREE falls back to cwd — but `/`,
-# /tmp, /private/tmp, /var, /private/var, /Users, /home, /private and a bare
-# $HOME never count as "my own worktree". Only the scratchpad exemption can
-# allow a target there.
+# Own tree: with a git repo at cwd, EVERY worktree of that repo (`git
+# worktree list`) counts as "my own tree", not just the one cwd itself sits
+# in — a call whose cwd drifted to a sibling worktree, or to the main one,
+# can still write into a linked worktree it owns. With no repo at cwd,
+# WORKTREE falls back to cwd alone. Either way, `/`, /tmp, /private/tmp,
+# /var, /private/var, /Users, /home, /private and a bare $HOME never count
+# as "my own tree" — only the scratchpad exemption can allow a target there.
 #
 # Fail posture: missing jq, invalid JSON on stdin, or no `.tool_input.command`
 # prints a note and exits 0 — a hook that dies on malformed input blocks every
@@ -59,9 +62,10 @@
 #
 # This is a text scanner, not a shell parser, and a guard against the
 # honest-mistake case, not a sandbox. Segment splitting on `;`/`&&`/`||`/`|`
-# is quote-unaware and runs before tokenization. The named bypasses it does
-# not chase, and the reasoning behind every rule above, are in memory-graph
-# (tag guard-fs-writes) and docs/known-issues/.
+# is quote-aware: a separator inside a single- or double-quoted span is data,
+# never a boundary. The named bypasses it does not chase, and the reasoning
+# behind every rule above, are in memory-graph (tag guard-fs-writes) and
+# docs/known-issues/.
 #
 # Dependencies: bash 3.2, jq, git. Nothing else — this runs on every Bash
 # call in the session, so it stays small and it stays fast.
@@ -104,9 +108,6 @@ else
   PWD_PHYS="$(pwd -P)"
 fi
 
-WORKTREE="$(git -C "$PWD_PHYS" rev-parse --show-toplevel 2>/dev/null)"
-[ -n "$WORKTREE" ] || WORKTREE="$PWD_PHYS"
-
 # Broad-root guard (see header): a shallow, shared/system directory never
 # counts as "my own worktree" even as a fallback.
 is_broad_root() {
@@ -121,8 +122,35 @@ is_broad_root() {
       ;;
   esac
 }
-if is_broad_root "$WORKTREE"; then
-  WORKTREE="/__guard-fs-writes-no-valid-worktree__"
+
+WORKTREE="$(git -C "$PWD_PHYS" rev-parse --show-toplevel 2>/dev/null)"
+
+# WORKTREE_ROOTS: every worktree of the repo at cwd (main + linked), not
+# just the one cwd sits in (WO-023) — from `git worktree list --porcelain`,
+# broad roots filtered same as the single-root fallback below. No repo at
+# cwd means no enumeration; that fallback stays exactly as narrow as before.
+WORKTREE_ROOTS=()
+if [ -n "$WORKTREE" ]; then
+  while IFS= read -r _wtl_line; do
+    case "$_wtl_line" in
+      "worktree "*)
+        _wtl_path="${_wtl_line#worktree }"
+        _wtl_phys="$(cd "$_wtl_path" 2>/dev/null && pwd -P)"
+        [ -n "$_wtl_phys" ] || _wtl_phys="$_wtl_path"
+        is_broad_root "$_wtl_phys" || WORKTREE_ROOTS+=("$_wtl_phys")
+        ;;
+    esac
+  done <<WTLIST
+$(git -C "$PWD_PHYS" worktree list --porcelain 2>/dev/null)
+WTLIST
+fi
+
+if [ "${#WORKTREE_ROOTS[@]}" -eq 0 ]; then
+  [ -n "$WORKTREE" ] || WORKTREE="$PWD_PHYS"
+  if is_broad_root "$WORKTREE"; then
+    WORKTREE="/__guard-fs-writes-no-valid-worktree__"
+  fi
+  WORKTREE_ROOTS=("$WORKTREE")
 fi
 
 # normalize_path: pure-bash collapse of . and .. in $1, without requiring it
@@ -322,7 +350,8 @@ _frame_pop() {
 _SS_FRAME_ARRAYS="_ss_words _ss_find_paths _ss_git_opts"
 _SS_FRAME_VARS="_ss_after _ss_cmd_word_idx _ss_ek _ss_et _ss_eval_rest _ss_exec_cmd _ss_find_has_action _ss_fk2 _ss_flag _ss_ftok _ss_git_block _ss_git_linked _ss_git_subcmd _ss_gj _ss_gk _ss_gk2 _ss_gtok _ss_i _ss_j _ss_k _ss_line _ss_match _ss_n _ss_next_i _ss_opaque _ss_saw_recursive _ss_stash_action _ss_tgt _ss_word _ss_xargs_cmd _ss_xeval _ss_xj2 _ss_xk _ss_xtok"
 _SDP_FRAME_VARS="_sdp_body _sdp_c _sdp_c2 _sdp_cj _sdp_depth _sdp_i _sdp_j _sdp_len _sdp_text"
-_SCT_FRAME_VARS="_sct_no_heredoc _sct_old_ifs _sct_seg _sct_segments _sct_text"
+_SCT_FRAME_ARRAYS="_sct_seglist"
+_SCT_FRAME_VARS="_sct_n _sct_no_heredoc _sct_seg _sct_text"
 
 # tokenize_quoted_cca: tokenize_quoted's logic writing to its OWN _CCA_WORDS —
 # reusing _ss_words would clobber an outer scan_segment loop mid-iteration.
@@ -514,11 +543,15 @@ target_is_outside() {
     /dev/null|/dev/stdout|/dev/stderr|/dev/tty) return 1 ;;
   esac
 
-  _tio_worktree_norm="$(normalize_path "$WORKTREE")"
-
-  if is_under "$_tio_norm" "$_tio_worktree_norm"; then
-    return 1
-  fi
+  _tio_wr_i=0
+  _tio_wr_n="${#WORKTREE_ROOTS[@]}"
+  while [ "$_tio_wr_i" -lt "$_tio_wr_n" ]; do
+    _tio_worktree_norm="$(normalize_path "${WORKTREE_ROOTS[$_tio_wr_i]}")"
+    if is_under "$_tio_norm" "$_tio_worktree_norm"; then
+      return 1
+    fi
+    _tio_wr_i=$((_tio_wr_i + 1))
+  done
 
   if [ -n "${CLAUDE_SCRATCHPAD:-}" ]; then
     _tio_scratch_norm="$(normalize_path "$CLAUDE_SCRATCHPAD")"
@@ -771,6 +804,95 @@ tokenize_quoted() {
   if [ "$_tq_in_word" -eq 1 ]; then
     _ss_words+=("$_tq_cur")
   fi
+  return 0
+}
+
+# split_unquoted_segments: quote-aware replacement for the old raw-text
+# split on ; && || | — a separator inside a quoted span is data, never a
+# boundary (the fixed false positive). `\;` (find's -exec terminator) stays
+# literal outside quotes; a literal newline splits too, as it did before.
+_sct_seglist=()
+split_unquoted_segments() {
+  _sus_text="$1"
+  _sct_seglist=()
+  _sus_cur=""
+  _sus_len=${#_sus_text}
+  _sus_i=0
+  while [ "$_sus_i" -lt "$_sus_len" ]; do
+    _sus_c="${_sus_text:$_sus_i:1}"
+    case "$_sus_c" in
+      \\)
+        _sus_c2=""
+        if [ "$((_sus_i + 1))" -lt "$_sus_len" ]; then
+          _sus_c2="${_sus_text:$((_sus_i + 1)):1}"
+        fi
+        if [ "$_sus_c2" = ';' ]; then
+          _sus_cur="$_sus_cur\\;"
+          _sus_i=$((_sus_i + 2))
+        else
+          _sus_cur="$_sus_cur\\"
+          _sus_i=$((_sus_i + 1))
+        fi
+        ;;
+      "'")
+        _sus_cur="$_sus_cur'"
+        _sus_i=$((_sus_i + 1))
+        while [ "$_sus_i" -lt "$_sus_len" ]; do
+          _sus_c2="${_sus_text:$_sus_i:1}"
+          _sus_cur="$_sus_cur$_sus_c2"
+          _sus_i=$((_sus_i + 1))
+          [ "$_sus_c2" = "'" ] && break
+        done
+        ;;
+      '"')
+        _sus_cur="$_sus_cur\""
+        _sus_i=$((_sus_i + 1))
+        while [ "$_sus_i" -lt "$_sus_len" ]; do
+          _sus_c2="${_sus_text:$_sus_i:1}"
+          _sus_cur="$_sus_cur$_sus_c2"
+          _sus_i=$((_sus_i + 1))
+          [ "$_sus_c2" = '"' ] && break
+        done
+        ;;
+      ';'|$'\n')
+        _sct_seglist+=("$_sus_cur")
+        _sus_cur=""
+        _sus_i=$((_sus_i + 1))
+        ;;
+      '|')
+        _sus_c2=""
+        if [ "$((_sus_i + 1))" -lt "$_sus_len" ]; then
+          _sus_c2="${_sus_text:$((_sus_i + 1)):1}"
+        fi
+        _sct_seglist+=("$_sus_cur")
+        _sus_cur=""
+        if [ "$_sus_c2" = '|' ]; then
+          _sus_i=$((_sus_i + 2))
+        else
+          _sus_i=$((_sus_i + 1))
+        fi
+        ;;
+      '&')
+        _sus_c2=""
+        if [ "$((_sus_i + 1))" -lt "$_sus_len" ]; then
+          _sus_c2="${_sus_text:$((_sus_i + 1)):1}"
+        fi
+        if [ "$_sus_c2" = '&' ]; then
+          _sct_seglist+=("$_sus_cur")
+          _sus_cur=""
+          _sus_i=$((_sus_i + 2))
+        else
+          _sus_cur="$_sus_cur&"
+          _sus_i=$((_sus_i + 1))
+        fi
+        ;;
+      *)
+        _sus_cur="$_sus_cur$_sus_c"
+        _sus_i=$((_sus_i + 1))
+        ;;
+    esac
+  done
+  _sct_seglist+=("$_sus_cur")
   return 0
 }
 
@@ -1182,26 +1304,22 @@ _scan_command_text_body() {
   _sct_text="$1"
   _sct_no_heredoc="$(strip_heredocs "$_sct_text")"
   collect_same_command_assignments "$_sct_no_heredoc"
-  _sct_segments="$(printf '%s\n' "$_sct_no_heredoc" | sed -e 's/\\;/@@GUARD_ESC_SEMI@@/g' -e 's/&&/\n/g' -e 's/||/\n/g' -e 's/;/\n/g' -e 's/|/\n/g' -e 's/@@GUARD_ESC_SEMI@@/\\;/g')"
-  _sct_old_ifs="$IFS"
-  IFS='
-'
-  for _sct_seg in $_sct_segments; do
-    IFS="$_sct_old_ifs"
-    scan_segment "$_sct_seg"
-    IFS='
-'
-  done
-  IFS="$_sct_old_ifs"
+  split_unquoted_segments "$_sct_no_heredoc"
+  _sct_n="${#_sct_seglist[@]}"
+  if [ "$_sct_n" -gt 0 ]; then
+    for _sct_seg in "${_sct_seglist[@]}"; do
+      scan_segment "$_sct_seg"
+    done
+  fi
   return 0
 }
 
 scan_command_text() {
   local _fw_rc
-  _frame_push "$_SCT_FRAME_VARS" ""
+  _frame_push "$_SCT_FRAME_VARS" "$_SCT_FRAME_ARRAYS"
   _scan_command_text_body "$@"
   _fw_rc=$?
-  _frame_pop "$_SCT_FRAME_VARS" ""
+  _frame_pop "$_SCT_FRAME_VARS" "$_SCT_FRAME_ARRAYS"
   return "$_fw_rc"
 }
 
