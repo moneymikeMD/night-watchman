@@ -476,6 +476,31 @@ else
   fail "blocked nested command stderr empty or carries runtime errors: $ERR"
 fi
 
+# NWM-113: redirect-shaped text inside a quoted argument is data. The first
+# three are the commands wrongly blocked on 2026-09-14/12 (secrets none).
+GOT="$(run_guard "$FAKE_WORKTREE" 'memorygraph store --type general --title "note" --content "the hook blocked >/dev/null inside quoted prose" --tags "night-watchman"')"
+assert_exit "allows memorygraph store whose quoted --content mentions a redirect (NWM-113 fixture 1)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" 'known-issue.sh add --title "arrow" --body "project = NWM -> PROJ, and a->b, are prose not redirects"')"
+assert_exit "allows known-issue.sh add whose quoted --body contains an arrow (NWM-113 fixture 2)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" 'herdr agent prompt w1 "fill in <field> and providers/<kind>/<impl>/provider.sh then report"')"
+assert_exit "allows herdr agent prompt whose quoted brief contains angle-bracket placeholders (NWM-113 fixture 3)" 0 "$GOT"
+
+# Counterpart: the same redirect text UNQUOTED still blocks.
+GOT="$(run_guard "$FAKE_WORKTREE" 'echo hello > /etc/nwm113-unquoted')"
+assert_exit "blocks the same redirect when unquoted (NWM-113 counterpart)" 2 "$GOT"
+
+# KNOWN-FAILING (MEDIUM known issue, quoted operators split before tokenising):
+# wanted 0, today 2. Flips to FAIL once fixed so the pin gets updated.
+# shellcheck disable=SC2016 # literal: raw pre-expansion command text
+GOT="$(run_guard "$FAKE_WORKTREE" 'grep -E "foo|>$HOME/x" file.txt')"
+if [ "$GOT" = 2 ]; then
+  pass "KNOWN-FAILING: quoted alternation next to > is still blocked (oracle: exit code 2, wanted 0; see MEDIUM known issue)"
+else
+  fail "known-failing case now returns $GOT: the MEDIUM known issue may be fixed, update this pin and resolve it"
+fi
+
 echo
 echo "$N assertion(s), $((N - FAIL)) passed" >&2
 if [ "$FAIL" -ne 0 ]; then
