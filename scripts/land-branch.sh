@@ -75,6 +75,24 @@
 #
 # Optional layer: with HERDR_ENV=1 and `herdr` on PATH, a successful landing
 # also removes the herdr worktree workspace matching this branch by name.
+#
+# CLOSING STATE (NWM-120). With HERDR_ENV=1 the exit is a handoff: before the
+# worker's session is ended, its closing state is written durably to the
+# tracker and read back, and only then is the orchestrator told, best-effort.
+#   - file tracker: appended to the completion outcome (or --no-complete note),
+#     committed with the landing, confirmed by reading the commit back.
+#   - jira tracker: a dedicated comment after the push, confirmed by reading
+#     the issue's comments back for its marker.
+# The worker supplies `.night-watchman/closing-state.md` in its worktree (or
+# $LAND_BRANCH_HANDOFF_FILE) with `## Human run list`, `## Left undone`,
+# `## Findings` sections and an optional `orchestrator-pane: ID` line; landed,
+# merge commit and uncommitted-work state are computed here. A human/mixed
+# ticket with no run list is refused before anything is mutated (exit 2).
+# A failed durable write exits 1 and leaves the worker's pane alone; an
+# unacknowledged notification (bounded by $LAND_BRANCH_ACK_WAIT_S, default 10,
+# ack = the file named in the notification appearing) is a warning only.
+# $LAND_BRANCH_ORCHESTRATOR_PANE overrides the pane id; $LAND_BRANCH_EXECUTOR_FIELD
+# (default customfield_10047) names the jira executor field.
 
 set -euo pipefail
 # shellcheck source=lib/kit.sh
@@ -450,6 +468,58 @@ Claude-Session: $LAND_BRANCH_SESSION"
 [ -z "$TRAILER_BLOCK" ] || TRAILER_BLOCK="
 $TRAILER_BLOCK"
 
+CLOSING=0
+CLOSING_FAILED=""
+CLOSING_TEXT=""
+CLOSING_MARK=""
+ORCH_PANE="${LAND_BRANCH_ORCHESTRATOR_PANE:-}"
+if [ "${HERDR_ENV:-}" = "1" ]; then
+    CLOSING=1
+    HANDOFF_FILE="${LAND_BRANCH_HANDOFF_FILE:-}"
+    WORKER_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$BRANCH" '/^worktree /{p=substr($0,10)} $1=="branch" && $2==b {print p}') || WORKER_WT=""
+    if [ -z "$HANDOFF_FILE" ] && [ -n "$WORKER_WT" ]; then
+        HANDOFF_FILE="$WORKER_WT/.night-watchman/closing-state.md"
+    fi
+
+    # handoff_section HEADING — body of `## HEADING` in the handoff file,
+    # trimmed of blank edges; empty when the file or section is absent.
+    handoff_section() {
+        [ -n "$HANDOFF_FILE" ] && [ -r "$HANDOFF_FILE" ] || return 0
+        awk -v h="## $1" '
+            $0 == h { on = 1; next }
+            /^## / { on = 0 }
+            on { print }
+        ' "$HANDOFF_FILE" | sed -e '/./,$!d' | awk '{ l[NR] = $0 } END { n = NR; while (n > 0 && l[n] == "") n--; for (i = 1; i <= n; i++) print l[i] }'
+    }
+
+    if [ "$TRACKER" = file ]; then
+        EXECUTOR=$(git show "$TARGET_BRANCH:$TICKET_FILE" 2>/dev/null | awk '/^---$/ { c++; next } c == 1 && !d && /^executor:/ { sub(/^executor:[ \t]*/, ""); print; d = 1 }') || EXECUTOR=""
+    else
+        EXEC_FIELD="${LAND_BRANCH_EXECUTOR_FIELD:-customfield_10047}"
+        EXECUTOR=""
+        if EXEC_JSON=$(jira_read "/issue/$TICKET_ID?fields=$EXEC_FIELD"); then
+            EXECUTOR=$(printf '%s' "$EXEC_JSON" | jq -r --arg f "$EXEC_FIELD" '.fields[$f].value // empty' 2>/dev/null) || EXECUTOR=""
+        fi
+    fi
+    EXECUTOR=$(printf '%s' "$EXECUTOR" | tr '[:upper:]' '[:lower:]' | tr -d ' \t\r')
+    RUN_LIST=$(handoff_section "Human run list")
+    case "$EXECUTOR" in
+        human|mixed)
+            [ -n "$RUN_LIST" ] || stop2 "$TICKET_ID's executor is '$EXECUTOR' but no '## Human run list' was found in '${HANDOFF_FILE:-<no worker worktree found for branch $BRANCH>}' — the closing state must carry the run list; have the worker write it (or set LAND_BRANCH_HANDOFF_FILE). Nothing mutated"
+            ;;
+    esac
+    [ -n "$ORCH_PANE" ] || {
+        [ -n "$HANDOFF_FILE" ] && [ -r "$HANDOFF_FILE" ] && ORCH_PANE=$(sed -n 's/^orchestrator-pane:[[:space:]]*//p' "$HANDOFF_FILE" | head -1) || true
+    }
+    BRANCH_CONDITION="landed; nothing left uncommitted in the worker's worktree"
+    if [ -n "$WORKER_WT" ] && [ -d "$WORKER_WT" ]; then
+        WT_DIRTY=$(git -C "$WORKER_WT" status --porcelain -- . ':!.night-watchman' 2>/dev/null) || WT_DIRTY=""
+        [ -z "$WT_DIRTY" ] || BRANCH_CONDITION="landed, but the worker's worktree has UNCOMMITTED work that was not landed"
+    else
+        BRANCH_CONDITION="landed; worker worktree not found, uncommitted state unknown"
+    fi
+fi
+
 MERGE_MSG="$TICKET_ID: merge branch '$BRANCH' into $TARGET_BRANCH
 
 Landed via land-branch.sh."
@@ -511,7 +581,8 @@ else
 fi
 echo "  4. git push origin HEAD:$TARGET_BRANCH (from the integration worktree; '$MAIN_WORKTREE' is not fast-forwarded automatically)"
 if [ "${HERDR_ENV:-}" = "1" ]; then
-    echo "  5. remove the herdr worktree workspace for branch '$BRANCH' (HERDR_ENV=1), then git branch -d '$BRANCH'"
+    echo "  5. (HERDR_ENV=1) write the worker's closing state durably ('${HANDOFF_FILE:-no handoff file found}', executor '${EXECUTOR:-unknown}'), read it back, notify the orchestrator best-effort (pane '${ORCH_PANE:-none}')"
+    echo "  6. remove the herdr worktree workspace for branch '$BRANCH' (HERDR_ENV=1), then git branch -d '$BRANCH'"
 else
     echo "  5. git branch -d '$BRANCH' (HERDR_ENV not set — no worktree removal)"
 fi
@@ -666,6 +737,34 @@ fi
 $STILL_UNMERGED"
 echo "merged clean."
 
+if [ "$CLOSING" = 1 ]; then
+    MERGE_SHA=$(git rev-parse HEAD)
+    CLOSING_MARK="closing-state:$TICKET_ID:${MERGE_SHA}"
+    closing_field() { local v; v=$(handoff_section "$1"); printf '%s' "${v:-none reported by the worker}"; }
+    CLOSING_TEXT="Closing state ($CLOSING_MARK)
+Landed: yes, merge commit $MERGE_SHA onto $TARGET_BRANCH
+Branch condition: $BRANCH_CONDITION
+Executor: ${EXECUTOR:-unknown}
+Human run list:
+$(closing_field "Human run list")
+Left undone:
+$(closing_field "Left undone")
+Findings noticed, not acted on:
+$(closing_field "Findings")"
+    if [ "$TRACKER" = file ]; then
+        if [ "$NO_COMPLETE" = 1 ]; then
+            NOTE_TEXT="${NOTE_TEXT:+$NOTE_TEXT
+
+}$CLOSING_TEXT"
+            NOTE_GIVEN=1
+        else
+            OUTCOME_TEXT="$OUTCOME_TEXT
+
+$CLOSING_TEXT"
+        fi
+    fi
+fi
+
 # A worker may move its own ticket file as part of its branch, so the
 # pre-merge $TICKET_FILE can point at a path this merge just deleted.
 # Re-resolve against the post-merge tree before touching the ticket at all.
@@ -720,6 +819,9 @@ $NOTE_TEXT
             git add -- "$NOTES_FILE" || die_reset "could not stage $NOTES_FILE — merge reverted, nothing pushed"
             git commit -m "$TICKET_ID: progress note (land-branch.sh --no-complete)$TRAILER_BLOCK" -- "$NOTES_FILE" \
                 || die_reset "could not commit $NOTES_FILE — merge reverted, nothing pushed"
+        fi
+        if [ "$CLOSING" = 1 ] && ! git show "HEAD:$NOTES_FILE" 2>/dev/null | grep -Fc "$CLOSING_MARK" >/dev/null; then
+            die_reset "closing state read-back failed: HEAD:$NOTES_FILE does not carry '$CLOSING_MARK' — merge reverted, nothing pushed"
         fi
         echo "--no-complete: ticket left in '$ISSUES_DIR/$TICKET_STAGE/'."
     elif [ "$ALREADY_DONE" = 1 ]; then
@@ -818,6 +920,10 @@ $OUTCOME_TEXT$TRAILER_BLOCK" \
             || die_reset "working tree under $ISSUES_DIR is not clean after the completion commit — merge reverted, nothing pushed:
 $LEFTOVER_AFTER"
 
+        if [ "$CLOSING" = 1 ] && ! git show "HEAD:$DEST" 2>/dev/null | grep -Fc "$CLOSING_MARK" >/dev/null; then
+            die_reset "closing state read-back failed: HEAD:$DEST does not carry '$CLOSING_MARK' — merge reverted, nothing pushed"
+        fi
+
         echo "$TICKET_ID moved to '$ISSUES_DIR/completed/'."
     fi
 else
@@ -880,8 +986,52 @@ if [ "$TRACKER" = jira ] && [ "$NO_COMPLETE" != 1 ]; then
     fi
 fi
 
+if [ "$CLOSING" = 1 ] && [ "$TRACKER" = jira ]; then
+    echo "Writing $TICKET_ID's closing state to the tracker..."
+    if ! jira_post_comment "$TICKET_ID" "$CLOSING_TEXT"; then
+        CLOSING_FAILED="POST of the closing-state comment failed"
+    elif ! CLOSING_READBACK=$(jira_read "/issue/$TICKET_ID/comment?maxResults=100&orderBy=-created") \
+        || ! printf '%s' "$CLOSING_READBACK" | grep -Fq "$CLOSING_MARK"; then
+        CLOSING_FAILED="the closing-state comment was POSTed but '$CLOSING_MARK' did not read back from $TICKET_ID's comments"
+    else
+        echo "closing state written and read back."
+    fi
+fi
+if [ "$CLOSING" = 1 ] && [ "$TRACKER" = file ]; then
+    if [ "$ALREADY_DONE" = 1 ]; then
+        CLOSING_FAILED="the ticket was already completed before this landing, so the file tracker had no outcome or note to carry the closing state"
+    else
+        echo "closing state written to the ticket and read back ($CLOSING_MARK)."
+    fi
+fi
 
-if [ "${HERDR_ENV:-}" = "1" ]; then
+if [ "$CLOSING" = 1 ] && [ -z "$CLOSING_FAILED" ]; then
+    ACK_FILE="${LAND_BRANCH_ACK_FILE:-${TMPDIR:-/tmp}/nw-ack-$TICKET_ID-${MERGE_SHA:0:8}}"
+    rm -f "$ACK_FILE" 2>/dev/null || true
+    if [ -z "$ORCH_PANE" ]; then
+        echo "no orchestrator pane recorded — closing state is in the tracker; nobody was notified."
+    elif ! command -v herdr >/dev/null 2>&1; then
+        warn "no 'herdr' on PATH — orchestrator pane $ORCH_PANE was not notified; closing state is in the tracker"
+    else
+        herdr pane send-text "$ORCH_PANE" "$TICKET_ID landed; closing state is in the tracker ($CLOSING_MARK). Acknowledge with: touch '$ACK_FILE'" >/dev/null 2>&1 \
+            && herdr pane send-keys "$ORCH_PANE" enter >/dev/null 2>&1 || true
+        ACK_BOUND_S="${LAND_BRANCH_ACK_WAIT_S:-10}"
+        ACK_WAITED_S=0
+        while [ "$ACK_WAITED_S" -lt "$ACK_BOUND_S" ] && [ ! -e "$ACK_FILE" ]; do
+            sleep 1
+            ACK_WAITED_S=$((ACK_WAITED_S + 1))
+        done
+        if [ -e "$ACK_FILE" ]; then
+            echo "orchestrator acknowledged the closing state."
+        else
+            warn "orchestrator pane $ORCH_PANE did not acknowledge within ${ACK_BOUND_S}s — the closing state IS in the tracker, continuing with the exit"
+        fi
+    fi
+fi
+
+if [ "$CLOSING" = 1 ] && [ -n "$CLOSING_FAILED" ]; then
+    warn "closing state was NOT written durably ($CLOSING_FAILED) — leaving the worker's session and workspace in place so its output survives"
+elif [ "${HERDR_ENV:-}" = "1" ]; then
     if ! command -v herdr >/dev/null 2>&1; then
         echo "HERDR_ENV=1 but 'herdr' is not on PATH — skipping worktree removal."
     elif ! command -v jq >/dev/null 2>&1; then
@@ -955,6 +1105,10 @@ else
 fi
 
 echo
+if [ -n "$CLOSING_FAILED" ]; then
+    release_land_lock
+    die "branch '$BRANCH' landed on '$TARGET_BRANCH' and was pushed — the landing stands and was NOT reverted — but the worker's closing state was NOT written durably: $CLOSING_FAILED. The worker's pane and workspace were left in place; recover its closing state by hand and post it on $TICKET_ID"
+fi
 if [ "$NO_COMPLETE" = 1 ]; then
     if [ "$TRACKER" = file ]; then
         echo "branch '$BRANCH' landed on '$TARGET_BRANCH'. $TICKET_ID was DELIBERATELY NOT COMPLETED (--no-complete) — it remains in '$ISSUES_DIR/$TICKET_STAGE/'."

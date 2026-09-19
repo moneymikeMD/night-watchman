@@ -38,6 +38,7 @@ export JIRA_MOCK_REJECTED="$FIXTURES/issue.transition.rules-rejected.txt"
 # Belt-and-braces: nothing here should reach a real wrapper, but if one ever
 # did it would find no routable host.
 export JIRA_HOST=127.0.0.1
+unset HERDR_ENV HERDR_PANE_ID LAND_BRANCH_ORCHESTRATOR_PANE LAND_BRANCH_HANDOFF_FILE
 
 PASS=0
 FAIL=0
@@ -106,6 +107,11 @@ def main():
             st = load()
             print(json.dumps({"fields": {"status": {
                 "id": st["status_id"], "name": NAMES.get(st["status_id"], "Unknown")}}}))
+        elif "?fields=customfield_" in path:
+            print(json.dumps({"fields": {path.split("fields=")[1]: {
+                "value": os.environ.get("JIRA_MOCK_EXECUTOR", "agent")}}}))
+        elif "/comment" in path:
+            print(json.dumps({"comments": [{"body": c} for c in load()["comments"]]}))
         else:
             sys.exit("mock: unexpected GET %s" % path)
         return 0
@@ -481,6 +487,83 @@ elif ! grep -qi "issues/{open,in-progress,awaiting-deployment,completed,cancelle
 $(cat "$WORK/j10.out")"
 else
     ok "testJ10: with no --tracker given, land-branch.sh still defaults to file mode"
+fi
+
+# ---- NWM-120 closing state, jira mode. A stub herdr logs each call; the
+# closing-state comment must be read back before the worker is exited, and a
+# failed durable write must leave the worker's pane and workspace alone.
+
+closing_stub() {
+    mkdir -p "$WORK/$1.bin"
+    cat > "$WORK/$1.bin/herdr" <<'HEOF'
+#!/bin/bash
+printf '%s\n' "$*" >> "$STUB_HERDR_LOG"
+case "$1 $2" in
+    "agent get") exit 1 ;;
+    "worktree list") printf '{"result":{"worktrees":[{"is_linked_worktree":true,"branch":"work","open_workspace_id":"ws1"}]}}\n' ;;
+    *) exit 0 ;;
+esac
+HEOF
+    chmod +x "$WORK/$1.bin/herdr"
+    : > "$WORK/$1.herdr.log"
+}
+mkdir -p "$WORK/handoff"
+printf 'orchestrator-pane: orch1\n\n## Findings\n- found a thing\n' > "$WORK/handoff/closing-state.md"
+
+run_closing() {
+    local name="$1"; shift
+    set +e
+    # shellcheck disable=SC2086  # STATUS_FLAGS is a fixed flag list
+    (cd "$WORK/$name" && HERDR_ENV=1 PATH="$WORK/$name.bin:$PATH" STUB_HERDR_LOG="$WORK/$name.herdr.log" \
+        LAND_BRANCH_HANDOFF_FILE="$WORK/handoff/closing-state.md" LAND_BRANCH_ACK_WAIT_S=1 \
+        JIRA_MOCK_STATE="$WORK/$name.jira-state.json" JIRA_MOCK_BARE="$WORK/$name.git" env "$@" \
+        ./scripts/land-branch.sh work PROJ-1 --tracker jira --jira-api "$JIRA_MOCK" $STATUS_FLAGS --jira-done-status 10014) \
+        >"$WORK/$name.out" 2>&1
+    RC=$?
+    set -e
+}
+
+fresh_jira_repo jc1 3 10009 >/dev/null
+closing_stub jc1
+run_closing jc1
+STATE="$WORK/jc1.jira-state.json"
+LOG="$WORK/jc1.herdr.log"
+if [ "$RC" -ne 0 ]; then
+    bad "testJC1 (closing state, jira): exit $RC:
+$(cat "$WORK/jc1.out")"
+elif [ "$(comment_count "$STATE")" != "2" ]; then
+    bad "testJC1: expected outcome + closing-state comments (2), got $(comment_count "$STATE")"
+elif ! python3 -c 'import json,sys; sys.exit(0 if "found a thing" in json.load(open(sys.argv[1]))["comments"][1] else 1)' "$STATE"; then
+    bad "testJC1: second comment is not the closing state"
+elif ! grep -q "closing state written and read back" "$WORK/jc1.out"; then
+    bad "testJC1: no read-back confirmation logged:
+$(cat "$WORK/jc1.out")"
+elif [ "$(grep -n '^pane send-text orch1' "$LOG" | head -1 | cut -d: -f1)" -gt "$(grep -n '^worktree remove' "$LOG" | head -1 | cut -d: -f1)" ]; then
+    bad "testJC1: notification came after the workspace removal:
+$(cat "$LOG")"
+else
+    ok "testJC1: the closing state is a tracker comment, read back, before the notification and the workspace removal"
+fi
+
+fresh_jira_repo jc2 3 10009 >/dev/null
+closing_stub jc2
+BEFORE=$(git -C "$WORK/jc2.git" rev-parse main)
+run_closing jc2 JIRA_MOCK_FAIL_COMMENT=1
+if [ "$RC" -ne 1 ]; then
+    bad "testJC2 (durable write fails): exit $RC, expected 1:
+$(cat "$WORK/jc2.out")"
+elif [ "$(git -C "$WORK/jc2.git" rev-parse main)" = "$BEFORE" ]; then
+    bad "testJC2: the landing was reverted/never pushed — a failed closing write must not undo it"
+elif [ "$(state_field "$WORK/jc2.jira-state.json" status_id)" != "10014" ]; then
+    bad "testJC2: issue is not Completed although the landing stood"
+elif grep -q '^worktree remove\|/exit' "$WORK/jc2.herdr.log"; then
+    bad "testJC2: the worker was exited or its workspace removed despite the failed write:
+$(cat "$WORK/jc2.herdr.log")"
+elif ! grep -q "NOT written durably" "$WORK/jc2.out"; then
+    bad "testJC2: failure was not loud:
+$(cat "$WORK/jc2.out")"
+else
+    ok "testJC2: a failed closing-state write exits 1 loudly, keeps the landing, and leaves the worker's pane alone"
 fi
 
 echo
