@@ -15,6 +15,7 @@
   "known-issues-manifest-json-hashes-disagree-with-every-entry-file-so-the-force-mode-tamper-check-is-meaningless-directory-wide": "2282505b647e7705f243ea292bc22b4e4b333a6be35908ccf24c2acb69993e83",
   "land-branch-selftest-sh-needs-pyyaml-but-neither-declares-nor-checks-for-it": "8111da9d48073e06fcbd0ce70d2b0f04c29ccfda97f4c0346828028125ed6354",
   "land-branch-sh-lint-cmd-is-word-split-not-shell-evaluated": "04e4c4ea1eb976ab99928f5fcfc8511e30757d9f06154e3cb5cfc5a7cc2bfdeb",
+  "memorygraph-link-rejects-supersedes-and-relates-to-so-a-memory-cannot-be-superseded-by-an-edge": "9646dc9f8729ed9a09790a19adb0e1ad8a41b1540caf5c008d09c8490f84061d",
   "nwm-workflow-previous-status-validator-on-completed-refuses-the-normal-in-progress-to-completed-path-it-counts-only-statuses-before-the-current-one": "03897e810fca84114138c788efba5aa6bb85b8a4baed1df5a3726bce01a45989",
   "providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted": "acaa6af0a8d5c3f33513892ede2aad0333f9f453041dc289698aaaae23eea213",
   "release-sh-calls-the-tracker-fetch-verb-with-a-since-tag-but-tracker-fetch-takes-an-issue-key-changelog-always-degrades-to-the-placeholder-line": "591c97a7ae4a1189d297e8d1285b7c8767455f9f164834b6feef82fa53fc17c6",
