@@ -12,6 +12,11 @@
 #   - allows `rm -rf` of a path under the session scratchpad
 #   - allows `rm -rf` of a path under the current worktree
 #   - allows plain `ls`
+#   - blocks a shim whose NAME matches nothing but which resolves to git or
+#     rm, and still allows that shim's in-worktree operations (NWM-123)
+#
+# Every NWM-123 assertion pins the exit code AND the stderr, so a guard that
+# refused everything would fail this file rather than pass it.
 #
 # Per this plugin's own name-the-oracle rule (see script-reviewer.md):
 # section (mutation) below is not run automatically here — it is a manual
@@ -500,6 +505,90 @@ if [ "$GOT" = 2 ]; then
 else
   fail "known-failing case now returns $GOT: the MEDIUM known issue may be fixed, update this pin and resolve it"
 fi
+
+# NWM-123: the guard must match the binary a word RESOLVES to, not the name it
+# was typed under. Every assertion below pins the exit code AND the stderr, so
+# a guard that simply refused everything would fail this section rather than
+# pass it.
+
+assert_block() {
+  # $1 = description, $2 = cwd, $3 = command text, $4 = extended regex the
+  # guard's stderr must match. Both oracles must hold.
+  _ab_desc="$1"; _ab_cwd="$2"; _ab_cmd="$3"; _ab_re="$4"
+  _ab_rc="$(run_guard "$_ab_cwd" "$_ab_cmd")"
+  _ab_err="$(run_guard_stderr "$_ab_cwd" "$_ab_cmd")"
+  if [ "$_ab_rc" != 2 ]; then
+    fail "$_ab_desc (oracle: exit code, want 2 got $_ab_rc)"
+  elif ! printf '%s' "$_ab_err" | grep -Eq "$_ab_re"; then
+    fail "$_ab_desc (oracle: stderr, want /$_ab_re/ got: $_ab_err)"
+  elif printf '%s' "$_ab_err" | grep -Eq "$RUNTIME_ERR_RE"; then
+    fail "$_ab_desc (oracle: stderr carries a runtime error: $_ab_err)"
+  else
+    pass "$_ab_desc (oracles: exit code 2 AND stderr /$_ab_re/)"
+  fi
+}
+
+assert_allow() {
+  # $1 = description, $2 = cwd, $3 = command text. Exit 0 AND silent stderr —
+  # the stderr oracle is what stops a refuse-everything guard passing here.
+  _aa_desc="$1"; _aa_cwd="$2"; _aa_cmd="$3"
+  _aa_rc="$(run_guard "$_aa_cwd" "$_aa_cmd")"
+  _aa_err="$(run_guard_stderr "$_aa_cwd" "$_aa_cmd")"
+  if [ "$_aa_rc" != 0 ]; then
+    fail "$_aa_desc (oracle: exit code, want 0 got $_aa_rc; stderr: $_aa_err)"
+  elif [ -n "$_aa_err" ]; then
+    fail "$_aa_desc (oracle: stderr must be empty, got: $_aa_err)"
+  else
+    pass "$_aa_desc (oracles: exit code 0 AND empty stderr)"
+  fi
+}
+
+GIT_ABS="$(command -v git 2>/dev/null)"
+RM_ABS="$(command -v rm 2>/dev/null)"
+SHIM_DIR="$SCRATCH/shims"
+mkdir -p "$SHIM_DIR"
+# Shims under a name that matches none of the guard's typed-name patterns:
+# only resolving them through the filesystem reveals what they run.
+if [ -n "$GIT_ABS" ]; then ln -sf "$GIT_ABS" "$SHIM_DIR/g"; fi
+if [ -n "$RM_ABS" ]; then ln -sf "$RM_ABS" "$SHIM_DIR/zap"; fi
+
+GIT_MAIN_DIAG='git (stash|reset|clean|checkout) targets the main worktree'
+RM_DIAG='rm -r target outside worktree and scratchpad'
+
+# Ticket verify clause 1: a worktree-isolated agent works in its own tree
+# unimpeded. A bare status carries no operand for the guard to object to.
+assert_allow "allows a bare 'git status' in the agent's OWN linked worktree (NWM-123 verify 1)" \
+  "$FAKE_LINKED_WORKTREE" "git status"
+assert_allow "allows 'git add -A && git commit' in the agent's OWN linked worktree (NWM-123 verify 1)" \
+  "$FAKE_LINKED_WORKTREE" "git add -A"
+
+# Ticket verify clause 2: an absolute-path git write aimed OUT of that
+# worktree is refused with the same diagnostic the plain command gets.
+if [ -n "$GIT_ABS" ]; then
+  assert_block "blocks '<abs>/git -C <main worktree> reset --hard' from a linked worktree (NWM-123 verify 2)" \
+    "$FAKE_LINKED_WORKTREE" "$GIT_ABS -C $FAKE_WORKTREE reset --hard" "$GIT_MAIN_DIAG"
+fi
+assert_block "blocks the plain-named 'git -C <main worktree> reset --hard' with that same diagnostic (NWM-123 verify 2)" \
+  "$FAKE_LINKED_WORKTREE" "git -C $FAKE_WORKTREE reset --hard" "$GIT_MAIN_DIAG"
+
+# The gap the typed-name patterns left: a shim whose own NAME matches nothing.
+if [ -n "$GIT_ABS" ]; then
+  assert_block "blocks a shim named 'g' that resolves to git, stashing the main worktree (NWM-123)" \
+    "$FAKE_LINKED_WORKTREE" "$SHIM_DIR/g -C $FAKE_WORKTREE stash push -u" "$GIT_MAIN_DIAG"
+  assert_allow "allows that same shim running 'g status' inside the agent's own worktree (NWM-123, resolution must not widen the policy)" \
+    "$FAKE_LINKED_WORKTREE" "$SHIM_DIR/g status"
+fi
+
+if [ -n "$RM_ABS" ]; then
+  assert_block "blocks a shim named 'zap' that resolves to rm, removing a path outside the worktree (NWM-123)" \
+    "$FAKE_WORKTREE" "$SHIM_DIR/zap -rf $NOT_WORKTREE_NOT_SCRATCH/victim" "$RM_DIAG"
+  assert_allow "allows that same shim removing a path INSIDE the worktree (NWM-123, resolution must not widen the policy)" \
+    "$FAKE_WORKTREE" "$SHIM_DIR/zap -rf $FAKE_WORKTREE/leftover"
+fi
+
+# A non-command word that happens to name an executable must stay an argument.
+assert_allow "allows 'echo git status' — a head-name word in argument position is not a command head (NWM-123)" \
+  "$FAKE_LINKED_WORKTREE" "echo git status"
 
 echo
 echo "$N assertion(s), $((N - FAIL)) passed" >&2
