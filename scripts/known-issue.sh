@@ -39,11 +39,16 @@
 #                               reindex.
 #   severity <slug> <SEV>       Change an entry's severity and reindex.
 #   lint                        Verify every entry file parses, has the
-#                               required frontmatter, has a unique slug, and
-#                               that docs/known-issues.md is exactly what
+#                               required frontmatter, has a unique slug,
+#                               that its sha256 still matches
+#                               _manifest.json (catching any edit that
+#                               bypassed add/resolve/severity), and that
+#                               docs/known-issues.md is exactly what
 #                               `reindex` would produce right now. Non-zero
 #                               exit on any failure — this is the guard that
-#                               keeps the index from drifting again.
+#                               keeps the index (and the manifest) from
+#                               drifting again, and it is the check CI runs
+#                               on every push.
 #
 # Every subcommand answers -h/--help on its own; run with no arguments for
 # the same text this comment carries.
@@ -64,7 +69,8 @@
 #   slug         the file's own slug, for round-trip safety
 #
 # docs/known-issues/_manifest.json is NOT an entry. It records the sha256 this
-# tool wrote for every slug and is what --force checks against; never hand-edit.
+# tool wrote for every slug and is what --force and lint check against;
+# never hand-edit.
 #
 set -euo pipefail
 # shellcheck source=lib/kit.sh
@@ -173,6 +179,41 @@ def record_written(entries_dir, slug, path):
     manifest = load_manifest(entries_dir) or {}
     manifest[slug] = file_hash(path)
     save_manifest(entries_dir, manifest)
+
+
+def check_manifest(entries_dir, entries):
+    """Compare every entry's current sha256 against _manifest.json, the
+    only record of what add/resolve/severity last wrote; a hand-edit that
+    bypasses those commands leaves the recorded hash stale, and a deleted
+    file leaves an orphaned key. Called from lint so this runs on every
+    routine invocation, not only the rare migrate --force recovery path."""
+    manifest = load_manifest(entries_dir)
+    if manifest is None:
+        return ["%s is missing — no record of what this tool last wrote, so "
+                "a hand-edit to any entry would go undetected. Run add, "
+                "resolve or severity once to create it." %
+                manifest_path(entries_dir)]
+    errors = []
+    present_slugs = set()
+    for meta, body, relpath, path in entries:
+        present_slugs.add(meta["slug"])
+        recorded = manifest.get(meta["slug"])
+        if recorded is None:
+            errors.append("%s has no entry in %s — never recorded" %
+                           (path, manifest_path(entries_dir)))
+        elif recorded != file_hash(path):
+            errors.append(
+                "%s does not match its recorded sha256 in %s — edited by "
+                "something other than add/resolve/severity since it was "
+                "last written" % (path, manifest_path(entries_dir)))
+    for slug in sorted(manifest):
+        if slug not in present_slugs:
+            errors.append(
+                "%s is recorded in %s but %s does not exist — deleted since "
+                "it was written" % (
+                    slug, manifest_path(entries_dir),
+                    os.path.join(entries_dir, slug + ".md")))
+    return errors
 
 SEV_ORDER = ["HIGH", "MEDIUM", "LOW", "COSMETIC"]
 SEV_WORDS = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "COSMETIC"]
@@ -1311,6 +1352,12 @@ def cmd_lint(args):
     if not entries:
         print("Error: no entries found in %s" % args.entries_dir, file=sys.stderr)
         return 1
+    manifest_errors = check_manifest(args.entries_dir, entries)
+    if manifest_errors:
+        print("LINT FAILED:", file=sys.stderr)
+        for e in manifest_errors:
+            print(" - " + e, file=sys.stderr)
+        return 1
     index_entries = [(meta, relpath) for meta, body, relpath, path in entries]
     expected = build_index(index_entries)
     actual = None
@@ -1568,9 +1615,11 @@ Usage: known-issue.sh lint
 
 Verifies every docs/known-issues/*.md file parses, carries the required
 frontmatter (title, severity, status, slug), has a slug matching its own
-filename and unique among all entries, and that docs/known-issues.md is
-exactly what \`reindex\` would produce right now. Exits non-zero on any
-failure — this is the guard that keeps the index from drifting again.
+filename and unique among all entries, matches its recorded sha256 in
+_manifest.json (an entry edited by anything other than add/resolve/severity
+would fail this), and that docs/known-issues.md is exactly what \`reindex\`
+would produce right now. Exits non-zero on any failure — this is the guard
+that keeps the index and the manifest from drifting again.
 EOF
     exit 0
 }
