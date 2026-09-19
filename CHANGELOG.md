@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.9.2](https://github.com/moneymikeMD/night-watchman/compare/v0.9.1...v0.9.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* **guard-fs-writes:** make segment splitting quote-aware and resolve the whole worktree set ([#14](https://github.com/moneymikeMD/night-watchman/issues/14)) ([20ea533](https://github.com/moneymikeMD/night-watchman/commit/20ea53361a4309ce0f02e74791e4116956dee08f))
+
 ## [0.9.1](https://github.com/moneymikeMD/night-watchman/compare/v0.9.0...v0.9.1) (2026-09-19)
 
 
