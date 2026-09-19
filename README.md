@@ -24,6 +24,35 @@ This plugin was extracted from a production system that has been
 measuring its own operating cost since before this repo existed — the
 honest version, caveats included, lives in [docs/evidence.md](docs/evidence.md).
 
+## What this is
+
+An unattended-operations engine, which is a different question rather than a
+better answer to an existing one.
+
+A workflow and an agent team both answer **"how do I run N agents right now?"**
+night-watchman answers **"what has to be true for work to proceed while nobody
+is watching?"** Those are orthogonal, and the second decomposes into four
+things:
+
+- **the unit of work** — a ticket is a contract an agent can execute cold: what
+  to touch, how to verify, who finishes
+- **the economics** — script beats agent beats skill, and hooks keep the
+  expensive model out of tool output the cheap one can read
+- **the safety envelope** — a deterministic write guard, a capped still-ask
+  list, and escalation that marks an assumption and keeps going rather than
+  stalling for a human who is not there
+- **the record** — decisions, known issues, handoffs and memory, written so the
+  next session starts from them instead of re-deriving them
+
+Roughly: a workflow is a `for` loop with a thread pool, an agent team is an org
+chart, and this is CI/CD plus runbooks plus the on-call rotation. It defines the
+unit, the gates, the record and the cost model, then hires whatever executor is
+available — `providers/dispatch/` is a contract, and the executor behind it is
+swappable.
+
+Why it is not a workflow and not an agent team, at length and with the evidence:
+[docs/faq.md](docs/faq.md).
+
 ## Install
 
 From a local checkout (this repo cloned or checked out anywhere on disk):
