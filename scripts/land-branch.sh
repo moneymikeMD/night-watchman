@@ -65,34 +65,19 @@
 #   LAND_BRANCH_LINT_CMD              command run on the merged tree before
 #                                     completing (default: ./scripts/lint.sh
 #                                     if present, else skipped with a warning).
-#   LAND_BRANCH_COAUTHOR              optional "Name <email>" for a
-#                                     Co-Authored-By trailer; unset means none.
-#   LAND_BRANCH_SESSION               optional, same shape, for a
-#                                     Claude-Session trailer.
+#   LAND_BRANCH_COAUTHOR              optional Co-Authored-By trailer.
+#   LAND_BRANCH_SESSION               optional Claude-Session trailer.
+#   LAND_BRANCH_ACK_WAIT_S            closing-state ack wait, s (default 10).
+#   LAND_BRANCH_HANDOFF_FILE          override the closing-state path.
+#   LAND_BRANCH_ORCHESTRATOR_PANE     override the orchestrator pane id.
+#   LAND_BRANCH_EXECUTOR_FIELD        jira executor field (customfield_10047).
 #   --reset-land                      (flag only) discards uncommitted changes
 #                                     in the integration worktree before
 #                                     syncing. Never touches the invoking tree.
 #
 # Optional layer: with HERDR_ENV=1 and `herdr` on PATH, a successful landing
 # also removes the herdr worktree workspace matching this branch by name.
-#
-# CLOSING STATE (NWM-120). With HERDR_ENV=1 the exit is a handoff: before the
-# worker's session is ended, its closing state is written durably to the
-# tracker and read back, and only then is the orchestrator told, best-effort.
-#   - file tracker: appended to the completion outcome (or --no-complete note),
-#     committed with the landing, confirmed by reading the commit back.
-#   - jira tracker: a dedicated comment after the push, confirmed by reading
-#     the issue's comments back for its marker.
-# The worker supplies `.night-watchman/closing-state.md` in its worktree (or
-# $LAND_BRANCH_HANDOFF_FILE) with `## Human run list`, `## Left undone`,
-# `## Findings` sections and an optional `orchestrator-pane: ID` line; landed,
-# merge commit and uncommitted-work state are computed here. A human/mixed
-# ticket with no run list is refused before anything is mutated (exit 2).
-# A failed durable write exits 1 and leaves the worker's pane alone; an
-# unacknowledged notification (bounded by $LAND_BRANCH_ACK_WAIT_S, default 10,
-# ack = the file named in the notification appearing) is a warning only.
-# $LAND_BRANCH_ORCHESTRATOR_PANE overrides the pane id; $LAND_BRANCH_EXECUTOR_FIELD
-# (default customfield_10047) names the jira executor field.
+# Closing state (NWM-120): docs/decisions.md, 2026-09-18.
 
 set -euo pipefail
 # shellcheck source=lib/kit.sh
