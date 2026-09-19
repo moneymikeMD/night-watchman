@@ -52,6 +52,11 @@
 # and if the target repo's git-dir cannot be determined the stash/reset/
 # clean/checkout-`--` block stays in force.
 #
+# Command heads are matched by typed name (`rm`, and `*/rm` so an absolute or
+# relative path still matches) against every word. A word in COMMAND position
+# that matches no such name is then resolved on disk and matched by the
+# basename it resolves to, so a shim named anything is caught as what it runs.
+#
 # This is a text scanner, not a shell parser, and a guard against the
 # honest-mistake case, not a sandbox. Segment splitting on `;`/`&&`/`||`/`|`
 # is quote-unaware and runs before tokenization. The named bypasses it does
@@ -315,7 +320,7 @@ _frame_pop() {
   done
 }
 _SS_FRAME_ARRAYS="_ss_words _ss_find_paths _ss_git_opts"
-_SS_FRAME_VARS="_ss_after _ss_cmd_word_idx _ss_ek _ss_et _ss_eval_rest _ss_exec_cmd _ss_find_has_action _ss_fk2 _ss_flag _ss_ftok _ss_git_block _ss_git_linked _ss_git_subcmd _ss_gj _ss_gk _ss_gk2 _ss_gtok _ss_i _ss_j _ss_k _ss_line _ss_n _ss_next_i _ss_opaque _ss_saw_recursive _ss_stash_action _ss_tgt _ss_word _ss_xargs_cmd _ss_xeval _ss_xj2 _ss_xk _ss_xtok"
+_SS_FRAME_VARS="_ss_after _ss_cmd_word_idx _ss_ek _ss_et _ss_eval_rest _ss_exec_cmd _ss_find_has_action _ss_fk2 _ss_flag _ss_ftok _ss_git_block _ss_git_linked _ss_git_subcmd _ss_gj _ss_gk _ss_gk2 _ss_gtok _ss_i _ss_j _ss_k _ss_line _ss_match _ss_n _ss_next_i _ss_opaque _ss_saw_recursive _ss_stash_action _ss_tgt _ss_word _ss_xargs_cmd _ss_xeval _ss_xj2 _ss_xk _ss_xtok"
 _SDP_FRAME_VARS="_sdp_body _sdp_c _sdp_c2 _sdp_cj _sdp_depth _sdp_i _sdp_j _sdp_len _sdp_text"
 _SCT_FRAME_VARS="_sct_no_heredoc _sct_old_ifs _sct_seg _sct_segments _sct_text"
 
@@ -595,6 +600,61 @@ xargs_opt_takes_value() {
   esac
 }
 
+_RCH_MEMO=""
+_RCH_OUT=""
+
+# resolve_command_head: sets $_RCH_OUT to the basename of the binary $1 really
+# names, symlinks followed, or to $1 unchanged when nothing resolves. Callers
+# must only ask about a word in command position — an argument sharing a shim's
+# name is not that shim. Fork-free: it runs on every Bash call in the session.
+resolve_command_head() {
+  _rch_w="$1"
+  _RCH_OUT="$_rch_w"
+  case "$_rch_w" in
+    ''|-*|*=*|*'$'*|*'*'*|*'?'*|*'['*|*\'*|*'"'*|*'`'*|*'>'*|*'<'*|*'|'*|*'&'*|*'('*|*')'*|*'{'*|*'}'*|*';'*|*','*)
+      return 0 ;;
+  esac
+  case "$_RCH_MEMO" in
+    *"|$_rch_w>"*)
+      _rch_rest="${_RCH_MEMO#*"|$_rch_w>"}"
+      _RCH_OUT="${_rch_rest%%|*}"
+      return 0
+      ;;
+  esac
+  _rch_p=""
+  case "$_rch_w" in
+    '~'*) _rch_p="$(expand_tilde "$_rch_w")" ;;
+    */*)  _rch_p="$_rch_w" ;;
+    *)
+      _rch_oifs="$IFS"
+      IFS=:
+      for _rch_d in $PATH; do
+        [ -n "$_rch_d" ] || _rch_d="."
+        if [ -x "$_rch_d/$_rch_w" ] && [ ! -d "$_rch_d/$_rch_w" ]; then
+          _rch_p="$_rch_d/$_rch_w"
+          break
+        fi
+      done
+      IFS="$_rch_oifs"
+      ;;
+  esac
+  if [ -n "$_rch_p" ] && [ -e "$_rch_p" ]; then
+    _rch_hops=0
+    while [ -L "$_rch_p" ] && [ "$_rch_hops" -lt 40 ]; do
+      _rch_t="$(readlink "$_rch_p" 2>/dev/null)"
+      [ -n "$_rch_t" ] || break
+      case "$_rch_t" in
+        /*) _rch_p="$_rch_t" ;;
+        *)  _rch_p="${_rch_p%/*}/$_rch_t" ;;
+      esac
+      _rch_hops=$((_rch_hops + 1))
+    done
+    _RCH_OUT="${_rch_p##*/}"
+  fi
+  _RCH_MEMO="$_RCH_MEMO|$_rch_w>$_RCH_OUT"
+  return 0
+}
+
 # is_quoted_word: true if $1 STARTS with a quote character. Deliberately
 # start-of-word only, so `"rm" -rf /` is not recognised (documented gap).
 is_quoted_word() {
@@ -749,9 +809,19 @@ _scan_segment_body() {
       continue
     fi
 
-    # basename match so /bin/rm, /usr/bin/mv etc. are still caught.
     if [ "$_ss_opaque" -eq 0 ]; then
-    case "$_ss_word" in
+    # Typed-name patterns are tried against EVERY word (they cover /bin/rm and
+    # /usr/bin/git by path suffix). On-disk resolution is not: it runs only at
+    # this segment's own command-word index, or an argument that merely shares
+    # a name with some shim would be read as that shim.
+    _ss_match="$_ss_word"
+    if [ "$_ss_i" -eq "$_ss_cmd_word_idx" ]; then
+      case "$_ss_word" in
+        ssh|*/ssh|scp|*/scp|rsync|*/rsync|mosh|*/mosh|rm|*/rm|mv|*/mv|find|*/find|xargs|*/xargs|bash|*/bash|sh|*/sh|eval|*/eval|git|*/git) ;;
+        *) resolve_command_head "$_ss_word"; _ss_match="$_RCH_OUT" ;;
+      esac
+    fi
+    case "$_ss_match" in
       ssh|*/ssh|scp|*/scp|rsync|*/rsync|mosh|*/mosh)
         if [ "$_ss_i" -eq "$_ss_cmd_word_idx" ]; then
           _ss_opaque=1
@@ -869,6 +939,10 @@ _scan_segment_body() {
             *) _ss_xargs_cmd="$_ss_xtok"; break ;;
           esac
         done
+        case "$_ss_xargs_cmd" in
+          rm|*/rm|mv|*/mv|bash|*/bash|sh|*/sh|eval|*/eval) ;;
+          *) resolve_command_head "$_ss_xargs_cmd"; _ss_xargs_cmd="$_RCH_OUT" ;;
+        esac
         case "$_ss_xargs_cmd" in
           rm|*/rm|mv|*/mv)
             block "xargs invokes $_ss_xargs_cmd on stdin-sourced arguments this hook cannot statically verify"
