@@ -9,5 +9,5 @@
 - `parity/` — dated findings of each source-project parity sweep, once one has
   run against this checkout; absent until then.
 - `handoffs/` — one dated note per session, read once at the next
-  session-start, then moved to `handoffs/archive/`. Newest:
-  `handoffs/2026-09-18.md`.
+  session-start, then moved to `handoffs/archive/`. Currently empty:
+  2026-09-18's note was read and archived on 2026-09-19.
