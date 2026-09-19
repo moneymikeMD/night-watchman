@@ -27,6 +27,7 @@
 #     tracker/jira/provider.sh
 #     secrets/op/provider.sh
 #     secrets/env/provider.sh
+#     dispatch/workflow/provider.sh
 #     dispatch/herdr/provider.sh
 #     memory/memorygraph/provider.sh
 #     publish/atlassian/provider.sh
@@ -93,7 +94,7 @@ nw_default_impl() {
     case "$1" in
         tracker)  echo "jira" ;;
         secrets)  echo "op" ;;
-        dispatch) echo "herdr" ;;
+        dispatch) echo "workflow" ;;
         memory)   echo "memorygraph" ;;
         publish)  echo "atlassian" ;;
         *)        return 1 ;;

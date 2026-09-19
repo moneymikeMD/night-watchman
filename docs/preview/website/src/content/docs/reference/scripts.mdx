@@ -177,6 +177,24 @@ Usage:
   provider.sh stop <ticket-id>
 ```
 
+## Provider: dispatch/workflow
+
+### providers/dispatch/workflow/provider.sh
+
+provider.sh — the `workflow` implementation of the `dispatch` provider kind
+(verbs: start, watch, stop — see ../../README.md for the contract and for
+the one place these semantics differ from herdr's).
+
+```text
+Usage:
+  provider.sh start <ticket-id> (--ticket-file PATH | --executor agent)
+                    [--model sonnet|opus|haiku] [--worktree PATH]
+                    [--agent NAME] [--timebox TEXT] [--forbidden TEXT]...
+                    [--dry-run]
+  provider.sh watch <ticket-id>
+  provider.sh stop  <ticket-id> [--reason TEXT]
+```
+
 ## Provider: memory/memorygraph
 
 ### providers/memory/memorygraph/provider.sh
