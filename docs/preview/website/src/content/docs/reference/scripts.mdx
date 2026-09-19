@@ -51,6 +51,18 @@ Usage:
 Manage docs/known-issues/ — one markdown file per finding, with
 docs/known-issues.md as a GENERATED index rendered from their frontmatter.
 
+### scripts/land-ack.sh
+
+land-ack.sh — the consumer end of land-branch.sh's orchestrator notification.
+
+```text
+Usage: land-ack.sh <ack-file>
+  Creates the ack file named in a "closing state is in the tracker"
+  notification so the waiting land-branch.sh sees the acknowledgement.
+  Refuses any path whose basename does not start with nw-ack-, so a
+  mistyped or hostile notification cannot make it touch arbitrary files.
+```
+
 ### scripts/land-branch.sh
 
 Land a finished ticket branch onto the target branch (default: main),
