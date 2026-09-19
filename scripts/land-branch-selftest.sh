@@ -1116,6 +1116,30 @@ else
     ok "test29: land-ack.sh creates nw-ack-* files and refuses anything else"
 fi
 
+# ---- test 30: a worker writing its hand-off file must not dirty its worktree,
+# or land-branch.sh's clean-tree precondition refuses before reading it. The
+# path is read out of land-branch.sh; a $LAND_BRANCH_HANDOFF_FILE elsewhere is
+# the caller's concern.
+
+HANDOFF_REL=$(grep -o '\.night-watchman/closing-state\.md' "$LAND_BRANCH" | head -1)
+GI_REPO="$WORK/t30"
+git init -q -b main "$GI_REPO"
+cp "$HERE/../.gitignore" "$GI_REPO/.gitignore"
+git -C "$GI_REPO" add .gitignore
+git -C "$GI_REPO" -c user.email=t@example.invalid -c user.name=selftest -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q -m init
+if [ -n "$HANDOFF_REL" ]; then
+    mkdir -p "$GI_REPO/$(dirname "$HANDOFF_REL")"
+    printf '## Findings\n- x\n' > "$GI_REPO/$HANDOFF_REL"
+fi
+if [ -z "$HANDOFF_REL" ]; then
+    bad "test30: land-branch.sh names no closing-state.md path to check"
+elif [ -n "$(git -C "$GI_REPO" status --porcelain)" ]; then
+    bad "test30: writing $HANDOFF_REL dirties the worktree:
+$(git -C "$GI_REPO" status --porcelain)"
+else
+    ok "test30: a hand-off file at $HANDOFF_REL leaves git status --porcelain empty"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]
