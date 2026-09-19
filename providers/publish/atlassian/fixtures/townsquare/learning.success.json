@@ -1,0 +1,19 @@
+# projects_createLearning success, against a throwaway project
+# Recorded: 2026-09-11, real call against a live Atlassian Cloud site
+# (copied from the homelab production client's recorded fixtures, LAB-180).
+# De-identified: site host -> example.atlassian.net. Field names, types and
+# all other values are as the API returned them.
+---
+{
+  "data": {
+    "projects_createLearning": {
+      "success": true,
+      "errors": [],
+      "learning": {
+        "summary": "fixture learning",
+        "description": "{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"fixture learning body\"}]}]}",
+        "id": "ari:cloud:townsquare:6e91b541-5dc7-4d6d-b95e-e1bd6229d921:learning/5fd9fd95-6d30-4715-815a-3585f5776918"
+      }
+    }
+  }
+}

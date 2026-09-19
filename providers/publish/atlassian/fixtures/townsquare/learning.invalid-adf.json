@@ -1,0 +1,21 @@
+# projects_createLearning with a plain-text description: HTTP 200, success:false
+# Recorded: 2026-09-11, real call against a live Atlassian Cloud site
+# (copied from the homelab production client's recorded fixtures, LAB-180).
+# De-identified: site host -> example.atlassian.net. Field names, types and
+# all other values are as the API returned them. Confirmed on this mutation
+# family only via `learning`; `risk` and `decision` share the same input
+# shape so the same "Invalid ADF" rule is documented, not separately fixtured.
+---
+{
+  "data": {
+    "projects_createLearning": {
+      "success": false,
+      "errors": [
+        {
+          "message": "createLearning.description: Invalid ADF"
+        }
+      ],
+      "learning": null
+    }
+  }
+}

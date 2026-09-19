@@ -1,0 +1,21 @@
+# projects_createRisk success, against a throwaway project. NOTE the
+# returned id's ARI type segment says "learning", not "risk" — confirmed
+# live, the server's own inconsistency, not a fixture typo.
+# Recorded: 2026-09-11, real call against a live Atlassian Cloud site
+# (copied from the homelab production client's recorded fixtures, LAB-180).
+# De-identified: site host -> example.atlassian.net. Field names, types and
+# all other values are as the API returned them.
+---
+{
+  "data": {
+    "projects_createRisk": {
+      "success": true,
+      "errors": [],
+      "risk": {
+        "summary": "fixture risk",
+        "description": "{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"fixture risk body\"}]}]}",
+        "id": "ari:cloud:townsquare:6e91b541-5dc7-4d6d-b95e-e1bd6229d921:learning/adf71995-df51-4af2-9bd8-a3f9a5c52c6b"
+      }
+    }
+  }
+}

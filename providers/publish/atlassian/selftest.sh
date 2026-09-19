@@ -51,6 +51,12 @@ strip "$FIX/confluence/whoami.success.json"    > "$WORK/whoami.json"
 strip "$FIX/townsquare/update.success.json"    > "$WORK/update.ok.json"
 strip "$FIX/townsquare/update.invalid-adf.json" > "$WORK/update.adf.json"
 strip "$FIX/townsquare/update.error.invalid-ari.json" > "$WORK/update.ari.json"
+strip "$FIX/townsquare/learning.success.json"  > "$WORK/learning.ok.json"
+strip "$FIX/townsquare/learning.invalid-adf.json" > "$WORK/learning.adf.json"
+strip "$FIX/townsquare/risk.success.json"      > "$WORK/risk.ok.json"
+strip "$FIX/townsquare/decision.success.json"  > "$WORK/decision.ok.json"
+strip "$FIX/townsquare/about.success.json"     > "$WORK/about.ok.json"
+strip "$FIX/townsquare/about.invalid-adf.json" > "$WORK/about.adf.json"
 for f in "$WORK"/*.json; do
     jq -e . >/dev/null 2>&1 < "$f" || { echo "fixture is not valid JSON: $f" >&2; exit 2; }
 done
@@ -168,6 +174,29 @@ for sub in whoami projects; do
     dry "$TSQ" "$sub"
     eq "dry townsquare.sh $sub exits 0 with no request" "0:0" "$RC:$(reqs)"
 done
+for sub in about learning decision risk; do
+    dry "$TSQ" "$sub" --dry-run
+    eq "dry townsquare.sh $sub --dry-run exits 0 with no request" "0:0" "$RC:$(reqs)"
+    contains "dry townsquare.sh $sub --dry-run says what it would do" "would issue" "$ERR"
+done
+
+HTXT="$WORK/highlight.txt"
+printf 'Short headline\nLonger body line.\n' > "$HTXT"
+dry "$TSQ" learning "ari:cloud:townsquare:c0:project/x" - < "$HTXT"
+eq "dry learning exits 0 with no request" "0:0" "$RC:$(reqs)"
+HVARS=$(printf '%s\n' "$ERR" | sed -n 's/^would issue variables: //p')
+eq "dry learning's summary is the stdin's first line" "Short headline" "$(printf '%s' "$HVARS" | jq -r .summary)"
+contains "dry learning's description ADF-encodes the whole text" "Longer body line." \
+    "$(printf '%s' "$HVARS" | jq -r '.description | fromjson | .content[1].content[0].text')"
+
+ABTXT="$WORK/about.txt"
+printf '## what\nWe ship faster.\n## measurement\nCycle time.\n' > "$ABTXT"
+dry "$TSQ" about "ari:cloud:townsquare:c0:project/x" - < "$ABTXT"
+eq "dry about exits 0 with no request" "0:0" "$RC:$(reqs)"
+ABDVARS=$(printf '%s\n' "$ERR" | sed -n 's/^would issue variables: //p')
+contains "dry about's what section is ADF-encoded" "We ship faster." \
+    "$(printf '%s' "$ABDVARS" | jq -r '.what | fromjson | .content[0].content[0].text')"
+not_contains "dry about omits the why key entirely (server leaves it alone)" '"why"' "$ABDVARS"
 
 # markdown conversion, asserted on the dry-run request body
 MD="$WORK/md.md"
@@ -256,6 +285,44 @@ run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/update.ari.json|200" \
     "$PROVIDER" post-headline default "t" "$URL"
 eq "a top-level GraphQL error exits 1" "1" "$RC"
 contains "the GraphQL error body is shown" "InvalidARI" "$ERR"
+
+HARI="ari:cloud:townsquare:c0:project/x"
+run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/learning.ok.json|200" \
+    "$TSQ" --yes learning "$HARI" - <<< $'Fixture learning\nBody text'
+eq "learning (live-fixture) exits 0" "0" "$RC"
+contains "learning prints the created id and project" "created on $HARI" "$OUT"
+LVARS=$(cut -f3 "$WORK/req" | jq -c .variables)
+eq "learning's summary is sent plain, not ADF-wrapped" "Fixture learning" "$(printf '%s' "$LVARS" | jq -r .summary)"
+
+run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/learning.adf.json|200" \
+    "$TSQ" --yes learning "$HARI" - <<< "plain text"
+eq "learning success:false exits 1" "1" "$RC"
+contains "learning surfaces the server's Invalid ADF message" "Invalid ADF" "$ERR"
+
+run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/risk.ok.json|200" \
+    "$TSQ" --yes risk "$HARI" - <<< "Fixture risk"
+eq "risk (live-fixture) exits 0" "0" "$RC"
+contains "risk prints the created id and project" "created on $HARI" "$OUT"
+
+run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/decision.ok.json|200" \
+    "$TSQ" --yes decision "$HARI" - <<< "Fixture decision"
+eq "decision (live-fixture) exits 0" "0" "$RC"
+contains "decision prints the created id and project" "created on $HARI" "$OUT"
+
+run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/about.ok.json|200" \
+    "$TSQ" --yes about "$HARI" - <<< $'## what\nFixture what\n'
+eq "about (live-fixture) exits 0" "0" "$RC"
+contains "about prints the updated project" "updated on $HARI" "$OUT"
+
+run env STUB_ROUTES="POST|/gateway/api/graphql|$WORK/about.adf.json|200" \
+    "$TSQ" --yes about "$HARI" - <<< $'## what\nplain text\n'
+eq "about success:false exits 1" "1" "$RC"
+contains "about surfaces the server's Invalid ADF message" "Invalid ADF" "$ERR"
+
+run env STUB_ROUTES="" "$TSQ" --yes learning PROJ-12 - <<< "t"
+eq "a short key where an ARI belongs is refused before any request (learning)" "1:0" "$RC:$(reqs)"
+run env STUB_ROUTES="" "$TSQ" --yes about PROJ-12 - <<< $'## what\nx\n'
+eq "a short key where an ARI belongs is refused before any request (about)" "1:0" "$RC:$(reqs)"
 
 run env STUB_ROUTES="GET|/wiki/rest/api/user/current|$WORK/404.json|404" "$CONF" whoami
 eq "a Confluence 404 exits 1" "1" "$RC"
