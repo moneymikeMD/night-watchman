@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: python3 scripts/comment-lint.py
+      - uses: moneymikeMD/ai-toolkit/actions/comment-lint@v1
 
   docs-site:
     # Mirrors website-deploy.yml's frozen install: catches a desynced

@@ -17,19 +17,6 @@ claude-cost.py — a small, dependency-free ledger for tracking what an
 agentic wave of work cost, in whatever unit the caller wants (dollars,
 tokens, whatever their own accounting already uses).
 
-### scripts/comment-lint.py
-
-Fail on comment blocks longer than the project's comment rule allows.
-
-```text
-Usage:
-  comment-lint.py [PATH ...]           # default: every tracked code file
-  comment-lint.py --max-block N        # cap on any comment run below the header
-  comment-lint.py --max-header N       # cap on the file header itself
-  comment-lint.py --stats              # per-file comment ratio, no pass/fail
-  comment-lint.py --selftest           # built-in fixture checks
-```
-
 ### scripts/decision-log.sh
 
 Appends one sanitised row to a wave-trail TSV (see skills/wave-trail/
