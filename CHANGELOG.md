@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.9.0](https://github.com/moneymikeMD/night-watchman/compare/v0.8.0...v0.9.0) (2026-09-19)
+
+
+### Features
+
+* **ci:** consume comment-lint from ai-toolkit instead of shipping it ([dd1062b](https://github.com/moneymikeMD/night-watchman/commit/dd1062b401754e295a8d4ea230c67be5bdd926e7))
+
 ## [0.8.0](https://github.com/moneymikeMD/night-watchman/compare/v0.7.2...v0.8.0) (2026-09-18)
 
 
