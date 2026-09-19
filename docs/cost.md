@@ -345,3 +345,52 @@ resolving no credential. The ticket's still-current status is written with
 (never re-appended as a duplicate); every other status is `outcome:
 closed` and immutable once written. Does not paginate: a changelog with
 more than one page is truncated to its most recent page, named on stderr.
+
+## Bash-family report: ranking parameterisation candidates by evidence
+
+A third, separate tool answering a narrower question than either lane
+above: not "what did a wave cost" or "is a script getting used", but
+"which repeated Bash invocation is actually a function in disguise" —
+answered by counting, not by impression. A one-off scratchpad scan on
+2026-09-19 found 39,652 Bash tool calls across 4,735 distinct command
+families in the local transcript corpus, and counting reversed the wave's
+first pick: a `gh` release family had been chosen as the pilot before
+anyone counted, and counting showed it was comparatively rare.
+
+- `scripts/bash-family-report.py` — streams every
+  `~/.claude/projects/**/*.jsonl` file (same corpus as
+  `claude-cost-scan.py`/`script-analytics.py`), collects every Bash
+  `tool_use` block's `command`, and normalises each to a family key: a
+  leading `cd <path> &&` and any leading `VAR=value` assignments are
+  stripped, a heredoc form folds to `python3 heredoc` or `cat > heredoc`
+  rather than being ranked by its body, and otherwise the family is the
+  executable's basename plus its first non-flag argument (e.g.
+  `./scripts/jira-api.sh raw ...` families as `jira-api.sh raw`). Families
+  are ranked by call count; average command length (of the original,
+  un-normalised command) is reported alongside it, since volume alone
+  surfaces `grep`-shaped noise while length is what flags a call worth
+  turning into a typed tool. `--since`, `--top`, `--projects-dir`, and
+  `--format text|json`; `--projects-dir` is the same test seam
+  `claude-cost-scan.py` and `script-events-hook.sh` use, so a selftest
+  never reads the live corpus. `rtk discover` is adjacent but answers a
+  different question — a rolling 30-day window ranked by RTK savings
+  opportunity ("what should RTK proxy"), not "what is a function in
+  disguise" over the whole corpus.
+
+```bash
+# rank the top 20 families by call count
+python3 scripts/bash-family-report.py --top 20 --format text
+
+# scope to a wave's window, machine-readable for trend tracking
+python3 scripts/bash-family-report.py --since 2026-09-12T00:00:00Z --format json
+```
+
+Run `scripts/bash-family-report-selftest.sh` to check the normalisation
+rules and every flag against fixture transcripts under
+`scripts/fixtures/bash-family/` — structurally offline, never reads the
+real `~/.claude/projects` tree.
+
+This tool only ranks; it does not decide. Turning a ranked family into an
+actual typed MCP tool, and picking the pilot, is out of scope here — see
+the ticket that specified this report (WO-033) and the one that covers
+the pilot pattern (WO-029).

@@ -1,0 +1,1 @@
+{"type": "assistant", "timestamp": "2026-09-02T00:00:07Z", "message": {"id": "m1", "model": "claude-sonnet-5", "usage": {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}, "content": [{"type": "tool_use", "id": "toolu_14", "name": "Bash", "input": {"command": "memorygraph recall --query lint --limit 5"}}]}}
