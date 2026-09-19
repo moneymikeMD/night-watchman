@@ -590,6 +590,32 @@ fi
 assert_allow "allows 'echo git status' — a head-name word in argument position is not a command head (NWM-123)" \
   "$FAKE_LINKED_WORKTREE" "echo git status"
 
+# NWM-123 review round: on-disk resolution must run ONLY in command position.
+# With the shim dir on PATH, a bare `g` or `zap` in ARGUMENT position names
+# nothing the command is going to run, and blocking it would grow exactly the
+# false-positive surface this ticket exists to shrink.
+if [ -n "$GIT_ABS" ]; then
+  PATH="$SHIM_DIR:$PATH" assert_allow "allows 'echo hello g stash' — git-shaped shim resolvable on PATH but in argument position (NWM-123 review)" \
+    "$FAKE_WORKTREE" "echo hello g stash"
+  assert_allow "allows 'echo hello <shimdir>/g stash' — git-shaped shim by absolute path in argument position (NWM-123 review)" \
+    "$FAKE_WORKTREE" "echo hello $SHIM_DIR/g stash"
+  PATH="$SHIM_DIR:$PATH" assert_block "still blocks a bare 'g stash' — same shim, COMMAND position (NWM-123 review, the gate must not undo the fix)" \
+    "$FAKE_WORKTREE" "g stash" "$GIT_MAIN_DIAG"
+  PATH="$SHIM_DIR:$PATH" assert_block "still blocks 'env g stash' — shim behind a transparent prefix is still the command word (NWM-123 review)" \
+    "$FAKE_WORKTREE" "env g stash" "$GIT_MAIN_DIAG"
+  PATH="$SHIM_DIR:$PATH" assert_block "still blocks 'bash -c \"g stash\"' — the nested script has its own command word (NWM-123 review)" \
+    "$FAKE_WORKTREE" 'bash -c "g stash"' "$GIT_MAIN_DIAG"
+fi
+
+if [ -n "$RM_ABS" ]; then
+  PATH="$SHIM_DIR:$PATH" assert_allow "allows 'echo describing zap -rf <outside>' — rm-shaped shim resolvable on PATH but in argument position (NWM-123 review)" \
+    "$FAKE_WORKTREE" "echo describing zap -rf $NOT_WORKTREE_NOT_SCRATCH/x"
+  PATH="$SHIM_DIR:$PATH" assert_block "still blocks a bare 'zap -rf <outside>' — same shim, COMMAND position (NWM-123 review)" \
+    "$FAKE_WORKTREE" "zap -rf $NOT_WORKTREE_NOT_SCRATCH/x" "$RM_DIAG"
+  PATH="$SHIM_DIR:$PATH" assert_block "still blocks 'xargs zap' — the xargs TARGET is a command position too (NWM-123 review)" \
+    "$FAKE_WORKTREE" "xargs zap" "xargs invokes rm on stdin-sourced arguments"
+fi
+
 echo
 echo "$N assertion(s), $((N - FAIL)) passed" >&2
 if [ "$FAIL" -ne 0 ]; then

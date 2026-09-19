@@ -53,9 +53,9 @@
 # clean/checkout-`--` block stays in force.
 #
 # Command heads are matched by typed name (`rm`, and `*/rm` so an absolute or
-# relative path still matches), then, for a word matching no head, by the
-# basename of the binary it resolves to on disk — so a shim named anything is
-# matched as what it really runs. Resolution only ever adds a match.
+# relative path still matches) against every word. A word in COMMAND position
+# that matches no such name is then resolved on disk and matched by the
+# basename it resolves to, so a shim named anything is caught as what it runs.
 #
 # This is a text scanner, not a shell parser, and a guard against the
 # honest-mistake case, not a sandbox. Segment splitting on `;`/`&&`/`||`/`|`
@@ -605,9 +605,8 @@ _RCH_OUT=""
 
 # resolve_command_head: sets $_RCH_OUT to the basename of the binary $1 really
 # names, symlinks followed, or to $1 unchanged when nothing resolves. Callers
-# consult it only for words the typed-name patterns already missed, so it can
-# add a match but never remove one. Fork-free on the common path on purpose —
-# it runs per word on every Bash call in the session.
+# must only ask about a word in command position — an argument sharing a shim's
+# name is not that shim. Fork-free: it runs on every Bash call in the session.
 resolve_command_head() {
   _rch_w="$1"
   _RCH_OUT="$_rch_w"
@@ -811,13 +810,17 @@ _scan_segment_body() {
     fi
 
     if [ "$_ss_opaque" -eq 0 ]; then
-    # Typed-name patterns first (they cover /bin/rm and /usr/bin/git by path
-    # suffix); only a word matching none of them is resolved on disk.
+    # Typed-name patterns are tried against EVERY word (they cover /bin/rm and
+    # /usr/bin/git by path suffix). On-disk resolution is not: it runs only at
+    # this segment's own command-word index, or an argument that merely shares
+    # a name with some shim would be read as that shim.
     _ss_match="$_ss_word"
-    case "$_ss_word" in
-      ssh|*/ssh|scp|*/scp|rsync|*/rsync|mosh|*/mosh|rm|*/rm|mv|*/mv|find|*/find|xargs|*/xargs|bash|*/bash|sh|*/sh|eval|*/eval|git|*/git) ;;
-      *) resolve_command_head "$_ss_word"; _ss_match="$_RCH_OUT" ;;
-    esac
+    if [ "$_ss_i" -eq "$_ss_cmd_word_idx" ]; then
+      case "$_ss_word" in
+        ssh|*/ssh|scp|*/scp|rsync|*/rsync|mosh|*/mosh|rm|*/rm|mv|*/mv|find|*/find|xargs|*/xargs|bash|*/bash|sh|*/sh|eval|*/eval|git|*/git) ;;
+        *) resolve_command_head "$_ss_word"; _ss_match="$_RCH_OUT" ;;
+      esac
+    fi
     case "$_ss_match" in
       ssh|*/ssh|scp|*/scp|rsync|*/rsync|mosh|*/mosh)
         if [ "$_ss_i" -eq "$_ss_cmd_word_idx" ]; then
