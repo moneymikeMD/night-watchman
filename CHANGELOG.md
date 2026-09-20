@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [0.11.0](https://github.com/moneymikeMD/night-watchman/compare/v0.10.0...v0.11.0) (2026-09-20)
+
+
+### Features
+
+* **to-issues-mine:** add the mining half of to-issues ([#27](https://github.com/moneymikeMD/night-watchman/issues/27)) ([4a2febd](https://github.com/moneymikeMD/night-watchman/commit/4a2febd3bad1d81415900ee1d52acc279e3b1fa2))
+
 ## [0.10.0](https://github.com/moneymikeMD/night-watchman/compare/v0.9.2...v0.10.0) (2026-09-20)
 
 
