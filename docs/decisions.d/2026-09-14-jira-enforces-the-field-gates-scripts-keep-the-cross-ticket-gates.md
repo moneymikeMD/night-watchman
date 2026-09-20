@@ -1,0 +1,34 @@
+---
+seq: 2
+date: 2026-09-14
+level: 3
+slug: 2026-09-14-jira-enforces-the-field-gates-scripts-keep-the-cross-ticket-gates
+title: "Jira enforces the field gates; scripts keep the cross-ticket gates"
+---
+
+Owner decision after the gating spike: adopt all four Jira-native rules —
+`system:validate-field-value` for a non-empty `verify` on To Do→In
+Progress and on every transition into Completed, the same validator for a
+non-empty `touches` on To Do→In Progress, `system:previous-status-validator`
+(must have been In Progress) on every transition into Completed, and one
+Automation scheduled rule that returns Deferred tickets to To Do once
+`defer_until` has passed. `touches` is required for every ticket, not only
+agent/mixed ones: Jira cannot condition a validator on another field, and
+the owner accepted that because every ticket is created through the
+agent anyway.
+
+Reasoning: the spike measured the live workflow capabilities endpoint.
+Jira has field, previous-status, parent and permission validators, field
+and subtask conditions, webhook post-functions and GitHub triggers, but no
+rule at all on linked issues. So `blocked_by`, `touches` collisions between
+startable siblings, and `mixed` needing `human_steps` stay in `issues.py`
+and land-branch; Jira takes the two field gates and the status-order gate,
+which catches a hand-filed ticket at transition time (tickets were
+filed with malformed `touches` this week). Automation is post-hoc and is
+used only where reacting late is fine (deferral expiry). Automation
+execution caps on this plan were not verified; single-project rules are
+believed uncapped.
+
+Implementation: additive rules spec through
+`jira-workflow-apply.sh`, rehearsed on a scratch project with recorded
+fixtures. The Automation rule is a UI step.
