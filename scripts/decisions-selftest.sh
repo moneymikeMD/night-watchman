@@ -160,7 +160,7 @@ elif [ "$RC_LINT" -ne 0 ]; then
     bad "test4: lint failed after two concurrent adds (a seq collision or index drift):
 $(cat "$WORK/t4lint.out")"
 else
-    ok "test4: two concurrent adds write two distinct files"
+    ok "two concurrent adds write two distinct files"
 fi
 
 # ---- test 5: lint is a real second oracle — a hand-edit to an entry's
