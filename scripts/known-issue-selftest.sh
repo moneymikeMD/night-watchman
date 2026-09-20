@@ -162,6 +162,39 @@ else
     ok "test4: a slug resolving outside \$ENTRIES_DIR is refused before anything is touched"
 fi
 
+# ---- test 5: lint must catch an entry hand-edited after it was written —
+# the sha256 in _manifest.json is the only record of what add/resolve/
+# severity last wrote, and a hand-edit that bypasses all three (so
+# record_written never runs) must not pass silently.
+
+REPO=$(fresh_repo t5)
+(cd "$REPO" && printf 'original body text\n' | ./scripts/known-issue.sh add \
+    --title "Drift target" --severity LOW) >"$WORK/t5setup.out" 2>&1
+SLUG=""
+for f in "$REPO"/docs/known-issues/*.md; do
+    SLUG="$(basename "$f" .md)"
+done
+set +e
+(cd "$REPO" && ./scripts/known-issue.sh lint) >"$WORK/t5before.out" 2>&1
+RC_BEFORE=$?
+set -e
+printf '\nhand-tampered line, never hashed\n' >> "$REPO/docs/known-issues/$SLUG.md"
+set +e
+(cd "$REPO" && ./scripts/known-issue.sh lint) >"$WORK/t5after.out" 2>&1
+RC_AFTER=$?
+set -e
+if [ "$RC_BEFORE" -ne 0 ]; then
+    bad "test5 (drift detection): lint failed on the untouched entry before any tampering ($RC_BEFORE):
+$(cat "$WORK/t5before.out")"
+elif [ "$RC_AFTER" -eq 0 ]; then
+    bad "test5: lint exited 0 after a hand-edit to $SLUG.md — the sha256 check did not catch it"
+elif ! grep -q "does not match its recorded sha256" "$WORK/t5after.out"; then
+    bad "test5: lint failed after the hand-edit (rc=$RC_AFTER) but not for the checksum reason expected:
+$(cat "$WORK/t5after.out")"
+else
+    ok "test5: lint refuses when an entry file was hand-edited after known-issue.sh last wrote it"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $KNOWN_ISSUE)"
 [ "$FAIL" -eq 0 ]
