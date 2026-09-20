@@ -40,6 +40,16 @@ for the full reasoning behind this ordering.
 
 (Ported from pstack `poteto-mode`, 2026-09-14.)
 
+## Check known-issues before reporting broken
+
+Before telling anyone something is broken, unexplained, or missing — in a
+report, a PR, or a hand-back — check whatever this project's memory already
+holds: `grep -ril '<symptom>' docs/known-issues/` (adapt the path to your
+project's layout) and, if this project also runs memory-graph, `memorygraph
+recall --query "<one noun>"`. A hit is the answer, not a lead to re-verify
+from scratch. Reproducing a failure proves it is real; it does not prove it
+is new.
+
 ## Testing a script never touches a live target
 
 Any script with an apply/POST/write/mutate path must be tested with every
