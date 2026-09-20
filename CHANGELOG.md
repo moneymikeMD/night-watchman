@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [0.10.0](https://github.com/moneymikeMD/night-watchman/compare/v0.9.2...v0.10.0) (2026-09-20)
+
+
+### Features
+
+* **dispatch:** make the Workflow tool the default dispatch provider, herdr the fallback ([#21](https://github.com/moneymikeMD/night-watchman/issues/21)) ([3a314db](https://github.com/moneymikeMD/night-watchman/commit/3a314db69b84cf6f477cd95b67f7d06056a79ea7))
+
+
+### Bug Fixes
+
+* **known-issues:** make lint catch manifest hash drift, repair it ([#20](https://github.com/moneymikeMD/night-watchman/issues/20)) ([517e7b9](https://github.com/moneymikeMD/night-watchman/commit/517e7b9fd801a6565303be9f95a282b1479602ba))
+
 ## [0.9.2](https://github.com/moneymikeMD/night-watchman/compare/v0.9.1...v0.9.2) (2026-09-19)
 
 
