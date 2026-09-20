@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented here.
 
+## [1.0.0](https://github.com/moneymikeMD/night-watchman/compare/v0.11.0...v1.0.0) (2026-09-20)
+
+
+### ⚠ BREAKING CHANGES
+
+* installing night-watchman now also installs work-order, and the work-order marketplace must be added first.
+
+### Features
+
+* depend on the work-order plugin instead of carrying its copies ([#32](https://github.com/moneymikeMD/night-watchman/issues/32)) ([a9be349](https://github.com/moneymikeMD/night-watchman/commit/a9be3491c9df9cd6914281fd8fb3895321ec2281))
+
 ## [0.11.0](https://github.com/moneymikeMD/night-watchman/compare/v0.10.0...v0.11.0) (2026-09-20)
 
 
