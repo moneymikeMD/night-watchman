@@ -1,6 +1,6 @@
 {
   "name": "night-watchman",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "description": "Unattended-operations engine for Claude Code: tickets as dispatch contracts, an owner decision profile that reduces questions over time, a capability ladder (script beats agent beats skill), and the orchestrator/cheap-executor split. Dependency-free core; file-mode tickets by default.",
   "author": {
     "name": "Mike Garrett"
