@@ -1,0 +1,25 @@
+# Declared exceptions for no-personal-paths. A path glob, or name:<who> to
+# exempt a fake home directory wherever it appears.
+#
+# Fixtures that carry realistic absolute paths on purpose. Each records what a
+# real tool emitted (herdr's JSON, a Claude Code transcript path, a hook's
+# stdin), so the path is the thing under test and cannot be parameterised away.
+hooks/fixtures/**
+providers/dispatch/herdr/fixtures/**
+scripts/fixtures/**
+scripts/claude-cost-scan-selftest.sh
+
+# This selftest passes '/home/mike' and '/home/x' as PROSE payloads, asserting
+# that `memorygraph store --content '...'` is not mistaken for a redirect.
+#
+# Scoped to this file rather than declaring `name:mike`, deliberately. Mike is a
+# real first name and /home/mike is a plausible real path on a Linux box, so
+# exempting the name globally would blind the gate to an actual leak. Exempting
+# the one file that needs it keeps the rest of the repo covered.
+hooks/guard-fs-writes-selftest.sh
+
+# A generic placeholder in a module docstring's worked example
+# (/Users/me/code/foo -> -Users-me-code-foo). Exempted by name rather than by
+# file, because claude-cost-scan.py is production code and should stay covered
+# for every other name.
+name:me
