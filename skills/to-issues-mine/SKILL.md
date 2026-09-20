@@ -10,7 +10,7 @@ pass. This skill is the first half only: read the conversation, decide what
 counts as a decision, and write a decision list. Turning that list into
 ticket files is work-order's `emit-tickets` skill, run separately, against a
 format both sides can test independently — see
-`~/code/work-order/decision-list/FORMAT.md`.
+`~/code/home_workspace/work-order/decision-list/FORMAT.md`.
 
 The bar is the same one `to-issues` always used: an agent with no memory of
 this conversation must be able to finish the resulting ticket without asking
@@ -67,7 +67,7 @@ gap; mine one more entry for it.
    parsing:
 
    ```
-   python3 ~/code/work-order/decision-list/validate.py decisions.json
+   python3 ~/code/home_workspace/work-order/decision-list/validate.py decisions.json
    ```
 
    A schema error names the field and the decision index. Fix the capture
