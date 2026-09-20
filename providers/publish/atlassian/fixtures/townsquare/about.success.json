@@ -1,0 +1,23 @@
+# projects_edit success for `about` (edits description.what only, in this
+# recording — why/measurement omitted from the request and left unchanged).
+# Recorded: 2026-09-11, real call against a live Atlassian Cloud site
+# (copied from the homelab production client's recorded fixtures, LAB-180).
+# De-identified: site host -> example.atlassian.net. Field names, types and
+# all other values are as the API returned them.
+---
+{
+  "data": {
+    "projects_edit": {
+      "success": true,
+      "errors": [],
+      "project": {
+        "description": {
+          "what": "{\"type\":\"doc\",\"version\":1,\"content\":[{\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"fixture what\"}]}]}",
+          "why": "",
+          "measurement": ""
+        },
+        "id": "ari:cloud:townsquare:6e91b541-5dc7-4d6d-b95e-e1bd6229d921:project/427a5020-d12d-40fe-a3b3-047cd3308565"
+      }
+    }
+  }
+}
