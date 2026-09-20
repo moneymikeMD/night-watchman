@@ -1,5 +1,11 @@
 # Decisions — dated append log of "why"
 
+**GENERATED — do not hand-edit.** Produced by `scripts/decisions.sh index`
+from the frontmatter and body of every file in `docs/decisions.d/`. Add an
+entry with `scripts/decisions.sh add --title T --body B`, which writes the
+file there and reindexes for you. `scripts/decisions.sh lint` fails if this
+file ever drifts from what `index` would produce.
+
 Append-only. Never rewrite or delete an entry — if a decision changes,
 append a new entry that names the old one it supersedes. The point is a
 fresh session (or a fresh agent) can read this file top-to-bottom and see
@@ -659,6 +665,7 @@ still answers `herdr` wherever `NW_CONFIG` points there. That file was left
 alone deliberately; it is the operator's to change, and a flip nobody can
 observe is the failure mode this ticket was most likely to ship, so it is
 recorded here rather than quietly worked around.
+
 ## 2026-09-19 — Bare `cd <repo> &&`/`;` Bash prefixes replaced with `-C`/`--repo` (WO-034)
 
 Baseline measured over the full transcript corpus on 2026-09-19 (WO-033,
@@ -684,6 +691,7 @@ automatically was considered and deliberately deferred: it would sit beside
 just spent real time on guard false positives from a rewriter on that same
 seam. A second rewriter there is something to earn with evidence from the
 re-run, not assume up front.
+
 ### 2026-09-19 — WO-035: memorygraph gets a typed MCP dispatcher, not a bundled server
 
 `memorygraph` is the second-highest-volume Bash family in the corpus — 744
@@ -725,6 +733,7 @@ that here is how the two diverge.
 Out of scope, deliberately: changing `memorygraph` itself, or upstreaming
 the multi-word-recall behaviour as a fix there — worth doing, separately.
 Auto-recall on session start.
+
 ### 2026-09-19 — MCP sits beside rung 1 as a surface, not a fourth rung (WO-030)
 
 Added to `skills/capability-ladder/SKILL.md`: a script can carry a typed,
@@ -759,6 +768,7 @@ laundering hazard is named in the skill itself, not only in memory: a tool
 that reaches an action its script can't, or carries a flag bypassing a
 check the script enforces, is a permission bypass wearing an interface.
 Building the server itself is WO-029's territory, out of scope here.
+
 ### 2026-09-19 — WO-037: ship About/Learning/Risk/Decision as four named verbs, not a `mutate` passthrough
 
 `townsquare.sh` shipped `whoami`/`projects`/`update` only, by its own header's
