@@ -85,15 +85,26 @@ executor is available.
 
 Yes, and it is the one place the question has teeth.
 
-`providers/dispatch/` is currently built as a peer implementation rather than a
-thin adapter, which means this repo maintains a dispatch mechanism whose failure
-modes the platform has since made unnecessary. Three of the open herdr dispatch
+`providers/dispatch/` was built as a peer implementation rather than a thin
+adapter, which meant this repo maintained a dispatch mechanism whose failure
+modes the platform had since made unnecessary. Three of the open herdr dispatch
 issues — a cold boot swallowing the brief, the reached-working wait failing on
 back-to-back starts, a fresh worktree hitting the folder-trust dialog — do not
 exist when the same wave runs under the Workflow tool.
 
-The honest reading is that layer 3, the provider system, is the least settled of
-the three and the dispatch provider is the least settled part of it.
+WO-026 answered that by adding the Workflow tool as the second implementation
+and making it the default; herdr stays as the fallback for a supervised pane, a
+session outliving the turn, and anything needing a real terminal. So the seam
+now carries two implementations rather than one, which is the only way its
+design gets tested by something other than argument. What that surfaced is
+written down in `providers/README.md`: the verbs do not map one-to-one, and
+`watch` in particular promises a read of a run journal rather than the live
+view and blocking wait herdr's offers — declared as a gap instead of
+approximated.
+
+The honest reading is still that layer 3, the provider system, is the least
+settled of the three, and that the dispatch provider is where it is being
+settled first.
 
 ## Which parts are actually novel?
 

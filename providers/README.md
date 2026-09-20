@@ -48,7 +48,11 @@ custom fields + those fields on every project screen — each step
 idempotent, so a re-run converges rather than failing on "already there";
 not a verb of the `tracker` contract itself, since it is a one-time setup
 operation, not part of the fetch/transition/comment/create surface every
-implementation must offer. `dispatch/herdr` is a port of a
+implementation must offer. `dispatch` ships two implementations —
+`dispatch/workflow` (the default) and `dispatch/herdr` (the fallback) —
+and they do not mean the same thing by the same verb; see
+"dispatch: `workflow` and `herdr`" below for the table and the one
+declared gap. `dispatch/herdr` is a port of a
 worktree-dispatch tool's ticket-start flow (`herdr-ticket-start.sh`,
 under `providers/dispatch/herdr/`): its `start` verb opens a Herdr
 worktree, starts a pinned-model Claude agent in it, and hands it the
@@ -257,6 +261,72 @@ A repo that is published should keep `space`, `root_page`,
 `project_feed` and any `[publish.atlassian.feeds]` entries out of its
 committed config and put them in the private copy described under
 "Private config" below, alongside `[tracker.jira] host`.
+
+## dispatch: `workflow` and `herdr`
+
+`dispatch` is the first kind with two implementations, and they do not
+mean the same thing by the same verb. That is what having two is for; it
+is also where this contract's only declared gap lives.
+
+**`workflow`** runs subagents in-process, inside the orchestrating turn,
+under a deterministic script — Claude Code's Workflow tool. It is the
+default because a wave already ran this way: 2026-09-19, seven tickets,
+fourteen agents, zero dispatch failures, against three standing herdr
+dispatch bugs on the other path (a cold boot swallowing the brief, the
+reached-working wait failing on back-to-back starts, a fresh worktree
+hitting the folder-trust dialog). None of the three exists here, because
+none of the machinery they live in exists here.
+
+**`herdr`** opens a pane per ticket in a worktree-dispatch tool. It stays
+registered and working, and it is still the right answer for three things
+the Workflow tool does not do: a human-visible pane during a supervised
+run, a session that outlives the orchestrating turn, and anything that
+needs a real terminal.
+
+### What the three verbs mean for an in-process dispatcher
+
+A subprocess cannot call an in-process tool. So
+`providers/dispatch/workflow/provider.sh` owns the deterministic half of
+dispatch — compose, record, report — and the orchestrating turn owns the
+half only it can perform. Every verb prints one JSON object naming what is
+left for the turn to do, and a run journal outside the repo (see that
+file's header for where) is the only state that outlives the turn.
+
+| Verb | `herdr` | `workflow` |
+| --- | --- | --- |
+| `start` | opens a worktree and pane, starts a pinned-model agent, hands it the brief, transitions the ticket | composes the brief, records the launch request, prints it. No pane, no folder-trust dialog, no worktree — the brief tells the agent to create its own, the way the wave ran |
+| `watch` | `herdr agent wait`, blocking, optionally `--until STATE --timeout MS`; a pane a human can look at | a point-in-time read of the run journal. It does not block, and there is nothing to look at |
+| `stop` | closes the agent's owning workspace, taking the pane with it | records a stop request and prints the `TaskStop` the turn must issue. Nothing is killed, because nothing was spawned |
+
+### The declared gap
+
+**`watch` does not promise what herdr's `watch` promises, and does not
+pretend to.** herdr's is a live view plus a blocking wait. The Workflow
+tool's equivalents are a task notification and a journal, and both are
+delivered to the turn holding the tool — never to a subprocess it spawned.
+So this implementation's `watch` promises exactly one thing: the state
+recorded in the run journal at the moment it is asked. `--until` and
+`--timeout` are refused by name rather than accepted and approximated,
+because a wait here could only ever time out — nothing in this process's
+lifetime writes the state it would be waiting on. A caller that needs to
+block has to *be* the turn, and has to wait on the Workflow task itself.
+
+Two smaller differences, declared for the same reason rather than papered
+over:
+
+- **`start` does not transition the ticket.** herdr's does, as its last
+  step, because by then the agent is running. Here the launch happens
+  after `start` returns, so a transition would move the ticket at request
+  time and claim something that has not happened yet. The lifecycle move
+  stays with the caller.
+- **`start` requires an executor assertion** — `--ticket-file PATH`, whose
+  frontmatter decides, or `--executor agent`. herdr reads the executor
+  from the tracker; this implementation reaches no tracker at all, and an
+  unattended dispatch where nobody checked who the ticket is for is the
+  one failure mode worth a required flag.
+
+Neither implementation is a superset of the other, and a caller written
+against one should read this table before assuming the other will do.
 
 ## Adding an implementation
 

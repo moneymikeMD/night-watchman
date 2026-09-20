@@ -32,7 +32,7 @@
 # publish  — where the wave brief goes. verbs: publish-brief, post-headline
 tracker  = "jira"
 secrets  = "op"
-dispatch = "herdr"
+dispatch = "workflow"
 memory   = "memorygraph"
 publish  = "atlassian"
 
@@ -51,9 +51,18 @@ project = "PROJ"
 # secret. `vault` is the default vault for references that omit one.
 vault = "Private"
 
+[dispatch.workflow]
+# In-process dispatch through Claude Code's Workflow tool — the default.
+# `state_dir` holds one run journal and one composed brief per ticket; it
+# lives outside any repo on purpose. Commented out here because the default
+# ($XDG_STATE_HOME/night-watchman/dispatch-workflow) is right for everyone
+# and a real path in a shipped template is a path copied out unnoticed.
+# state_dir = "/absolute/path/for/run/journals"
+
 [dispatch.herdr]
-# Worktree-per-ticket dispatch. `workspace` names the Herdr workspace a
-# wave's panes are opened in.
+# Worktree-per-ticket dispatch, the fallback: a human-visible pane, and a
+# session that outlives the turn that started it. `workspace` names the Herdr
+# workspace a wave's panes are opened in.
 workspace = "night-watchman"
 
 [dispatch.brief]
