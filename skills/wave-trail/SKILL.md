@@ -65,13 +65,57 @@ that reads unrelated sessions). Walk the log against what actually happened:
 Fix the log, not the story: if the wave diverged from what a row claims, the
 row is wrong, not the wave.
 
+## The run record
+
+The report is the owner's **only** channel into a wave they did not watch.
+Under an in-process dispatch tool there is no pane to look into and no way
+to intervene mid-run, so anything the report omits is simply lost. Do not
+offer a live view as the remedy — observation without a control surface is
+declined on principle, not on effort.
+
+Build the run record at wrap-up, before the Attention reviewer runs.
+
+**Every agent declares its outcome in a structured result.** The dispatch
+brief's result schema must carry at least these fields. A wave whose schema
+drops one cannot report on it, so this is a contract, not a convention:
+
+| field | what it is for |
+| --- | --- |
+| `ticket`, `status` | which unit, and how it ended |
+| `assumed` | every `ASSUMED:` escalation taken, with its reasoning |
+| `denials` | permission refusals hit, and whether the agent routed around or stopped |
+| `failures` | what it could not do |
+| `verify_weakness`, `verify_could_have_failed_before` | whether the verify proved anything |
+| `commits`, `pr_urls`, `worktrees` | where the work landed |
+
+**One row per agent, and stalls are found by absence.** The dispatch tool's
+journal is append-only, one line per event. For the Workflow tool it is
+`<projects-dir>/<slug>/<session-id>/subagents/workflows/wf_*/journal.jsonl`,
+carrying `launched`, then per agent a `started` (`agentId`, `key`, `label`,
+`phase`) and a `result` (`agentId`, `key`, `result`). The per-agent
+conversation sits beside it as `agent-*.jsonl`.
+
+**An agent with a `started` and no matching `result` stalled.** That is the
+single most important thing the owner gave up by not watching, and it stays
+invisible unless the two event streams are joined on `agentId`. Report it by
+label and phase. Never let it show up as a silent absence from the list.
+
 ## The Attention section
 
-Once the log is audited, dispatch one `sonnet`-model agent (not the model
-that ran the wave, kept to one reviewer — see the epic's cost note) with
-read access to the trail and the transcript. It is not redoing the work; it
-scans for what the human should look at:
+Once the log is audited and the run record is built, dispatch one
+`sonnet`-model agent (not the model that ran the wave, kept to one reviewer
+— see the epic's cost note) with read access to the trail, the transcript
+and the run record. It is not redoing the work; it scans for what the human
+should look at:
 
+- an agent that started and never returned a result
+- every `ASSUMED:` escalation, quoted. A decision taken without the owner
+  because stopping to ask would have cost hours is precisely what they would
+  have interrupted, had they been able to
+- a `denials` entry, especially one the agent routed around rather than
+  stopped on
+- a verify flagged `verify_weakness`, or one whose
+  `verify_could_have_failed_before` is false — it proved nothing
 - decisions logged with weak or absent evidence
 - a verify step skipped or claimed without proof in the transcript
 - a choice that looks risky in hindsight (premature, scope-creeping,
@@ -79,8 +123,10 @@ scans for what the human should look at:
 - a gap the owner would miss on a casual skim
 
 The wrap-up report ends with an Attention section: `reviewed by sonnet` on
-its own line, then each flag pointing at a specific row. "No flags" is a
-valid value; omitting the section is not.
+its own line, then each flag pointing at a specific row or agent label. "No
+flags" is a valid value; omitting the section is not. An empty `assumed`
+list across a whole wave is itself worth a flag — report it as suspicious
+rather than as agreement.
 
 ## Reviewing the trail
 

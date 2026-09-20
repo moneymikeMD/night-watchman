@@ -243,12 +243,18 @@ present, for the correction-to-skill-edit loop.
 Report to the user as: verified (moved), verified-partial (what is owed and
 by whom), started (what each agent left on disk), and the one or two
 decisions only the user can make. When a dispatch provider ran the wave,
-name the dispatch tool and how each agent was watched (a `watch` verb
-once a `watch` verb lands; until then `herdr workspace list` agent_status
-polling), so the next reader can tell a provider-dispatched wave from a
-plain-subagent one. Then run this project's session-end memory-capture
-step, if one is configured (see the optional layers in the plugin
-README).
+name the dispatch tool and carry the **run record** — one row per agent,
+plus the collected `ASSUMED:` escalations, `denials` and stalls. See
+`wave-trail`.
+
+Do not report "how each agent was watched" under an in-process dispatch
+tool. Nobody watched: there is no pane and no way to intervene mid-run, and
+a live view is not wanted (offering one has been declined on principle).
+The run record is the owner's only channel into that wave, so treat an
+omission from it as information destroyed rather than detail spared.
+
+Then run this project's session-end memory-capture step, if one is
+configured (see the optional layers in the plugin README).
 
 **Publish the brief** once the wave note is written and committed, if a
 `publish` provider is configured (`provider.sh doctor` shows it
