@@ -21,6 +21,16 @@ cite this timebox.
 ## FORBIDDEN
 @FORBIDDEN@
 
+## BEFORE YOU REPORT
+Before reporting that something is broken, unexplained, failing, or missing —
+in a progress comment, a PR body, or this ticket's hand-back — check the two
+stores that may already know: `grep -ril '<symptom>' docs/known-issues/` and
+`memorygraph recall --query "<one noun>"` (one noun per call; a multi-word
+query returns zero results and reads as "nothing known"). A hit is the
+answer — cite it instead of re-deriving or re-testing it. This applies to a
+failure you reproduced yourself: reproducing it proves it is real, not that
+it is new.
+
 ## REPORT
 Post as a Jira comment on your ticket, then stop: status (DONE / PARTIAL /
 BLOCKED), branch name, head SHA, the commands you actually ran with their
