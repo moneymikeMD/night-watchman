@@ -25,6 +25,16 @@ written from the second adopter (ADOPT) adoption, 2026-09-13.
    `claude plugin enable` or an `enabledPlugins` entry in
    `.claude/settings.json` if the listing shows it disabled or absent.
 
+   In the same listing, confirm `work-order@work-order` is present with an
+   empty `errors`. It is the one plugin dependency, and it carries
+   `issues.py`. A cross-marketplace dependency whose marketplace was never
+   added still reports `ok` and exits 0, so the exit code proves nothing:
+   ```
+   claude plugin marketplace add moneymikeMD/work-order
+   claude plugin list --json \
+     | jq '.[] | select(.id == "work-order@work-order") | {version, errors}'
+   ```
+
 3. **Merge `templates/CLAUDE.md` into the adopter's CLAUDE.md, additively.**
    Append a clearly delimited section (HTML comment markers work well);
    never replace the adopter's own product overview. Copy
@@ -57,7 +67,7 @@ written from the second adopter (ADOPT) adoption, 2026-09-13.
    ISSUES_SOURCE=jira ISSUES_JIRA_PROJECT=<KEY> \
    ISSUES_JIRA_API=<path>/providers/tracker/jira/jira-api.sh \
    NW_CONFIG=<path to private toml> \
-   python3 <path>/skills/to-issues/scripts/issues.py next
+   python3 "$( <path>/scripts/work-order-root.sh --issues-py )" next
    ```
    should list the adopter's open tickets with exit 0. Run the same
    env vars against `issues.py lint` and record the counts — expect

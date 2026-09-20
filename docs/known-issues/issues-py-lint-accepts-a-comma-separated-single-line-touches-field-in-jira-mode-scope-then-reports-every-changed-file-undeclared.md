@@ -12,7 +12,7 @@ slug: issues-py-lint-accepts-a-comma-separated-single-line-touches-field-in-jira
 
 2026-09-14. issues.py _lines() splits a Jira textarea custom field on newlines only (one path per paragraph or hardBreak). A touches value written as one comma-separated line parses as a single bogus path, so lint sees a non-empty touches and passes, waves sees no collision, and scope reports every path the branch changed as UNDECLARED. Seen on tickets filed by hand via the Rovo connector, not jira-import.sh. Fix candidates: lint warns on a touches line containing ', ' or a path that does not exist and is not a glob; or _lines additionally splits on commas. Workaround: edit customfield_10043 so each path is its own paragraph.
 
-Resolved 2026-09-19 by WO-021, in work-order/reference/issues.py — the reference implementation this file moved to under WO-004, not in night-watchman. night-watchman's own skills/to-issues/scripts/issues.py is still byte-identical to the pre-fix file and still carries this defect; WO-010 deletes it in favour of the work-order dependency.
+Resolved 2026-09-19 by WO-021, in work-order/reference/issues.py — the reference implementation this file moved to under WO-004, not in night-watchman. night-watchman's own byte-identical copy carried the defect until WO-010 deleted it; this repo now runs the fixed reference implementation out of the work-order plugin dependency.
 
 lint now rejects a `touches` item that is two or more comma-separated PATHS on
 one line. _lines() was deliberately left alone rather than made to split on

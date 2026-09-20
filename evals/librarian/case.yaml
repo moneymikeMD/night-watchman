@@ -32,7 +32,7 @@ execution:
     \ touches, verify, human_steps, appends, executor, defer_until.\n5. A sentence explaining how those\
     \ six fields are represented when written to Jira — say plainly which of them go over as an ADF (Atlassian\
     \ Document Format) document and which do not (do not claim a single uniform representation covers\
-    \ all six if it doesn't; read providers/tracker/jira/jira-backfill.sh and skills/to-issues/references/frontmatter.md\
+    \ all six if it doesn't; read providers/tracker/jira/jira-backfill.sh and the work-order dependency's bindings/file/BINDING.md\
     \ with Read/Grep if you need to check).\n\nAlso state, in your own words, why an under-specified ticket\
     \ like this one (no acceptance criteria, no touches list, no verify command) cannot go straight to\
     \ a startable stage as-is, and what you would add before it could.\n\nDo not produce any code or fenced\

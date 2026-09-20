@@ -21,6 +21,24 @@ jobs:
       - name: install PyYAML
         run: python3 -m pip install --break-system-packages --quiet pyyaml
 
+      - name: work-order dependency
+        run: |
+          set -euo pipefail
+          # The newest tag satisfying plugin.json's ^1 pin, resolved now so no
+          # version literal lives here to go stale.
+          tag="$(git ls-remote --tags --refs \
+                   https://github.com/moneymikeMD/work-order.git 'v1.*' \
+                 | awk -F/ '{print $NF}' | sort -V | tail -1)"
+          [ -n "$tag" ] || { echo "no v1.* tag on work-order" >&2; exit 1; }
+          echo "resolved work-order $tag"
+          git clone --depth 1 --branch "$tag" \
+            https://github.com/moneymikeMD/work-order.git "$RUNNER_TEMP/work-order"
+          test -f "$RUNNER_TEMP/work-order/reference/issues.py"
+          echo "WORK_ORDER_ROOT=$RUNNER_TEMP/work-order" >> "$GITHUB_ENV"
+
+      - name: the dependency resolves
+        run: scripts/work-order-root.sh --issues-py
+
       - name: shellcheck
         run: |
           set -euo pipefail

@@ -128,8 +128,8 @@ Adapted from mattpocock/skills to-tickets, triage, 2026-09-14.
 
 ### 4. Write each ticket
 
-Use `assets/ticket-template.md`. Full field reference:
-`references/frontmatter.md`.
+Use `assets/ticket-template.md`. Full field reference: work-order's `SPEC.md`
+and `bindings/file/BINDING.md` — `scripts/work-order-root.sh` prints their root.
 
 **Assign each new ticket to an epic, or state in the ticket body why it is an orphan.** Every ticket either belongs to exactly one epic or is deliberately epic-less. A new epic needs an `Artifact:` line naming its countable output. See `skills/tickets-protocol/SKILL.md` for epic rules.
 
@@ -186,8 +186,9 @@ Ported from ptetau/pskills quiz-plan, 2026-09-14.
 ### 6. Validate before you finish
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint issues/
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py waves issues/
+ISSUES_PY="$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)"
+python3 "$ISSUES_PY" lint issues/
+python3 "$ISSUES_PY" waves issues/
 ```
 
 `lint` catches the errors that make a ticket unworkable — a missing `verify`, a

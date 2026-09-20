@@ -102,10 +102,10 @@ assert_rc "bare 'jira-api.sh board' is gated" "2" "$OUT"
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh raw /search" "sess-jiraraw")"
 assert_rc "bare 'jira-api.sh raw' is gated" "2" "$OUT"
 
-OUT="$(run_hook Bash "python3 skills/to-issues/scripts/issues.py board issues/" "sess-issues-board")"
+OUT="$(run_hook Bash "python3 /plugins/work-order/1.3.0/reference/issues.py board issues/" "sess-issues-board")"
 assert_rc "'issues.py board issues/' (this plugin's real invocation) is never gated" "0" "$OUT"
 
-OUT="$(run_hook Bash "python3 skills/to-issues/scripts/issues.py waves issues/" "sess-issues-waves")"
+OUT="$(run_hook Bash "python3 /plugins/work-order/1.3.0/reference/issues.py waves issues/" "sess-issues-waves")"
 assert_rc "'issues.py waves issues/' is never gated" "0" "$OUT"
 
 # Group 4 is what the discriminating mutant (see the header) flips to rc=2.

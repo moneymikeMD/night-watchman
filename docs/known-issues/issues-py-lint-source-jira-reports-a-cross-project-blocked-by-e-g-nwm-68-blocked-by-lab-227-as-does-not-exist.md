@@ -12,7 +12,7 @@ slug: issues-py-lint-source-jira-reports-a-cross-project-blocked-by-e-g-nwm-68-b
 
 Found 2026-09-14. issues.py's Jira source fetches one project (project = KEY AND status not in ...), then derives blocked_by from issuelinks. A Blocks link whose inward issue lives in another project is not in the fetched set, so lint errors 'blocked_by <key> does not exist' and the ticket is treated as unstartable-with-error rather than blocked. Fix: when a blocked_by key has a different project prefix, resolve it with one extra GET /issue/KEY?fields=status (or the slim status nested in the issuelinks payload, which is already there) and treat it as an external blocker: startable iff its statusCategory is Done. Until fixed, the error is cosmetic; waves still exclude the ticket because the link is present.
 
-Resolved 2026-09-19 by WO-021, in work-order/reference/issues.py — the reference implementation this file moved to under WO-004, not in night-watchman. night-watchman's own skills/to-issues/scripts/issues.py is still byte-identical to the pre-fix file and still carries this defect; WO-010 deletes it in favour of the work-order dependency.
+Resolved 2026-09-19 by WO-021, in work-order/reference/issues.py — the reference implementation this file moved to under WO-004, not in night-watchman. night-watchman's own byte-identical copy carried the defect until WO-010 deleted it; this repo now runs the fixed reference implementation out of the work-order plugin dependency.
 
 _jira_shadow_for_blocker() now takes the set of project prefixes the fetch
 actually returned, rather than trusting JIRA_PROJECT_KEY. A blocker outside that

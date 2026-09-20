@@ -57,7 +57,9 @@ different states until something verifies the deploy.
 
 ## Frontmatter contract
 
-Full reference: `to-issues/references/frontmatter.md`. Summary:
+Full reference: work-order's `SPEC.md` and `bindings/file/BINDING.md`, in
+the installed dependency — `scripts/work-order-root.sh` prints its root.
+Summary:
 
 - `verify` — required to reach `completed/`. "Deployed" is not evidence; a
   collector with a bad credential starts cleanly and reports healthy.
@@ -118,14 +120,17 @@ the ticket body.
 ## Tooling
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint  issues/   # file mode
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py board issues/
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py waves issues/
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py next  issues/
+# issues.py ships in the work-order plugin this one depends on:
+ISSUES_PY="$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)"
+
+python3 "$ISSUES_PY" lint  issues/   # file mode
+python3 "$ISSUES_PY" board issues/
+python3 "$ISSUES_PY" waves issues/
+python3 "$ISSUES_PY" next  issues/
 
 # tracker mode, once adopted:
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint  --source jira --jira-project PROJ
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py board --source jira --jira-project PROJ
+python3 "$ISSUES_PY" lint  --source jira --jira-project PROJ
+python3 "$ISSUES_PY" board --source jira --jira-project PROJ
 ```
 
 A ticket that fails lint will fail in an agent's hands too, just later and
