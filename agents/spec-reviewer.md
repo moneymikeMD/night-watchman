@@ -21,7 +21,9 @@ Ticket id, branch, base ref.
 
 1. Run `issues.py scope <ticket-id> <base-ref>` (add `--source jira` when
    the project's tracker is jira). Every path it reports UNDECLARED is a
-   finding — the ticket's `touches`/`appends` did not cover it.
+   finding — the ticket's `touches`/`appends` did not cover it. `issues.py`
+   ships in the work-order plugin this one depends on; get its path from
+   `${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py`.
 2. Read the ticket's Problem, Solution, Decisions, and Out of scope, then
    `git diff <base-ref>...HEAD`.
 3. For each Solution item: present in the diff (done), partially done,

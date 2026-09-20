@@ -5,6 +5,9 @@
   "owner": {
     "name": "Mike Garrett"
   },
+  "allowCrossMarketplaceDependenciesOn": [
+    "work-order"
+  ],
   "plugins": [
     {
       "name": "night-watchman",

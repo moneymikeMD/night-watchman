@@ -58,11 +58,13 @@ If deployment is automatic on merge, drop that stage rather than keep a bucket
 nothing ever sits in.
 
 Write each ticket using `assets/ticket-template.md` (full field reference:
-`references/frontmatter.md`), then validate before you finish:
+work-order's `SPEC.md` and `bindings/file/BINDING.md`), then validate before
+you finish:
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint issues/
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py waves issues/
+ISSUES_PY="$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)"
+python3 "$ISSUES_PY" lint issues/
+python3 "$ISSUES_PY" waves issues/
 ```
 
 `lint` catches the errors that make a ticket unworkable — a missing `verify`, a

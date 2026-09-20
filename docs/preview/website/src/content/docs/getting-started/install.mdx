@@ -21,7 +21,20 @@ claude plugin marketplace add moneymikeMD/night-watchman
 claude plugin install night-watchman@night-watchman
 ```
 
-Both forms install the dependency-free core only. Enable an optional layer
+night-watchman depends on one other plugin: [work-order](https://github.com/moneymikeMD/work-order), which carries
+the ticket contract and its `issues.py`. Add that marketplace first, or the
+dependency silently resolves to nothing — a blocked cross-marketplace
+dependency still reports `ok` and exits 0, and says so only in `errors`:
+
+```
+claude plugin marketplace add moneymikeMD/work-order
+claude plugin marketplace add moneymikeMD/night-watchman
+claude plugin install night-watchman@night-watchman
+claude plugin list --json \
+  | jq '.[] | select(.id == "work-order@work-order") | {version, errors}'
+```
+
+Neither form wires up a provider. Enable an optional layer
 (below) by copying its directory into your project and following that
 layer's own section.
 

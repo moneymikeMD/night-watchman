@@ -18,8 +18,9 @@ or diff anything itself — see the orchestrator/cheap-executor rule in
 
 ```bash
 cat docs/README.md                                                     # if one exists
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py next  issues/   # startable now, tool-as-truth
-python3 ${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py board issues/   # what is where
+ISSUES_PY="$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)"        # the work-order dependency
+python3 "$ISSUES_PY" next  issues/                                     # startable now, tool-as-truth
+python3 "$ISSUES_PY" board issues/                                     # what is where
 head -60 docs/known-issues.md                                          # severity table only, if it exists
 git log -1 --format=%B                                                 # last session's commit body
 memorygraph recall --query "<project>" --limit 8                       # if memorygraph is installed as an optional layer; single keyword, multi-word returns 0
@@ -162,7 +163,7 @@ When the reports come back:
 - New fact about the project → the matching `docs/` topic file, updated in
   place; new "why" → a dated append to the decisions log; problem found,
   not fixed → `${CLAUDE_PLUGIN_ROOT}/scripts/known-issue.sh add`.
-- Run `${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint` before any ticket transition.
+- Run `"$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)" lint` before any ticket transition.
 - Every user answer this session → a row in `ethos.md`'s decision log, and
   a default adjusted if the pattern moved.
 
@@ -278,7 +279,7 @@ wave MUST be started via
 `${CLAUDE_PLUGIN_ROOT}/providers/lib/provider.sh dispatch start
 <ticket-id>` (or the resolved implementation's own `provider.sh start`),
 one ticket per worktree — no size threshold, regardless of how small the
-ticket is. `${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py lint`
+ticket is. `issues.py lint`, from the work-order dependency,
 already guarantees wave siblings touch disjoint paths, so their branches
 merge without conflict.
 

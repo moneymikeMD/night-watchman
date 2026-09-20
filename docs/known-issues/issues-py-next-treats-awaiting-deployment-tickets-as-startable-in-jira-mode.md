@@ -5,14 +5,14 @@ severity: MEDIUM
 status: resolved
 resolved: 2026-09-19
 qualifiers: []
-note: "fixed in work-order/reference/issues.py (WO-021): WORKABLE is now open/in-progress only, and awaiting-deployment resolves a blocked_by so dependents are not stranded; night-watchman's own copy still has it until WO-010"
+note: "fixed in work-order/reference/issues.py (WO-021): WORKABLE is now open/in-progress only, and awaiting-deployment resolves a blocked_by so dependents are not stranded; night-watchman's own copy was deleted by WO-010 and the dependency supplies it"
 tickets: []
 slug: issues-py-next-treats-awaiting-deployment-tickets-as-startable-in-jira-mode
 ---
 
 issues.py next (jira source) lists tickets whose Jira status is Awaiting Deployment as startable, alongside open ones. Seen 2026-09-12 with two tickets parked there after a --no-complete landing with a verify step owed to the owner. A future session-start that fans out 'next' through herdr-ticket-start.sh would re-dispatch them onto fresh branches (the landed branches were deleted, so the branch-exists refusal does not fire). Workaround: read the board's awaiting-deployment section first and skip those ids. Fix candidate: exclude the awaiting-deployment stage from next/waves, matching the file-mode convention where only open/ is startable.
 
-Resolved 2026-09-19 by WO-021, in work-order/reference/issues.py — the reference implementation this file moved to under WO-004, not in night-watchman. night-watchman's own skills/to-issues/scripts/issues.py is still byte-identical to the pre-fix file and still carries this defect; WO-010 deletes it in favour of the work-order dependency.
+Resolved 2026-09-19 by WO-021, in work-order/reference/issues.py — the reference implementation this file moved to under WO-004, not in night-watchman. night-watchman's own byte-identical copy carried the defect until WO-010 deleted it; this repo now runs the fixed reference implementation out of the work-order plugin dependency.
 
 WORKABLE is now ["open", "in-progress"], so neither `next` nor `waves` will
 dispatch an awaiting-deployment ticket. A new RESOLVING = DONE +

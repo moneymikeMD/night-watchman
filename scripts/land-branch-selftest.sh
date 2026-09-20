@@ -13,14 +13,17 @@
 # `<name>-land.lock` by hand to exercise the lifecycle and lock gates.
 #
 # Usage: scripts/land-branch-selftest.sh [path-to-land-branch.sh] [path-to-issues.py]
-# Both default to this repo's current copies. Pass an older revision of
-# EITHER to reproduce the RED failures below against pre-fix code; pass both
-# when the finding spans the two files (test 6 does).
+# land-branch.sh defaults to this repo's copy; issues.py defaults to the one
+# in the work-order plugin this repo depends on, located by
+# scripts/work-order-root.sh. Pass an older revision of EITHER to reproduce
+# the RED failures below against pre-fix code; pass both when the finding
+# spans the two files (test 6 does).
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 LAND_BRANCH="${1:-$HERE/land-branch.sh}"
-ISSUES_PY="${2:-$HERE/../skills/to-issues/scripts/issues.py}"
+ISSUES_PY="${2:-}"
+[ -n "$ISSUES_PY" ] || ISSUES_PY="$("$HERE/work-order-root.sh" --issues-py)"
 KIT="$HERE/lib/kit.sh"
 [ -r "$LAND_BRANCH" ] || { echo "cannot read $LAND_BRANCH" >&2; exit 2; }
 [ -r "$ISSUES_PY" ] || { echo "cannot read $ISSUES_PY" >&2; exit 2; }
@@ -62,7 +65,7 @@ fresh_repo() {
     rm -rf "$d" "$d.git" "$d-land" "$d-land.lock"
     git init -q --bare -b main "$d.git" >/dev/null
     mkdir -p "$d/issues/in-progress" "$d/issues/completed" "$d/scripts/lib" "$d/notes" \
-             "$d/skills/to-issues/scripts"
+             "$d/vendor/work-order/reference"
     (
         cd "$d"
         git init -q -b main
@@ -76,7 +79,7 @@ fresh_repo() {
         cp "$LAND_BRANCH" scripts/land-branch.sh
         cp "$KIT" scripts/lib/kit.sh
         cp "$HERE/land-ack.sh" scripts/land-ack.sh
-        cp "$ISSUES_PY" skills/to-issues/scripts/issues.py
+        cp "$ISSUES_PY" vendor/work-order/reference/issues.py
         chmod +x scripts/land-branch.sh
         printf '%s' "$ticket_body" > issues/in-progress/PROJ-1.md
         # Tracked from the first commit so a later edit shows as "M " at this
@@ -363,7 +366,7 @@ ok = (data.get("id") == "PROJ-1"
       and "## Problem" in body
       and data.get("outcome") == "first line\n---\nlast line")
 print("OK" if ok else "BROKEN: id=%r verify=%r outcome=%r body=%r" % (data.get("id"), data.get("verify"), data.get("outcome"), body))
-' "$WORK/t6-completed.md" "$REPO/skills/to-issues/scripts")
+' "$WORK/t6-completed.md" "$REPO/vendor/work-order/reference")
     if [ "$CHECK" = "OK" ]; then
         ok "test6: an outcome containing a literal '---' line round-trips exactly (issues.py's parser is line-anchored)"
     else
@@ -414,7 +417,7 @@ worker_moved_repo() {
     rm -rf "$d" "$d.git" "$d-land" "$d-land.lock"
     git init -q --bare -b main "$d.git" >/dev/null
     mkdir -p "$d/issues/in-progress" "$d/issues/$dest_stage" "$d/issues/completed" \
-             "$d/scripts/lib" "$d/skills/to-issues/scripts"
+             "$d/scripts/lib" "$d/vendor/work-order/reference"
     (
         cd "$d"
         git init -q -b main
@@ -427,7 +430,7 @@ worker_moved_repo() {
         git remote add origin "$d.git"
         cp "$LAND_BRANCH" scripts/land-branch.sh
         cp "$KIT" scripts/lib/kit.sh
-        cp "$ISSUES_PY" skills/to-issues/scripts/issues.py
+        cp "$ISSUES_PY" vendor/work-order/reference/issues.py
         chmod +x scripts/land-branch.sh
         printf '%s' "$2" > issues/in-progress/PROJ-1.md
         git add -A

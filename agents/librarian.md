@@ -52,7 +52,7 @@ Ticket rules:
   this keeps the contract clear for a fresh reader trying to learn what
   "done" means.
 
-Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/to-issues/scripts/issues.py" lint`
+Run `python3 "$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)" lint`
 before finishing any ticket change (add `--source jira`, or whichever adapter
 flag applies, when the project uses one).
 

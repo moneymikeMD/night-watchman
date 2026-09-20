@@ -9,11 +9,11 @@ project's assigned keys land in that same order — the "keys match ids"
 property the other two scripts both assume (local ticket NNN -> Jira issue
 PROJECT-NNN). See those scripts' headers.
 
-Self-contained copy of to-issues/scripts/issues.py's parse_frontmatter()
+Self-contained copy of work-order's reference/issues.py parse_frontmatter()
 algorithm (same hand-rolled subset: scalars, inline lists, block lists,
 block scalars) — duplicated rather than imported so providers/ stays
 copy-portable into an adopter's own repo independent of where the
-to-issues skill happens to be installed (see providers/README.md: this
+work-order plugin happens to be installed (see providers/README.md: this
 directory is meant to be copied out, not referenced in place).
 
 Usage:
@@ -50,7 +50,7 @@ STAGES = ["open", "in-progress", "awaiting-deployment", "deferred", "completed",
 def parse_frontmatter(text):
     """Return (dict, body). Handles the subset tickets actually use:
     scalars, inline lists, block lists, and block scalars (| and >-).
-    Identical algorithm to to-issues/scripts/issues.py's parse_frontmatter
+    Identical algorithm to work-order's reference/issues.py parse_frontmatter
     — see this file's module docstring for why it is copied, not imported.
 
     Normalises CRLF/CR line endings to LF first (script-reviewer round on
