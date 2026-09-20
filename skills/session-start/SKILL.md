@@ -192,18 +192,40 @@ Adapted from mattpocock/skills resolving-merge-conflicts, 2026-09-14.
 
 ### Split to a fresh session before the main thread runs too long
 
+**End the orchestrator session at every wave boundary and start a new
+orchestrator session for the next wave.** This is a close action, not a
+judgement call — the handoff doc written in wrap-up already carries the
+state a fresh session needs, which is what makes the split cheap.
+
 Cache-read cost grows with accumulated context, so a long-running main
-thread's average per-turn cost creeps up the longer it runs. Two measured
-data points from one project's early operation: a 181-turn session cost
-roughly $49 and was judged acceptable; a later session that ran ~476 turns
-with no split cost roughly double that on cost and nearly triple the turn
-count. Split at a wave/ticket-batch boundary once the main thread's turn
-count is comfortably past the smaller of those two examples — pick a
-concrete number for your own project once you have a couple of measured
-sessions to compare, and revisit it as more data comes in. An
-owner-approved unattended run is not the same decision as whether to split
-at the turn threshold — the two are independent, and the threshold applies
+thread's average per-turn cost creeps up the longer it runs. **Measure that
+with cost per orchestrator turn, not with the turn count.** A turn count
+moves with how much work a wave contains, so it says nothing on its own,
+and where fan-out is dispatched in-process a naive turn count also sweeps
+in the agents.
+
+Two waves measured 2026-09-19 and 2026-09-20, one continuous orchestrator
+session across both, no split at the boundary:
+
+| | wave 1 | wave 2 |
+| --- | --- | --- |
+| orchestrator cost | $127.04 | $164.37 |
+| orchestrator turns | 824 | 465 |
+| **USD per orchestrator turn** | **0.154** | **0.353** |
+
+Turns fell 44% while cost per turn rose 2.29x. Fewer, far more expensive
+turns is what an unreset context looks like — and note that the raw turn
+count fell, so a turn-count threshold would have read this as improving.
+
+An owner-approved unattended run is not the same decision as whether to
+split at the boundary — the two are independent, and the split applies
 regardless of whether the run itself was pre-approved.
+
+**Never restart mid-wave.** Where agents are dispatched in-process, a
+session restart tears down the orchestrator and every in-process sibling
+with it, so a restart cannot be dispatched as a unit of work *inside* the
+wave it would kill. The split belongs at the boundary, after the wave has
+finished landing.
 
 State the exit predicate as something checkable before the first iteration
 of an unattended run. A plateau is not a stop — keep pushing past it, and
