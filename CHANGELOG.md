@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.1.0](https://github.com/moneymikeMD/night-watchman/compare/v1.0.0...v1.1.0) (2026-09-20)
+
+
+### Features
+
+* **wave-trail:** make the end-of-wave report carry the run record ([#35](https://github.com/moneymikeMD/night-watchman/issues/35)) ([41f23b6](https://github.com/moneymikeMD/night-watchman/commit/41f23b6d46c2b5a683c7372de9e0b674fc6f7ef5))
+
 ## [1.0.0](https://github.com/moneymikeMD/night-watchman/compare/v0.11.0...v1.0.0) (2026-09-20)
 
 
