@@ -11,15 +11,16 @@ description: Generated from every hooks/*.sh header (excluding selftests), plus 
 bash-result-shunt.sh — Claude Code PreToolUse hook for Bash. Gates the
 largest known-noisy Bash tool results (uncapped `git log`, unfiltered
 `jira-api.sh board`/`raw` search pulls) before they reach the calling
-model's context.
+model's context, and optionally redacts secret-shaped values out of a
+command's OUTPUT.
 
 ```text
-Usage: not a CLI. Fed the PreToolUse payload on stdin; reads `.tool_name`
-and `.tool_input.command`. Nothing is ever summarised and no command output
-is ever inspected — PreToolUse fires BEFORE the command runs, so the only
-size signal available is the command string itself. Deliberately less
-powerful than read-shunt.sh; see memory-graph on why no hook primitive can
-substitute a command's real output.
+Usage: not a CLI, with one exception: `--redact-stream` filters stdin to
+stdout as the secret redactor, and is how the rewritten command re-enters
+this script. Otherwise fed the PreToolUse payload on stdin; reads
+`.tool_name` and `.tool_input.command`. The HOOK never sees command output:
+PreToolUse fires BEFORE the command runs, so the command string is the only
+size signal available for gating.
 ```
 
 ### hooks/guard-fs-writes.sh
