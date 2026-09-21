@@ -407,11 +407,10 @@ strip_heredocs() {
   _sh_i=0
   _sh_q=""
   _sh_stage_start=0
-  # Multiple `<<DELIM` operators can appear on one line, attached to the same
-  # command (`cat <<A1 <<B1`): bash reads their bodies in order, right after
-  # that line. Queue each one instead of consuming its body immediately, so a
-  # second operator on the same line is still recognised as one, not folded
-  # into the first heredoc's "rest of line" text.
+  # Multiple `<<DELIM` operators can appear on one line (`cat <<A1 <<B1`);
+  # bash reads their bodies in order after the line ends. Queue each one
+  # here instead of consuming its body inline, so a later operator on the
+  # same line is still recognised, not folded into "rest of line" text.
   HD_DELIM=()
   HD_DASH=()
   _sh_word_start=1
@@ -576,12 +575,10 @@ strip_heredocs() {
                 _sh_i=$((_sh_i + 2))
                 _sh_word_start=0
               else
-                # Queue it rather than consuming its body here: a second
-                # `<<DELIM` can follow on the same line (`cat <<A1 <<B1`),
-                # and it must still be scanned as an operator, not folded
-                # into "rest of this line" as inert text. Bodies are read,
-                # in order, once the line-ending newline is reached — see
-                # _sh_drain_heredoc_queue.
+                # Queue rather than consume inline: a second `<<DELIM` can
+                # follow on the same line and must still be scanned as an
+                # operator. Bodies drain, in order, at the line's newline
+                # (_sh_drain_heredoc_queue).
                 _sh_out="$_sh_out${_sh_s:$_sh_i:$((_sh_k - _sh_i))}"
                 _sh_i=$_sh_k
                 _sh_word_start=0

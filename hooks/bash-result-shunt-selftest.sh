@@ -54,6 +54,10 @@
 #      a pure optimisation, pinned by byte-identical output over a 4.2MB
 #      corpus (4.12s to 0.26s), not by any assertion here.
 #
+# strip_heredocs() has its own mutant, outside the redaction table: in
+# _sh_drain_heredoc_queue, change `if [ "$_sh_found_term" -eq 0 ]; then` to
+# `if false; then` — expect the LAB-187b assertion alone red (1 failure).
+#
 # Exit 0 if every assertion passes, 1 on the first failure summary printed.
 
 set -u
@@ -388,6 +392,20 @@ assert_rc "[negative control, LAB-187a] a REAL gated command after two stacked h
 UNTERMINATED_HEREDOC_CMD="$(printf 'cat <<EOF\ngit log\nsome body with no closing EOF delimiter')"
 OUT="$(run_hook Bash "$UNTERMINATED_HEREDOC_CMD" "sess-unterminated-heredoc")"
 assert_rc "[discriminating, LAB-187b] strip_heredocs() restores an unterminated heredoc's body verbatim, so a gated shape inside it still gates" "2" "$OUT"
+
+# LAB-187 (a) widened the operator line's TAIL from "copied verbatim" to
+# "scanned by the main state machine", so a second command on that same
+# line (after a `;`) is now recognised, quotes and all — pin it.
+TAIL_SCANNED_CMD="$(cat <<'EOF'
+cat <<'A' ; ssh h <<'B'
+harmless
+A
+git log
+B
+EOF
+)"
+OUT="$(run_hook Bash "$TAIL_SCANNED_CMD" "sess-tail-scanned")"
+assert_rc "[regression guard, LAB-187a] a second, ';'-joined command on a heredoc operator line's tail is scanned, not copied verbatim — its own executor heredoc still gates" "2" "$OUT"
 
 REGRESSION_COMMIT_CMD="$(cat <<'EOF'
 git commit -F - <<'EOF2'
