@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.2.1](https://github.com/moneymikeMD/night-watchman/compare/v1.2.0...v1.2.1) (2026-09-21)
+
+
+### Bug Fixes
+
+* remove the landed branch's worktree with git, not only through herdr ([#53](https://github.com/moneymikeMD/night-watchman/issues/53)) ([e8e3cf5](https://github.com/moneymikeMD/night-watchman/commit/e8e3cf573814bd6ddea309561c57e343b58defd8))
+
 ## [1.2.0](https://github.com/moneymikeMD/night-watchman/compare/v1.1.0...v1.2.0) (2026-09-21)
 
 
