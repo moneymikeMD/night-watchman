@@ -1035,8 +1035,8 @@ deleted. `local` in bash is DYNAMICALLY scoped, not lexical: a helper
 called from the declaring function sees and writes the declaring
 function's copy, and a recursive re-entry gets a fresh copy with the
 outer one restored on return. That is exactly the property the frame
-stack was built to provide. Net −72 lines (1328 → 1256; 21 insertions,
-93 deletions).
+stack was built to provide. Net −74 lines in the hook (1328 → 1254;
+19 insertions, 93 deletions).
 
 **The specific risk, hunted and cleared.** `local` would be wrong if a
 helper called from one of these bodies relied on a global outliving the
@@ -1061,10 +1061,20 @@ stack never saved them either. Nothing about this change touches them.
 **Evidence.** Both shapes were kept side by side and run against the
 same oracles.
 
-- Selftest: 135 assertions, 135 passed, on both shapes. Baseline
-  (frame stack) and candidate (`local`) counts are identical, so the
-  verify's "no fewer assertions than NWM-118 left it at" holds at
-  equality.
+- Selftest, and the reason it was not enough on its own: the 135
+  behavioural assertions pass on both shapes, so the verify's "no fewer
+  assertions than NWM-118 left it at" holds at equality — but equality
+  is also the defect. Every one of those 135 passes against the parent
+  commit unchanged, so not one of them can tell the two shapes apart,
+  and a verify made only of them would have proved nothing about this
+  change. Three assertions were added that do discriminate (136–138).
+  They audit the source statically: every `_ss_` / `_sct_` / `_sdp_`
+  variable assigned anywhere in the hook is declared `local` in its
+  owning scanner, none is assigned at file scope, and `tokenize_quoted`
+  / `split_unquoted_segments` are called only from the scanner whose
+  `local` they write. Against the parent commit's hook, through the
+  selftest's own `GUARD_SH` override: 135 passed, 3 failed, exit 1.
+  Against this one: 138 passed, exit 0.
 - Four bypass shapes plus controls, re-run explicitly on the `local`
   shape: assertions 82–89 (`bash -c "true" rm -rf <outside>`,
   `sh -c "x" mv`, `eval true rm -rf`, a second `find -exec rm -rf`
@@ -1088,11 +1098,18 @@ same oracles.
   and 47 allow under the baseline) produced ZERO differences in exit
   code or stderr between the two shapes.
 - Negative control, which is what makes the above non-vacuous: a copy
-  of the `local` shape with the `local` declarations stripped and
-  nothing else changed fails 8 of the 135 assertions — 82, 83, 85, 86,
-  87, 88, 89 and the nested-stderr oracle 97 — and diverges from the
-  baseline on 8 of the 84 differential commands. The oracles do
-  discriminate; they are not passing because they cannot fail.
+  of the `local` shape with the 12 `local` declarations stripped and
+  nothing else changed fails 8 of the 135 behavioural assertions — 82,
+  83, 85, 86, 87, 88, 89 and the nested-stderr oracle 97 — plus the new
+  136, and diverges from the baseline on 8 of the 84 differential
+  commands. The oracles do discriminate; they are not passing because
+  they cannot fail.
+- Drift control, which is the failure this change actually has to
+  survive: a copy with `_ss_fp=""` removed from one `local` line and
+  nothing else changed — one forgotten name, the exact shape of the
+  frame-list drift argued against below. All 135 behavioural assertions
+  still pass. Only 136 fails. Nothing in this repo but that assertion
+  notices.
 
 **Timing, measured on this Mac, bash 3.2.57, arm64.** Mean wall time
 per invocation over 3x40 runs of an ordinary allowed command (`ls -la`):
@@ -1114,11 +1131,23 @@ lists are maintained by hand and the compiler cannot check them. Two
 drifts already existed: `_ss_fp` (the `for _ss_fp in
 "${_ss_find_paths[@]}"` loop variable) was never in `_SS_FRAME_VARS`,
 and the ticket records `_sct_seg` having been missing from
-`_SCT_FRAME_VARS` before it was added. Each such omission is a silent
-re-entrancy hole of precisely the class NWM-118 was opened to fix. With
-`local`, the declaration sits at the top of the function it belongs to,
-one screen from the body, and bash enforces it. There is no list to
-drift.
+`_SCT_FRAME_VARS` before it was added.
+
+`_ss_fp`'s omission was latent, not live, and the distinction is worth
+being exact about because a reader who checks will find it. Its loop
+body reaches only `check_and_block_target`, which reaches
+`target_is_outside` and `block` and re-enters no scanner, and bash
+snapshots a `for` list at loop entry, so no current call path could
+have observed the omission. That does not weaken the argument, it is
+the argument: nothing in the repo distinguished the latent omission
+from a live one, the difference is decided by call paths that later
+edits move, and a name is silently reclassified from harmless to
+load-bearing the day someone adds a re-entrant call under that loop.
+With `local`, the declaration sits at the top of the function it
+belongs to, one screen from the body, and bash enforces it. There is
+no list to drift — and since this change,
+`hooks/guard-fs-writes-selftest.sh` assertion 136 fails if a scanner
+variable ever goes undeclared again.
 
 **Left in place deliberately.** The `_SS_OPAQUE_STACK` push/pop pair is
 now redundant: a nested `scan_segment` gets its own `local _ss_opaque`,

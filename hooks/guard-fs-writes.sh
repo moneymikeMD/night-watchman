@@ -685,9 +685,10 @@ scan_dollar_parens_in_word() {
   return 0
 }
 
-# tokenize_quoted: quote-AWARE word splitting into the global array _ss_words.
-# A quoted span joins the CURRENT word rather than ending it at internal
-# whitespace; an unterminated quote consumes to end-of-segment, not forever.
+# tokenize_quoted: quote-AWARE word splitting into _ss_words, which scan_segment
+# declares `local` — call it only from scan_segment's dynamic extent. A quoted
+# span joins the CURRENT word rather than ending it at internal whitespace; an
+# unterminated quote consumes to end-of-segment, not forever.
 tokenize_quoted() {
   _tq_line="$1"
   _ss_words=()
