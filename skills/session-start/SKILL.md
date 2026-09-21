@@ -145,6 +145,13 @@ When the reports come back:
 - On any agent-executed ticket, run `spec-reviewer` against the ticket and
   its branch before landing. LAND AFTER FIXES or DO NOT LAND stops
   land-branch until the branch's own worker addresses the findings.
+- **A spec-review brief carries the ticket-specific concerns only.** The
+  repo's required checks are assumed, not listed: `spec-reviewer` discovers
+  and runs them itself before any verdict, so enumerating them in the brief
+  adds nothing and rots the moment one is forgotten. Reviewing to an
+  enumerated list is what let NWM-120 land red on 2026-09-19 — three
+  reviewers answered every question asked, and the unasked one turned main
+  red. Ask about what is peculiar to this ticket; never about the gates.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh` lands a finished branch:
   moves the ticket to Awaiting Deployment, merges, lints the merged tree,
   pushes, and moves the ticket to Completed (file-mode directory moves, or
