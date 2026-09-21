@@ -593,15 +593,17 @@ else
     fi
 fi
 echo "  4. git push origin HEAD:$TARGET_BRANCH (from the integration worktree; '$MAIN_WORKTREE' is not fast-forwarded automatically)"
+WT_PLAN=" git worktree remove $BRANCH_WT, then"
+[ -n "$BRANCH_WT" ] && [ "$BRANCH_WT" != "$MAIN_WORKTREE" ] || WT_PLAN=""
 if [ "${HERDR_ENV:-}" = "1" ]; then
     if [ "$CLOSING" = 1 ]; then
         echo "  5. (HERDR_ENV=1) write the worker's closing state durably ('$HANDOFF_FILE', executor '${EXECUTOR:-unknown}'), read it back, notify the orchestrator best-effort (pane '${ORCH_PANE:-none}')"
     else
         echo "  5. (HERDR_ENV=1) no hand-off file found for '$BRANCH' — no closing state is written and nobody is notified"
     fi
-    echo "  6. remove the herdr worktree workspace for branch '$BRANCH' (HERDR_ENV=1), then git branch -d '$BRANCH'"
+    echo "  6. remove the herdr worktree workspace for branch '$BRANCH' (HERDR_ENV=1), then$WT_PLAN git branch -d '$BRANCH'"
 else
-    echo "  5. git branch -d '$BRANCH' (HERDR_ENV not set — no worktree removal)"
+    echo "  5.$WT_PLAN git branch -d '$BRANCH' (HERDR_ENV not set — no herdr workspace is touched)"
 fi
 
 if [ "$DRY_RUN" = 1 ]; then
@@ -1102,7 +1104,7 @@ elif [ "${HERDR_ENV:-}" = "1" ]; then
             echo "Removing herdr worktree workspace '$WS_ID' (matched by branch '$BRANCH')..."
             herdr worktree remove --workspace "$WS_ID" || warn "herdr worktree remove failed — remove it by hand"
         elif [ "$MATCH_COUNT" = "1" ]; then
-            echo "branch '$BRANCH' has a herdr worktree but no workspace open on it — nothing to remove."
+            echo "branch '$BRANCH' has a herdr worktree with no workspace open on it — git removes it below."
         elif [ -n "$MATCH_COUNT" ] && [ "$MATCH_COUNT" -gt 1 ] 2>/dev/null; then
             echo "more than one herdr worktree matches branch '$BRANCH' — skipping removal (not guessing)."
         else
@@ -1111,6 +1113,21 @@ elif [ "${HERDR_ENV:-}" = "1" ]; then
     fi
 else
     echo "HERDR_ENV not set — skipping herdr worktree removal."
+fi
+
+# NWM-149: `herdr worktree remove` needs a workspace id and a landed worktree
+# rarely still has one, so git is the only path that removes it — or the branch.
+if [ -n "$BRANCH_WT" ] && [ "$BRANCH_WT" != "$MAIN_WORKTREE" ] && [ -e "$BRANCH_WT" ]; then
+    case "$(pwd -P)/" in
+        "$BRANCH_WT"/*) warn "worktree '$BRANCH_WT' holds branch '$BRANCH' but this script is running inside it — left in place" ;;
+        *)
+            if WT_RM=$(git -C "$MAIN_WORKTREE" worktree remove "$BRANCH_WT" 2>&1); then
+                echo "removed worktree '$BRANCH_WT'."
+            else
+                warn "could not remove worktree '$BRANCH_WT' — left in place: $WT_RM"
+            fi
+            ;;
+    esac
 fi
 
 if git branch -d "$BRANCH" >/dev/null 2>&1; then
