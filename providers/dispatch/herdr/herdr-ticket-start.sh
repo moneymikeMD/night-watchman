@@ -251,10 +251,13 @@ if [ "$EXECUTOR" = mixed ]; then
 
 ## MIXED TICKET — STOP AT AWAITING DEPLOYMENT
 This ticket's executor is mixed: only the agent portion runs unattended. Work
-it to the verify block, commit, push your branch and open the PR as usual,
-then STOP — do not land it and do not expect it to be landed for you. Leave
-it at Awaiting Deployment for a person to run this ticket's human_steps and
-land it from there."
+it to the verify block, commit, push your branch and open the PR as usual.
+Before you stop, write the \`## Human run list\` section in
+.night-watchman/closing-state.md — it is required for a mixed ticket (this
+one carries human_steps a person must run), and it is what lets
+land-branch.sh move this ticket through Awaiting Deployment to Completed the
+same as any other ticket once it lands. Then STOP and report — do not
+transition the ticket and do not land it yourself."
 fi
 
 # `open_workspace_id` is null when the worktree exists with no workspace open
