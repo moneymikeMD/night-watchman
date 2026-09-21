@@ -2,6 +2,31 @@
 
 All notable changes to this project are documented here.
 
+## [1.2.0](https://github.com/moneymikeMD/night-watchman/compare/v1.1.0...v1.2.0) (2026-09-21)
+
+
+### Features
+
+* cache WebFetch results and reuse them only on a 304 revalidation ([3eaad02](https://github.com/moneymikeMD/night-watchman/commit/3eaad02b9b2ec45c7604c864c7c54a8027ccb1e7))
+* consume ai-toolkit skill-routing with prompt fixtures for this repo's skills ([#52](https://github.com/moneymikeMD/night-watchman/issues/52)) ([cd77523](https://github.com/moneymikeMD/night-watchman/commit/cd775232a6ecc202b8d9ada58fd02354d0f6bbfe))
+* register memory and release MCP servers in .mcp.json ([68569fb](https://github.com/moneymikeMD/night-watchman/commit/68569fba74f00fd62cd02c184d1c748c5d04d359))
+* spec-reviewer runs the repo's discovered required checks before any verdict ([2357068](https://github.com/moneymikeMD/night-watchman/commit/23570687f71f37635c5743a906adf678e5aa9b95))
+
+
+### Bug Fixes
+
+* **herdr-dispatch:** correct the MIXED TICKET brief text (LAB-211 review) ([426e60c](https://github.com/moneymikeMD/night-watchman/commit/426e60c2ad2094e49a5719bc50b6772010dd1c6a))
+* **herdr-dispatch:** dispatch executor:mixed tickets, stop the brief at Awaiting Deployment (LAB-211) ([ae65d30](https://github.com/moneymikeMD/night-watchman/commit/ae65d30292267cca1617b15c4678d9e0a52e3d7b))
+* **hooks:** address LAB-187 review round-2 findings ([dd42b96](https://github.com/moneymikeMD/night-watchman/commit/dd42b9627ca3e8dfa246c5b4c12c63942d3c03d5))
+* **hooks:** correct the merged mutant-table counts after the NWM-136 rebase ([0b46f39](https://github.com/moneymikeMD/night-watchman/commit/0b46f399bf862b634580968cabf9962138765193))
+* **hooks:** strip_heredocs handles multiple heredocs on one line (LAB-187) ([1bdb839](https://github.com/moneymikeMD/night-watchman/commit/1bdb839a014fdfec5fb2875f93ff100f16012251))
+* install from the moneymike-plugins marketplace ([ff6b365](https://github.com/moneymikeMD/night-watchman/commit/ff6b365de41bea837e91102aeefaf364191d306d))
+* install from the moneymike-plugins marketplace ([#40](https://github.com/moneymikeMD/night-watchman/issues/40)) ([8301992](https://github.com/moneymikeMD/night-watchman/commit/83019926cfa267a38cb0ba3d90003e8f7c8d5956))
+* make the Bash output redactor survive a kill and a line continuation ([af06b7f](https://github.com/moneymikeMD/night-watchman/commit/af06b7f3ba40d1e2a438bdc0e7c942d897102305))
+* never cache a WebFetch response that is not page content ([08ea321](https://github.com/moneymikeMD/night-watchman/commit/08ea3213c3c563524b1172805140268551ebb3f8))
+* redact secret-shaped values in Bash command output (NWM-136) ([f34f0fa](https://github.com/moneymikeMD/night-watchman/commit/f34f0fa1e2bb712f3cbada7680c7be2ca064c644))
+* retry the jira closing-state read-back on Jira's read-after-write window ([3e80cea](https://github.com/moneymikeMD/night-watchman/commit/3e80cea62f665b6b62fa1294209978239b89f7c5))
+
 ## [1.1.0](https://github.com/moneymikeMD/night-watchman/compare/v1.0.0...v1.1.0) (2026-09-20)
 
 
