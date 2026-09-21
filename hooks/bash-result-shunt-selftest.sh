@@ -30,11 +30,12 @@
 #   ./bash-result-shunt-selftest.sh                                         # expect PASS
 #
 # The NWM-136 redaction group was proven discriminating the same way. Every
-# count below was re-measured 2026-09-21 against the current fixtures, with
-# 104 green unmutated; D's earlier figure of 4 was wrong and never
-# reproducible, which is why the whole table was re-run rather than extended:
+# count below is the redaction group's own, re-measured 2026-09-21 against the
+# current fixtures, with 108 green unmutated; D's earlier figure of 4 was wrong
+# and never reproducible, which is why the table was re-run, not extended:
 #   A  the pre-change script (`git show <parent>:hooks/bash-result-shunt.sh`)
-#      — 37 red. It has no --redact-stream at all.
+#      — 37 red. It has no --redact-stream at all. That script also predates
+#      LAB-187, so the run totals 38 red, the 38th being LAB-187a.
 #   B  `name_is_secret` neutralised to `return 0` — 7 red, all name-only
 #      cases. Written first WITHOUT those cases, this mutant passed clean:
 #      every other fixture value also matched by shape or by prefix, so the
@@ -53,6 +54,10 @@
 #   J  the PFXRE fast path in `scrub_tokens` deleted — 0 red, expected: it is
 #      a pure optimisation, pinned by byte-identical output over a 4.2MB
 #      corpus (4.12s to 0.26s), not by any assertion here.
+#
+# strip_heredocs() has its own mutant, outside the redaction table: in
+# _sh_drain_heredoc_queue, change `if [ "$_sh_found_term" -eq 0 ]; then` to
+# `if false; then` — expect the LAB-187b assertion alone red (1 failure).
 #
 # Exit 0 if every assertion passes, 1 on the first failure summary printed.
 
@@ -249,6 +254,9 @@ assert_rc "[discriminating] capped jira-api.sh board stage followed by an uncapp
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh board --limit 20; ./scripts/api/jira-api.sh board --limit 10" "sess-mixed-5")"
 assert_rc "[negative control] capped jira-api.sh board stage followed by ANOTHER capped stage is not gated" "0" "$OUT"
 
+# Heredoc-body cases from here through the hyphenated-delimiter assertion:
+# function under test is strip_heredocs() (hooks/bash-result-shunt.sh).
+
 GITCOMMIT_HEREDOC_CMD="$(cat <<'EOF'
 git commit -F - <<'EOF2'
 fix detector
@@ -352,6 +360,53 @@ EOF
 )"
 OUT="$(run_hook Bash "$HYPHEN_DELIM_CMD" "sess-hyphen-delim")"
 assert_rc "[discriminating, MEDIUM] a real gated command after a heredoc with a hyphenated delimiter ('EOF-1') is gated (delimiter is a shell word, not [A-Za-z0-9_] only)" "2" "$OUT"
+
+# LAB-187 (a): two `<<DELIM` operators on one line, attached to one command
+# (`cat <<A1 <<B1`) — strip_heredocs() must recognise the second as an
+# operator, not fold it into the first heredoc's "rest of line" text.
+TWO_HEREDOCS_ONE_LINE_CMD="$(cat <<'EOF'
+cat <<'A1' <<'B1'
+harmless
+A1
+git log
+B1
+EOF
+)"
+OUT="$(run_hook Bash "$TWO_HEREDOCS_ONE_LINE_CMD" "sess-two-heredocs-one-line")"
+assert_rc "[discriminating, LAB-187a] gated prose inside the SECOND of two heredocs stacked on one line ('cat <<A1 <<B1') is not gated" "0" "$OUT"
+
+TWO_HEREDOCS_THEN_REAL_CMD="$(cat <<'EOF'
+cat <<'A1' <<'B1'
+harmless
+A1
+prose
+B1
+git log
+EOF
+)"
+OUT="$(run_hook Bash "$TWO_HEREDOCS_THEN_REAL_CMD" "sess-two-heredocs-then-real")"
+assert_rc "[negative control, LAB-187a] a REAL gated command after two stacked heredocs on one line still gates" "2" "$OUT"
+
+# LAB-187 (b): strip_heredocs() restores an UNTERMINATED heredoc's body
+# verbatim (rather than discarding it), so it can still be gated — a
+# deliberate false-positive-over-false-negative choice, asserted by name.
+UNTERMINATED_HEREDOC_CMD="$(printf 'cat <<EOF\ngit log\nsome body with no closing EOF delimiter')"
+OUT="$(run_hook Bash "$UNTERMINATED_HEREDOC_CMD" "sess-unterminated-heredoc")"
+assert_rc "[discriminating, LAB-187b] strip_heredocs() restores an unterminated heredoc's body verbatim, so a gated shape inside it still gates" "2" "$OUT"
+
+# LAB-187 (a) widened the operator line's TAIL from "copied verbatim" to
+# "scanned by the main state machine", so a second command on that same
+# line (after a `;`) is now recognised, quotes and all — pin it.
+TAIL_SCANNED_CMD="$(cat <<'EOF'
+cat <<'A' ; ssh h <<'B'
+harmless
+A
+git log
+B
+EOF
+)"
+OUT="$(run_hook Bash "$TAIL_SCANNED_CMD" "sess-tail-scanned")"
+assert_rc "[regression guard, LAB-187a] a second, ';'-joined command on a heredoc operator line's tail is scanned, not copied verbatim — its own executor heredoc still gates" "2" "$OUT"
 
 REGRESSION_COMMIT_CMD="$(cat <<'EOF'
 git commit -F - <<'EOF2'
