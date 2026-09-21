@@ -32,6 +32,10 @@ Shared-lib conventions and the shipped-bug rules for scripts/ — bash 3.2 limit
 
 The docs/ routing table and the ticket workflow — status-is-a-directory-move (or a tracker transition, if one is adopted), the frontmatter/field contract, body-vs-progress-note rules, and the UNVERIFIED discipline. Load for session wrap-up, ticket filing, ticket transitions, or any durable-knowledge capture.
 
+## to-issues-mine
+
+Mine a settled planning, grilling, or design conversation into a decision-list JSON conforming to work-order's decision-list/FORMAT.md — the mining half of to-issues, split so that ticket authoring lives in work-order's emit-tickets skill instead of here. Use whenever a grilling session ends and the decisions need to leave the conversation as data, before anything decides how they become ticket files.
+
 ## to-issues
 
 Turn a finished planning, grilling, or design conversation into independently-workable tickets as frontmatter Markdown files on disk, so the session can be closed and the work picked up cold by parallel agents in git worktrees. Use this whenever a grilling session ends, whenever the user says "turn this into tickets/issues/a work log", "write this up so I can start a fresh session", "break this into work I can parallelise", or after any long discussion that settled a bunch of decisions and now needs to survive the context window. Also use it when a plan already exists but the tickets are too coupled or too vague for an agent to execute without asking questions.

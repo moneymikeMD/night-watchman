@@ -78,6 +78,14 @@ jobs:
       - name: known-issues index is not drifted
         run: scripts/known-issue.sh lint
 
+      - name: generated reference docs are not drifted
+        run: |
+          set -uo pipefail
+          scripts/gen-reference-docs.sh --check && exit 0
+          rc=$?
+          echo "::error::Reference pages are stale. Run scripts/gen-reference-docs.sh (no --check) and commit the result." >&2
+          exit "$rc"
+
   comment-lint:
     runs-on: ubuntu-latest
     steps:
