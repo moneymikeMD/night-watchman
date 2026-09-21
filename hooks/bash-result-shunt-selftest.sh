@@ -29,19 +29,30 @@
 #   BASH_SHUNT_SCRIPT="$SCRATCH/mutant.sh" ./bash-result-shunt-selftest.sh   # expect FAIL (6 red)
 #   ./bash-result-shunt-selftest.sh                                         # expect PASS
 #
-# The NWM-136 redaction group was proven discriminating the same way, against
-# four mutants, all run 2026-09-20 (93 green unmutated):
+# The NWM-136 redaction group was proven discriminating the same way. Every
+# count below was re-measured 2026-09-21 against the current fixtures, with
+# 104 green unmutated; D's earlier figure of 4 was wrong and never
+# reproducible, which is why the whole table was re-run rather than extended:
 #   A  the pre-change script (`git show <parent>:hooks/bash-result-shunt.sh`)
-#      — 29 red. It has no --redact-stream at all.
+#      — 37 red. It has no --redact-stream at all.
 #   B  `name_is_secret` neutralised to `return 0` — 7 red, all name-only
 #      cases. Written first WITHOUT those cases, this mutant passed clean:
 #      every other fixture value also matched by shape or by prefix, so the
 #      allowlist was dead code no assertion reached. That is why
 #      `NAME=hunter2` exists.
 #   C  the pass-through `print scrub_tokens(line)` replaced by `print ""`, a
-#      redactor that eats all output — 12 red, caught by the negatives and by
+#      redactor that eats all output — 17 red, caught by the negatives and by
 #      the surviving-control argument every assert_absent carries.
-#   D  `is_opaque`'s length gate inverted so every value is opaque — 4 red.
+#   D  `is_opaque`'s length gate inverted so every value is opaque — 2 red.
+#   E  `is_opaque`'s `return (hasd && hasa)` forced to `return 1` — 1 red.
+#      Passed clean until the long-single-class negative was added.
+#   F  the INT/TERM/EXIT trap deleted from the rewrite — 3 red.
+#   G  the blank line before the wrapper's closing brace deleted — 2 red.
+#   H  `allow_exit`'s `split_segments` handed raw $CMD again — 1 red.
+#   I  the NAME boundary set narrowed back to space/tab only — 2 red.
+#   J  the PFXRE fast path in `scrub_tokens` deleted — 0 red, expected: it is
+#      a pure optimisation, pinned by byte-identical output over a 4.2MB
+#      corpus (4.12s to 0.26s), not by any assertion here.
 #
 # Exit 0 if every assertion passes, 1 on the first failure summary printed.
 
@@ -354,11 +365,9 @@ EOF
 OUT="$(run_hook Bash "$REGRESSION_COMMIT_CMD" "sess-regression-commit-prose")"
 assert_rc "[regression guard] gated prose inside a git-commit heredoc body is still not gated after the rework" "0" "$OUT"
 
-# --- NWM-136: secret redaction in command OUTPUT --------------------------
-#
-# Every value below is a fixture invention. None is, or ever was, a real
-# credential: FIXTURE/FAKE appears inside each one so a future reader and a
-# future secret scanner can both tell at a glance.
+# --- NWM-136: secret redaction in command OUTPUT. Every value below is a
+# fixture invention, never a real credential: FIXTURE/FAKE appears inside
+# each one so a reader and a secret scanner can both tell at a glance.
 
 FIX_OP_TOKEN='ops_FAKEFIXTUREtokenAAAAAAAAAAAAAAAAAAAAAAAA'
 FIX_MEMORY_PW='Kj8mQ2FIXTUREx7LpR4tW9zYc3BdFgH6sA1eU5iO0nM2k'
@@ -467,6 +476,66 @@ assert_contains "[NWM-136] the rewrite leaves 'cd' in effect (no subshell)" "pwd
 OUT="$(run_hook Bash "ls -la" "sess-nwm136-default-off")"
 assert_rc "[NWM-136] redaction is off by default: no rewrite, plain allow" "0" "$OUT"
 
+# grep/git-grep prefix a match with 'path:N:' or 'N:', which is the shape a
+# leak actually arrives in. The NAME boundary must accept ':'.
+
+GREPSHAPE_OUT="$(redact "lab-env.sh:4:MEMORY_FALKORDB_PASSWORD=$FIX_MEMORY_PW")"
+assert_absent "[NWM-136] the grep 'path:N:NAME=value' shape is redacted" "$FIX_MEMORY_PW" "$GREPSHAPE_OUT" "lab-env.sh:4:MEMORY_FALKORDB_PASSWORD="
+GREPN_OUT="$(redact "4:GH_TOKEN=$FIX_MEMORY_PW")"
+assert_absent "[NWM-136] the 'grep -n' 'N:NAME=value' shape is redacted" "$FIX_MEMORY_PW" "$GREPN_OUT" "4:GH_TOKEN="
+
+# The rewrite must not turn a valid command into a syntax error. A trailing
+# line continuation swallows the newline before the closing brace.
+
+wrap_cmd() {
+  printf '%s\n' "$(jq -n --arg cmd "$1" --arg sid "$2" \
+    '{tool_name: "Bash", session_id: $sid, tool_input: {command: $cmd}}' \
+    | env BASH_SHUNT_STATE_ROOT="$STATE_ROOT" BASH_SHUNT_REDACT_OUTPUT=1 "$SCRIPT" \
+    | jq -r '.hookSpecificOutput.updatedInput.command // empty')"
+}
+
+# shellcheck disable=SC1003 # the trailing backslash IS the fixture
+wrap_cmd 'echo BSLASH_OK \' sess-nwm136-bslash > "$WORKDIR/bslash.sh"
+BSLASH_OUT="$(bash "$WORKDIR/bslash.sh" 2>&1; echo "rc=$?")"
+assert_contains "[NWM-136] a command ending in a line continuation still runs once wrapped" "BSLASH_OK" "$BSLASH_OUT"
+assert_contains "[NWM-136] a wrapped line-continuation command exits 0, not a parse error" "rc=0" "$BSLASH_OUT"
+
+# allow_exit scans $STRIPPED_CMD, so an '&' in a heredoc BODY is not read as a
+# background separator — but a REAL background '&' must still skip the rewrite.
+
+HEREDOC_AMP_WRAPPED="$(wrap_cmd "$(printf 'cat <<XEOF\nA & B\nXEOF\n')" sess-nwm136-hd-amp)"
+if [ -n "$HEREDOC_AMP_WRAPPED" ]; then
+  pass "[NWM-136] an '&' inside a heredoc body does not disable the rewrite"
+else
+  fail "[NWM-136] an '&' inside a heredoc body does not disable the rewrite (no updatedInput emitted)"
+fi
+BG_WRAPPED="$(wrap_cmd 'sleep 0 & echo hi' sess-nwm136-real-bg)"
+if [ -z "$BG_WRAPPED" ]; then
+  pass "[NWM-136] a real backgrounded statement still skips the rewrite"
+else
+  fail "[NWM-136] a real backgrounded statement still skips the rewrite (rewrite was emitted)"
+fi
+
+# A killed command (the Bash tool's own 120s timeout is the common case) must
+# still replay what it already produced, and must not leak its temp files.
+
+KILL_TMP="$WORKDIR/killtmp"
+mkdir -p "$KILL_TMP"
+wrap_cmd 'echo PRE_KILL_LINE; sleep 3; echo POST_KILL_LINE' sess-nwm136-kill > "$WORKDIR/kill.sh"
+( env TMPDIR="$KILL_TMP" bash "$WORKDIR/kill.sh" > "$WORKDIR/kill.out" 2>&1 & echo $! > "$WORKDIR/kill.pid" )
+sleep 1
+kill -TERM "$(cat "$WORKDIR/kill.pid")" 2>/dev/null
+sleep 4
+KILL_OUT="$(cat "$WORKDIR/kill.out" 2>/dev/null)"
+assert_contains "[NWM-136] output produced before a TERM survives the kill" "PRE_KILL_LINE" "$KILL_OUT"
+assert_absent "[NWM-136] a TERM-killed command does not emit its post-kill output" "POST_KILL_LINE" "$KILL_OUT" "PRE_KILL_LINE"
+KILL_LEFT="$(find "$KILL_TMP" -name 'nwm-redact.*' 2>/dev/null | wc -l | tr -d ' ')"
+if [ "$KILL_LEFT" = "0" ]; then
+  pass "[NWM-136] a TERM-killed command leaves no nwm-redact temp file behind"
+else
+  fail "[NWM-136] a TERM-killed command leaves no nwm-redact temp file behind (found $KILL_LEFT)"
+fi
+
 # The NEGATIVE half. A redactor that eats ordinary output is the same defect
 # as a guard that over-blocks, and this repo has shipped one of those.
 
@@ -475,7 +544,9 @@ assert_identical "[NWM-136 negative] a NAME inside an ordinary command line is u
 assert_identical "[NWM-136 negative] an empty assignment is untouched" "OP_SERVICE_ACCOUNT_TOKEN="
 assert_identical "[NWM-136 negative] a short ordinary assignment is untouched" "FOO=bar"
 assert_identical "[NWM-136 negative] a long PATH value is untouched" "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-assert_identical "[NWM-136 negative] a long PWD value is untouched" "PWD=/Users/someone/code/home_workspace/night-watchman"
+assert_identical "[NWM-136 negative] a long PWD value is untouched" "PWD=/opt/build/code/home_workspace/night-watchman"
+assert_identical "[NWM-136 negative] a long single-class value is untouched (is_opaque needs a letter AND a digit)" "NOTES=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+assert_identical "[NWM-136 negative] a Python kwarg is untouched ('(' is deliberately not a NAME boundary)" "    rows.sort(key=lambda r: r[0])"
 assert_identical "[NWM-136 negative] a prefixed-but-ordinary env var is untouched" "npm_config_prefix=/opt/homebrew"
 assert_identical "[NWM-136 negative] a flag that looks like an assignment is untouched" "git log --max-count=20 --oneline"
 assert_identical "[NWM-136 negative] ordinary prose is untouched" "Rotated the token on 2026-09-19; see docs/known-issues for the write-up."

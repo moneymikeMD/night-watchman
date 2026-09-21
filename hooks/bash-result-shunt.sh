@@ -3,49 +3,51 @@
 # bash-result-shunt.sh — Claude Code PreToolUse hook for Bash. Gates the
 # largest known-noisy Bash tool results (uncapped `git log`, unfiltered
 # `jira-api.sh board`/`raw` search pulls) before they reach the calling
-# model's context.
+# model's context, and optionally redacts secret-shaped values out of a
+# command's OUTPUT.
 #
 # Usage: not a CLI, with one exception: `--redact-stream` filters stdin to
-# stdout as the secret redactor described below, and is how the rewritten
-# command re-enters this script. Otherwise fed the PreToolUse payload on
-# stdin; reads `.tool_name` and `.tool_input.command`. Nothing is ever
-# summarised and no command output is inspected by the HOOK — PreToolUse
-# fires BEFORE the command runs, so the only size signal available for
-# gating is the command string itself. Deliberately less powerful than
-# read-shunt.sh; see memory-graph on why no hook primitive can substitute a
-# command's real output after the fact.
+# stdout as the secret redactor, and is how the rewritten command re-enters
+# this script. Otherwise fed the PreToolUse payload on stdin; reads
+# `.tool_name` and `.tool_input.command`. The HOOK never sees command output:
+# PreToolUse fires BEFORE the command runs, so the command string is the only
+# size signal available for gating.
 #
-# Exit codes:
-#   0  allow
-#   2  block, with guidance naming the flag or pipe to add, on stderr —
-#      Claude Code surfaces a PreToolUse hook's stderr as the tool's result
+# Exit codes: 0 allow; 2 block, with guidance naming the flag or pipe to add,
+# on stderr — Claude Code surfaces a PreToolUse hook's stderr as the tool's
+# result.
 #
 # SECRET REDACTION (NWM-136), OFF BY DEFAULT — set BASH_SHUNT_REDACT_OUTPUT=1.
-# A worker running `env | grep` printed two live credentials into its
-# transcript; nothing covered command OUTPUT, only file reads. There is still
-# no PostToolUse primitive that can rewrite a tool result (re-verified against
-# the hook reference on 2026-09-20), so the only mechanism is the documented
-# PreToolUse `updatedInput`: this hook rewrites the command to capture its
-# stdout and stderr and replay them through `--redact-stream`. Shell state is
-# preserved — the command runs in a brace group in the live shell, not a
-# subshell, so `cd` and `export` still take effect, and the exit status is
-# replayed. stdout/stderr INTERLEAVING is not preserved.
+# No hook primitive can rewrite a tool result after the fact, so the only
+# mechanism is the documented PreToolUse `updatedInput`: allow_exit() rewrites
+# the command to buffer stdout and stderr and replay them through
+# `--redact-stream`. The command runs in a brace group in the live shell, so
+# `cd` and `export` still take effect, and the exit status is replayed. An
+# INT/TERM/EXIT trap replays and cleans up when the command is killed
+# mid-flight (the Bash tool's own 120s timeout is the common case), writing
+# through fds 9 and 8, saved copies of the real stdout and stderr — measured:
+# the trap can fire while the brace group's redirections are still in force,
+# and without the saved fds the replay vanishes into the temp file.
+# Mechanism survey and rationale: memory-graph 9860c1dc and ab543420.
 #
-# It defaults off because the rewrite touches every Bash call in a session and
-# has not been observed in a live one: guard-fs-writes.sh is a PreToolUse
-# Bash hook in this same plugin that blocks redirects outside the worktree,
-# and the rewrite adds exactly such redirects. Turn it on for one session and
-# watch before making it the default.
+# Redaction gaps, all deliberate: stdout/stderr INTERLEAVING is not preserved;
+# a value spanning lines; a second assignment on one line; an opaque value
+# printed bare with no recognised prefix; a NAME preceded by a character
+# outside [line start, space, tab, : " ' [ ,] — "(" is excluded because it
+# redacts Python kwargs; fds 8 and 9 are clobbered while the command runs.
 #
-# Pipeline, in order: strip_heredocs() first, then a `;`/`&&`/`||`/`&`/newline
-# split into statements, each into `|`-separated stages, each into
-# quote-aware words. Every detector reads $STRIPPED_CMD, never the raw
-# command. A shape matches only when a stage's own WORDS say so, so "git log"
-# in prose or in a grep pattern does not match, and capping flags are read
-# only from that stage. A stage piped to ANYTHING counts as already capped.
+# It defaults off because the rewrite touches every Bash call and has not been
+# observed in a live session: guard-fs-writes.sh, a PreToolUse Bash hook in
+# this same plugin, blocks redirects outside the worktree, and the rewrite
+# adds exactly such redirects. Watch one session before making it default.
+#
+# Pipeline, in order: strip_heredocs(), a `;`/`&&`/`||`/`&`/newline split into
+# statements, each into `|`-separated stages, each into quote-aware words.
+# Every detector reads $STRIPPED_CMD, never the raw command, and a shape
+# matches only when a stage's own WORDS say so, so "git log" in prose or in a
+# grep pattern does not match. A stage piped to ANYTHING counts as capped.
 #
 # Gated shapes, checked in order, first match wins:
-#
 #   1. `git log` with none of: --oneline, -n<N>/-n N/--max-count[=N], a bare
 #      numeric limit (`-5`, `-20`), or a pipe. `--since`/`--until` bound
 #      TIME, not output SIZE, and do not count as caps.
@@ -53,19 +55,16 @@
 #      `/search` or `/issue`, with no --limit and no pipe. `raw /myself` and
 #      other single-object reads are not gated.
 #
-# Deliberately NOT gated: `issues.py board`/`waves` — it has no filter flag
-# at all, so gating it would block the exact command every session-start is
-# told to run, with nothing available to add.
+# Deliberately NOT gated: `issues.py board`/`waves` has no filter flag at all,
+# so gating it would block the command every session-start is told to run.
 #
 # Escape hatch: the first (session_id, exact command string) is blocked; the
-# identical command again in the same session is allowed through. Nothing is
-# ever permanently un-runnable.
+# identical command again in the same session runs. Nothing is permanently
+# un-runnable.
 #
 # Never gates a command naming a credential tool or token (op/1Password, a
 # literal `.env` file, an actual `docker inspect`, or a word containing
-# secret/credential/token) as one of its own shell WORDS. A courtesy skip,
-# not a security control: this hook never reads or prints a command's output,
-# and the block message never echoes the command text back.
+# secret/credential/token) as one of its own shell WORDS. A courtesy skip.
 #
 # Fails open on malformed input: missing jq, an empty or absent tool_name or
 # command, a missing or path-unsafe session_id, no hashing tool on PATH. A
@@ -76,12 +75,10 @@
 # PreToolUse reads a non-zero exit as BLOCK — shellcheck and the selftest
 # before deployment are the only guard against it.
 #
-# Overridable for testing:
-#   BASH_SHUNT_STATE_ROOT   root dir for per-session gate markers
-#                           (${TMPDIR:-/tmp}/bash-result-shunt-state)
+# Overridable for testing: BASH_SHUNT_STATE_ROOT, the root dir for per-session
+# gate markers (${TMPDIR:-/tmp}/bash-result-shunt-state).
 #
-# Dependencies: bash 3.2, jq, and one of shasum/md5/openssl (all ship on
-# macOS). No `claude` binary dependency at all — this hook never summarises.
+# Dependencies: bash 3.2, jq, mktemp, one of shasum/md5/openssl.
 
 set -u
 
@@ -92,33 +89,10 @@ fail_open() {
   exit 0
 }
 
-# --- secret redaction ------------------------------------------------------
-#
-# `--redact-stream` filters stdin to stdout, replacing a secret VALUE with
-# `[redacted: NAME]`. Two passes, in order, first match per line wins:
-#
-#   1. ASSIGNMENT. The first `NAME=VALUE` on a line, where NAME starts at the
-#      line start or after a space/tab (so `env`, `printenv`, `set` and
-#      `declare -x NAME="V"` from `export -p` all parse, and `--max-count=20`
-#      does not). Surrounding quotes are preserved around the marker. The
-#      value is redacted when the NAME is on the allowlist (contains TOKEN,
-#      SECRET, PASSWORD, PASSWD, CREDENTIAL or KEY, or starts OP_/MEMORY_) OR
-#      the VALUE carries a known credential prefix OR the VALUE is opaque
-#      enough on its own — 32+ chars of [A-Za-z0-9+=_-] with at least one
-#      letter and one digit.
-#   2. BARE TOKEN. Any remaining word carrying a known credential prefix,
-#      which catches `echo $OP_SERVICE_ACCOUNT_TOKEN` where no NAME is in the
-#      output at all. The marker cannot name a variable there.
-#
-# `/` and `.` are deliberately OUT of the opaque-value charset: without that,
-# every PWD, HOME and PATH-like value is 32+ chars of allowed characters and
-# the filter eats ordinary output, which is the same failure as a guard that
-# over-blocks. The cost is that an unprefixed base64 secret containing `/`
-# under a non-allowlisted NAME is not caught by shape alone.
-#
-# Known gaps, all deliberate: a value spanning multiple lines, a second
-# assignment on the same line, and an opaque value printed bare with no
-# recognised prefix.
+# --- secret redaction: `--redact-stream` replaces a secret VALUE with
+# `[redacted: NAME]` — pass 1 the first NAME=VALUE on a line, pass 2 any bare
+# credential-prefixed word. `/` and `.` are out of the opaque-value charset so
+# PWD/HOME/PATH survive. Shape, gaps: header and memory-graph 9860c1dc.
 
 redact_stream() {
   awk '
@@ -159,6 +133,10 @@ function is_opaque(v,   n, i, c, hasd, hasa) {
   return (hasd && hasa)
 }
 function scrub_tokens(s,   res, i, n, c, tok) {
+  # A whole-line regex first: no token can carry a prefix the line does not.
+  # Measured on 4.2MB / 84k lines of `git log -p`: 4.12s without it, 0.26s
+  # with, same bytes out.
+  if (s !~ PFXRE) return s
   res = ""; tok = ""; n = length(s)
   for (i = 1; i <= n + 1; i++) {
     c = (i <= n) ? substr(s, i, 1) : ""
@@ -170,6 +148,8 @@ function scrub_tokens(s,   res, i, n, c, tok) {
 }
 BEGIN {
   NPFX = split("ops_ ghp_ gho_ ghu_ ghs_ ghr_ github_pat_ xoxb- xoxa- xoxp- xoxr- xoxs- glpat- dop_v1_ shpat_ AKIA ASIA eyJ", PFX, " ")
+  PFXRE = PFX[1]
+  for (pi = 2; pi <= NPFX; pi++) PFXRE = PFXRE "|" PFX[pi]
 }
 {
   line = $0
@@ -185,7 +165,13 @@ BEGIN {
     ok = 0
     if (length(nm) > 0 && !isdig(substr(nm, 1, 1))) {
       if (nstart == 1) ok = 1
-      else { b = substr(line, nstart - 1, 1); if (b == " " || b == "\t") ok = 1 }
+      else {
+        # ":" covers the grep/git-grep shape path:N:NAME=value. "(" is
+        # deliberately absent: it redacts Python kwargs such as
+        # sort(key=lambda ...) -- 10 false positives on a 4.2MB corpus.
+        b = substr(line, nstart - 1, 1)
+        if (index(" \t:\"\047[,", b) > 0) ok = 1
+      }
     }
     if (ok) {
       val = substr(line, eq + 1)
@@ -646,8 +632,9 @@ allow_exit() {
   command -v mktemp >/dev/null 2>&1 || exit 0
 
   # A backgrounded statement outlives the wrapper, so its output would be
-  # deleted with the temp file rather than redacted.
-  split_segments "$CMD"
+  # deleted with the temp file rather than redacted. Read $STRIPPED_CMD, so an
+  # '&' inside a heredoc BODY is not mistaken for a real separator.
+  split_segments "$STRIPPED_CMD"
   _ae_i=0
   while [ "$_ae_i" -lt "${#SEG_SEP[@]}" ]; do
     [ "${SEG_SEP[$_ae_i]}" = "&" ] && exit 0
@@ -655,8 +642,12 @@ allow_exit() {
   done
 
   _ae_t="\${TMPDIR:-/tmp}/nwm-redact.XXXXXX"
-  _ae_wrapped="__nwm_rd_o=\"\$(mktemp \"$_ae_t\")\"; __nwm_rd_e=\"\$(mktemp \"$_ae_t\")\"; { $CMD
-} >\"\$__nwm_rd_o\" 2>\"\$__nwm_rd_e\"; __nwm_rd_rc=\$?; '$SELF' --redact-stream <\"\$__nwm_rd_o\"; '$SELF' --redact-stream <\"\$__nwm_rd_e\" >&2; rm -f \"\$__nwm_rd_o\" \"\$__nwm_rd_e\"; unset __nwm_rd_o __nwm_rd_e; ( exit \$__nwm_rd_rc )"
+  _ae_flush="__nwm_rd_flush() { if [ -n \"\${__nwm_rd_done:-}\" ]; then return 0; fi; __nwm_rd_done=1; '$SELF' --redact-stream <\"\$__nwm_rd_o\" >&9; '$SELF' --redact-stream <\"\$__nwm_rd_e\" >&8; rm -f \"\$__nwm_rd_o\" \"\$__nwm_rd_e\"; }"
+  # The blank line before '}' is load-bearing: a $CMD ending in a line
+  # continuation would otherwise swallow the newline and eat the brace.
+  _ae_wrapped="__nwm_rd_o=\"\$(mktemp \"$_ae_t\")\"; __nwm_rd_e=\"\$(mktemp \"$_ae_t\")\"; exec 9>&1 8>&2; $_ae_flush; trap '__nwm_rd_flush; exit 130' INT; trap '__nwm_rd_flush; exit 143' TERM; trap __nwm_rd_flush EXIT; { $CMD
+
+} >\"\$__nwm_rd_o\" 2>\"\$__nwm_rd_e\"; __nwm_rd_rc=\$?; trap - INT TERM EXIT; __nwm_rd_flush; exec 9>&- 8>&-; unset -f __nwm_rd_flush; unset __nwm_rd_o __nwm_rd_e __nwm_rd_done; ( exit \$__nwm_rd_rc )"
 
   echo "$INPUT" | jq -c --arg c "$_ae_wrapped" \
     '{hookSpecificOutput: {hookEventName: "PreToolUse", updatedInput: ((.tool_input // {}) + {command: $c})}}' \
