@@ -1,0 +1,78 @@
+{
+  "positives": [
+    {
+      "prompt": "I keep doing this same lookup by hand every session. Should it be a script, an agent, or a skill?",
+      "skill": "night-watchman/capability-ladder"
+    },
+    {
+      "prompt": "That check is red again. Debug why it is failing and open a draft PR with the fix.",
+      "skill": "night-watchman/diagnose-and-pr"
+    },
+    {
+      "prompt": "Grill me on this plan before I start building it.",
+      "skill": "night-watchman/grill"
+    },
+    {
+      "prompt": "Poke holes in this before I commit to it \u2014 I want the weak spots found now, not after.",
+      "skill": "night-watchman/grill"
+    },
+    {
+      "prompt": "We are done for tonight. Write up where we left off for whoever picks this up next.",
+      "skill": "night-watchman/handoff-docs"
+    },
+    {
+      "prompt": "Pick up where we left off and fan the startable work out to subagents.",
+      "skill": "night-watchman/session-start"
+    },
+    {
+      "prompt": "Start on the next open tickets.",
+      "skill": "night-watchman/session-start"
+    },
+    {
+      "prompt": "I am about to write a new script in scripts/. What are the bash conventions and the rules here?",
+      "skill": "night-watchman/shell-scripting"
+    },
+    {
+      "prompt": "File this as a ticket and record the durable knowledge in the right place.",
+      "skill": "night-watchman/tickets-protocol"
+    },
+    {
+      "prompt": "Write all of this up as separate pieces of work so I can close the session and start fresh tomorrow.",
+      "skill": "night-watchman/to-issues"
+    },
+    {
+      "prompt": "Break this discussion into work I can parallelise across git worktrees.",
+      "skill": "night-watchman/to-issues"
+    },
+    {
+      "prompt": "Mine the settled decisions out of this conversation into a decision-list JSON.",
+      "skill": "night-watchman/to-issues-mine"
+    },
+    {
+      "prompt": "Nobody is watching this overnight run. I want a record of every pivot so I can audit it in the morning.",
+      "skill": "night-watchman/wave-trail"
+    }
+  ],
+  "negatives": [
+    {
+      "prompt": "Mine the settled decisions out of this conversation into a decision-list JSON.",
+      "skill": "night-watchman/to-issues",
+      "owner": "night-watchman/to-issues-mine"
+    },
+    {
+      "prompt": "Write all of this up as separate pieces of work so I can close the session and start fresh tomorrow.",
+      "skill": "night-watchman/to-issues-mine",
+      "owner": "night-watchman/to-issues"
+    },
+    {
+      "prompt": "Grill me on this plan before I start building it.",
+      "skill": "night-watchman/to-issues",
+      "owner": "night-watchman/grill"
+    },
+    {
+      "prompt": "We are done for tonight. Write up where we left off for whoever picks this up next.",
+      "skill": "night-watchman/session-start",
+      "owner": "night-watchman/handoff-docs"
+    }
+  ]
+}
