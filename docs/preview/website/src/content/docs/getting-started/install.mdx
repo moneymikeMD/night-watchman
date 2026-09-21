@@ -12,21 +12,21 @@ claude plugin marketplace add moneymikeMD/moneymike-plugins
 claude plugin install night-watchman@moneymike-plugins
 ```
 
-From a local checkout instead (development, or an air-gapped host):
+From a local checkout instead (development, or an air-gapped host), load the
+plugin directory directly:
 
 ```
-claude plugin marketplace add moneymikeMD/moneymike-plugins
-claude plugin marketplace add /path/to/night-watchman
-claude plugin install night-watchman@night-watchman
+claude --plugin-dir /path/to/night-watchman
 ```
 
 night-watchman depends on one other plugin: [work-order](https://github.com/moneymikeMD/work-order), which carries
 the ticket contract and its `issues.py`. Both plugins are published by the
-`moneymike-plugins` marketplace, so the first form installs the dependency with
-it. A local checkout is a different marketplace, so add `moneymike-plugins` as
-well, or the dependency silently resolves to nothing — a blocked
-cross-marketplace dependency still reports `ok` and exits 0, and says so only
-in `errors`. Check the `errors` field, not the exit code:
+`moneymike-plugins` marketplace, so the marketplace install brings the
+dependency with it. A plugin loaded with `--plugin-dir` has no plugin-list
+entry, so `scripts/work-order-root.sh` finds work-order through
+`$WORK_ORDER_ROOT` or a sibling checkout instead. After a marketplace install,
+check the `errors` field, not the exit code — a dependency that cannot resolve
+still reports `ok` and exits 0:
 
 ```
 claude plugin list --json \
