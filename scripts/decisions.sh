@@ -1,5 +1,6 @@
 #!/bin/bash
 #
+# NWM-139 verify: header edit with no reference-doc regen (throwaway, not landed).
 # Manage docs/decisions.d/ — one markdown file per dated decision, with
 # docs/decisions.md as a GENERATED index concatenating every entry in
 # order. Modelled on scripts/known-issue.sh's shape (add/index/lint); no
