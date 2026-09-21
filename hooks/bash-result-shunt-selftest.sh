@@ -249,6 +249,9 @@ assert_rc "[discriminating] capped jira-api.sh board stage followed by an uncapp
 OUT="$(run_hook Bash "./scripts/api/jira-api.sh board --limit 20; ./scripts/api/jira-api.sh board --limit 10" "sess-mixed-5")"
 assert_rc "[negative control] capped jira-api.sh board stage followed by ANOTHER capped stage is not gated" "0" "$OUT"
 
+# Heredoc-body cases from here through the hyphenated-delimiter assertion:
+# function under test is strip_heredocs() (hooks/bash-result-shunt.sh).
+
 GITCOMMIT_HEREDOC_CMD="$(cat <<'EOF'
 git commit -F - <<'EOF2'
 fix detector
@@ -352,6 +355,39 @@ EOF
 )"
 OUT="$(run_hook Bash "$HYPHEN_DELIM_CMD" "sess-hyphen-delim")"
 assert_rc "[discriminating, MEDIUM] a real gated command after a heredoc with a hyphenated delimiter ('EOF-1') is gated (delimiter is a shell word, not [A-Za-z0-9_] only)" "2" "$OUT"
+
+# LAB-187 (a): two `<<DELIM` operators on one line, attached to one command
+# (`cat <<A1 <<B1`) — strip_heredocs() must recognise the second as an
+# operator, not fold it into the first heredoc's "rest of line" text.
+TWO_HEREDOCS_ONE_LINE_CMD="$(cat <<'EOF'
+cat <<'A1' <<'B1'
+harmless
+A1
+git log
+B1
+EOF
+)"
+OUT="$(run_hook Bash "$TWO_HEREDOCS_ONE_LINE_CMD" "sess-two-heredocs-one-line")"
+assert_rc "[discriminating, LAB-187a] gated prose inside the SECOND of two heredocs stacked on one line ('cat <<A1 <<B1') is not gated" "0" "$OUT"
+
+TWO_HEREDOCS_THEN_REAL_CMD="$(cat <<'EOF'
+cat <<'A1' <<'B1'
+harmless
+A1
+prose
+B1
+git log
+EOF
+)"
+OUT="$(run_hook Bash "$TWO_HEREDOCS_THEN_REAL_CMD" "sess-two-heredocs-then-real")"
+assert_rc "[negative control, LAB-187a] a REAL gated command after two stacked heredocs on one line still gates" "2" "$OUT"
+
+# LAB-187 (b): strip_heredocs() restores an UNTERMINATED heredoc's body
+# verbatim (rather than discarding it), so it can still be gated — a
+# deliberate false-positive-over-false-negative choice, asserted by name.
+UNTERMINATED_HEREDOC_CMD="$(printf 'cat <<EOF\ngit log\nsome body with no closing EOF delimiter')"
+OUT="$(run_hook Bash "$UNTERMINATED_HEREDOC_CMD" "sess-unterminated-heredoc")"
+assert_rc "[discriminating, LAB-187b] strip_heredocs() restores an unterminated heredoc's body verbatim, so a gated shape inside it still gates" "2" "$OUT"
 
 REGRESSION_COMMIT_CMD="$(cat <<'EOF'
 git commit -F - <<'EOF2'

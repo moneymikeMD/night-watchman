@@ -353,6 +353,50 @@ is_stdin_executor_stage() {
   return 1
 }
 
+# _sh_drain_heredoc_queue: consume the body of every queued heredoc, in the
+# order its operator was seen, once the line that opened them has ended.
+# Reads/writes strip_heredocs()'s own _sh_* state, so it is only ever called
+# from there.
+_sh_drain_heredoc_queue() {
+  _sh_hq=0
+  while [ "$_sh_hq" -lt "${#HD_DELIM[@]}" ]; do
+    _sh_delim="${HD_DELIM[$_sh_hq]}"
+    _sh_dash="${HD_DASH[$_sh_hq]}"
+    _sh_body_start=$_sh_i
+    _sh_found_term=0
+    while [ "$_sh_i" -lt "$_sh_len" ]; do
+      _sh_line_start=$_sh_i
+      while [ "$_sh_i" -lt "$_sh_len" ] && [ "${_sh_s:$_sh_i:1}" != $'\n' ]; do
+        _sh_i=$((_sh_i + 1))
+      done
+      _sh_line="${_sh_s:$_sh_line_start:$((_sh_i - _sh_line_start))}"
+      if [ "$_sh_i" -lt "$_sh_len" ]; then
+        _sh_i=$((_sh_i + 1))
+      fi
+      _sh_check="$_sh_line"
+      if [ "$_sh_dash" -eq 1 ]; then
+        while [ "${_sh_check:0:1}" = $'\t' ]; do
+          _sh_check="${_sh_check#?}"
+        done
+      fi
+      if [ "$_sh_check" = "$_sh_delim" ]; then
+        _sh_found_term=1
+        break
+      fi
+    done
+    if [ "$_sh_found_term" -eq 0 ]; then
+      # An unterminated heredoc is bash-invalid input; restoring the span
+      # verbatim keeps a gated shape inside it gate-able, rather than
+      # letting the body vanish to end-of-string. A false positive is
+      # chosen over a false negative here, deliberately.
+      _sh_out="$_sh_out${_sh_s:$_sh_body_start:$((_sh_i - _sh_body_start))}"
+    fi
+    _sh_hq=$((_sh_hq + 1))
+  done
+  HD_DELIM=()
+  HD_DASH=()
+}
+
 # strip_heredocs: remove heredoc BODY text attached to a command that merely
 # READS the body as data, so prose is never parsed as further shell syntax. A
 # stdin-executing interpreter's body is left in place (its body IS commands).
@@ -363,6 +407,13 @@ strip_heredocs() {
   _sh_i=0
   _sh_q=""
   _sh_stage_start=0
+  # Multiple `<<DELIM` operators can appear on one line, attached to the same
+  # command (`cat <<A1 <<B1`): bash reads their bodies in order, right after
+  # that line. Queue each one instead of consuming its body immediately, so a
+  # second operator on the same line is still recognised as one, not folded
+  # into the first heredoc's "rest of line" text.
+  HD_DELIM=()
+  HD_DASH=()
   _sh_word_start=1
   _sh_in_comment=0
   while [ "$_sh_i" -lt "$_sh_len" ]; do
@@ -409,6 +460,9 @@ strip_heredocs() {
       $'\n')
         _sh_out="$_sh_out$_sh_c"
         _sh_i=$((_sh_i + 1))
+        if [ "${#HD_DELIM[@]}" -gt 0 ]; then
+          _sh_drain_heredoc_queue
+        fi
         _sh_stage_start=$_sh_i
         _sh_word_start=1
         ;;
@@ -522,47 +576,17 @@ strip_heredocs() {
                 _sh_i=$((_sh_i + 2))
                 _sh_word_start=0
               else
+                # Queue it rather than consuming its body here: a second
+                # `<<DELIM` can follow on the same line (`cat <<A1 <<B1`),
+                # and it must still be scanned as an operator, not folded
+                # into "rest of this line" as inert text. Bodies are read,
+                # in order, once the line-ending newline is reached — see
+                # _sh_drain_heredoc_queue.
                 _sh_out="$_sh_out${_sh_s:$_sh_i:$((_sh_k - _sh_i))}"
                 _sh_i=$_sh_k
-                while [ "$_sh_i" -lt "$_sh_len" ] && [ "${_sh_s:$_sh_i:1}" != $'\n' ]; do
-                  _sh_out="$_sh_out${_sh_s:$_sh_i:1}"
-                  _sh_i=$((_sh_i + 1))
-                done
-                if [ "$_sh_i" -lt "$_sh_len" ]; then
-                  _sh_out="$_sh_out"$'\n'
-                  _sh_i=$((_sh_i + 1))
-                fi
-                # $_sh_body_start marks the discarded span so it can be
-                # restored verbatim if the terminator is never found.
-                _sh_body_start=$_sh_i
-                _sh_found_term=0
-                while [ "$_sh_i" -lt "$_sh_len" ]; do
-                  _sh_line_start=$_sh_i
-                  while [ "$_sh_i" -lt "$_sh_len" ] && [ "${_sh_s:$_sh_i:1}" != $'\n' ]; do
-                    _sh_i=$((_sh_i + 1))
-                  done
-                  _sh_line="${_sh_s:$_sh_line_start:$((_sh_i - _sh_line_start))}"
-                  if [ "$_sh_i" -lt "$_sh_len" ]; then
-                    _sh_i=$((_sh_i + 1))
-                  fi
-                  _sh_check="$_sh_line"
-                  if [ "$_sh_dash" -eq 1 ]; then
-                    while [ "${_sh_check:0:1}" = $'\t' ]; do
-                      _sh_check="${_sh_check#?}"
-                    done
-                  fi
-                  if [ "$_sh_check" = "$_sh_delim" ]; then
-                    _sh_found_term=1
-                    break
-                  fi
-                done
-                if [ "$_sh_found_term" -eq 0 ]; then
-                  # Restore the whole discarded span rather than let an
-                  # unmatched heredoc silently vanish to end-of-string.
-                  _sh_out="$_sh_out${_sh_s:$_sh_body_start:$((_sh_i - _sh_body_start))}"
-                fi
-                _sh_stage_start=$_sh_i
-                _sh_word_start=1
+                _sh_word_start=0
+                HD_DELIM+=("$_sh_delim")
+                HD_DASH+=("$_sh_dash")
               fi
             fi
           fi
@@ -575,6 +599,9 @@ strip_heredocs() {
         ;;
     esac
   done
+  if [ "${#HD_DELIM[@]}" -gt 0 ]; then
+    _sh_drain_heredoc_queue
+  fi
   printf '%s' "$_sh_out"
 }
 
