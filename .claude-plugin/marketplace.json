@@ -6,7 +6,7 @@
     "name": "Mike Garrett"
   },
   "allowCrossMarketplaceDependenciesOn": [
-    "work-order"
+    "moneymike-plugins"
   ],
   "plugins": [
     {

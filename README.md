@@ -55,16 +55,15 @@ Why it is not a workflow and not an agent team, at length and with the evidence:
 
 ## Install
 
-From a local checkout (this repo cloned or checked out anywhere on disk):
-
 ```
-claude plugin marketplace add moneymikeMD/night-watchman
-claude plugin install night-watchman@night-watchman
+claude plugin marketplace add moneymikeMD/moneymike-plugins
+claude plugin install night-watchman@moneymike-plugins
 ```
 
 From a local checkout instead (development, or an air-gapped host):
 
 ```
+claude plugin marketplace add moneymikeMD/moneymike-plugins
 claude plugin marketplace add /path/to/night-watchman
 claude plugin install night-watchman@night-watchman
 ```
@@ -72,16 +71,16 @@ claude plugin install night-watchman@night-watchman
 Documentation: https://moneymikemd.github.io/night-watchman/
 
 night-watchman depends on one other plugin: [work-order][wo], which carries
-the ticket contract and its `issues.py`. Add that marketplace first, or the
-dependency silently resolves to nothing — a blocked cross-marketplace
-dependency still reports `ok` and exits 0, and says so only in `errors`:
+the ticket contract and its `issues.py`. Both plugins are published by the
+`moneymike-plugins` marketplace, so the first form installs the dependency with
+it. A local checkout is a different marketplace, so add `moneymike-plugins` as
+well, or the dependency silently resolves to nothing — a blocked
+cross-marketplace dependency still reports `ok` and exits 0, and says so only
+in `errors`. Check the `errors` field, not the exit code:
 
 ```
-claude plugin marketplace add moneymikeMD/work-order
-claude plugin marketplace add moneymikeMD/night-watchman
-claude plugin install night-watchman@night-watchman
 claude plugin list --json \
-  | jq '.[] | select(.id == "work-order@work-order") | {version, errors}'
+  | jq '.[] | select(.id == "work-order@moneymike-plugins") | {version, errors}'
 ```
 
 [wo]: https://github.com/moneymikeMD/work-order

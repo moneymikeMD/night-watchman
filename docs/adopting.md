@@ -13,20 +13,20 @@ Written from the second adopter (ADOPT) adoption, 2026-09-13.
    unless told otherwise.
 
 2. **Confirm the plugin is actually available to the adopter repo.**
-   `claude plugin list` — if `night-watchman@night-watchman` shows
+   `claude plugin list` — if `night-watchman@moneymike-plugins` shows
    `Scope: user` and `Status: ✔ enabled`, it already covers every repo on
    the machine; no per-project enable step is needed. Only reach for
    `claude plugin enable` or an `enabledPlugins` entry in
    `.claude/settings.json` if the listing shows it disabled or absent.
 
-   In the same listing, confirm `work-order@work-order` is present with an
+   In the same listing, confirm `work-order@moneymike-plugins` is present with an
    empty `errors`. It is the one plugin dependency, and it carries
    `issues.py`. A cross-marketplace dependency whose marketplace was never
    added still reports `ok` and exits 0, so the exit code proves nothing:
    ```
-   claude plugin marketplace add moneymikeMD/work-order
+   claude plugin marketplace add moneymikeMD/moneymike-plugins
    claude plugin list --json \
-     | jq '.[] | select(.id == "work-order@work-order") | {version, errors}'
+     | jq '.[] | select(.id == "work-order@moneymike-plugins") | {version, errors}'
    ```
 
 3. **Merge `templates/CLAUDE.md` into the adopter's CLAUDE.md, additively.**
