@@ -17,7 +17,7 @@ docs/preview/website/.astro/
 .night-watchman/last-session-cost.txt
 
 # per-wave decision trail; a working artifact for the wave, not project history
-.night-watchman/wave-trail.tsv
+.night-watchman/wave-trail*.tsv
 .night-watchman/closing-state.md
 
 # Execution plans handed to a repo-rooted session. Never committed: they
