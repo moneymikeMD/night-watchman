@@ -3,6 +3,8 @@ Rendered by providers/dispatch/herdr/herdr-ticket-start.sh into the agent's
 first prompt. Placeholders: @KEY@ @BRANCH@ @MODEL@ @TIMEBOX@ @FORBIDDEN@
 @TRACKER@. STANDING is the single source of this project's standing orders;
 the session-start skill points here. Text above the first heading is dropped.
+A CLOSING STATE section, and a MIXED TICKET one for an executor:mixed
+ticket, are appended by the script rather than templated here.
 -->
 # @KEY@ worker brief
 

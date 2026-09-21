@@ -44,7 +44,7 @@
 # Refusals, checked in this order, before anything is created:
 #   1. bad --model, or --jira-progress-status missing or not numeric
 #   2. HERDR_ENV is not "1"
-#   3. the issue's executor field is not `agent` (human/mixed need a person)
+#   3. the issue's executor field is `human` (`mixed` dispatches like `agent`)
 #   4. the branch already exists, as a herdr worktree or a bare local branch
 #
 # Idempotency: a herdr workspace ALREADY open on the target branch prints
@@ -76,7 +76,7 @@
 #   HERDR_EXECUTOR_FIELD      default: customfield_10047
 #   HERDR_EXECUTOR_AGENT_ID   default: 10020  (unattended agent allowed)
 #   HERDR_EXECUTOR_HUMAN_ID   default: 10021  (refuse: needs a person)
-#   HERDR_EXECUTOR_MIXED_ID   default: 10022  (refuse: needs a person)
+#   HERDR_EXECUTOR_MIXED_ID   default: 10022  (dispatches like agent)
 #   The executor field id and its option ids are specific to the Jira
 #   instance this is pointed at; no universal default exists.
 
@@ -237,14 +237,25 @@ else
 fi
 
 case "$EXECUTOR" in
-    agent) ;;
-    human|mixed)
-        die "$TICKET_UPPER's executor is '$EXECUTOR' — refusing to start an unattended Herdr agent on it (only 'agent' tickets qualify)"
+    agent|mixed) ;;
+    human)
+        die "$TICKET_UPPER's executor is 'human' — refusing to start an unattended Herdr agent on it (only 'agent' and 'mixed' tickets qualify)"
         ;;
     *)
         stop2 "$TICKET_UPPER's executor custom field ($EXECUTOR_FIELD) is '${EXECUTOR:-<unset>}', not one of agent/human/mixed — could not evaluate (unrecognized or unset value)"
         ;;
 esac
+
+if [ "$EXECUTOR" = mixed ]; then
+    PROMPT_TEXT="$PROMPT_TEXT
+
+## MIXED TICKET — STOP AT AWAITING DEPLOYMENT
+This ticket's executor is mixed: only the agent portion runs unattended. Work
+it to the verify block, commit, push your branch and open the PR as usual,
+then STOP — do not land it and do not expect it to be landed for you. Leave
+it at Awaiting Deployment for a person to run this ticket's human_steps and
+land it from there."
+fi
 
 # `open_workspace_id` is null when the worktree exists with no workspace open
 # — refusal #4, not idempotency. `is_linked_worktree` excludes the primary.

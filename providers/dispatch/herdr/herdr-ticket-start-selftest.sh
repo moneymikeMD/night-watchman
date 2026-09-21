@@ -2,9 +2,11 @@
 #
 # Assertions for herdr-ticket-start.sh's central claim: every path that
 # reaches `herdr agent start` carries an explicit `--model`, and every
-# refusal (bad model, human/mixed ticket, branch/worktree trap, --dry-run)
-# creates nothing — zero `herdr worktree create` / `herdr agent start` /
-# `herdr agent prompt` calls.
+# refusal (bad model, human ticket, branch/worktree trap, --dry-run) creates
+# nothing — zero `herdr worktree create` / `herdr agent start` / `herdr agent
+# prompt` calls. A mixed ticket is not a refusal: it dispatches like an
+# agent ticket, but its prompt carries the extra Awaiting-Deployment stop
+# instruction.
 #
 # Isolation: a stub `herdr` and a stub `jira-api.sh`-shaped wrapper on PATH,
 # installed fresh per scratch repo. Every jira-api and herdr call in this
@@ -496,7 +498,9 @@ scenario_human_executor() {
     assert_eq "C0 total herdr calls" "0" "$(wc -l < "$log" | tr -d ' ')"
 }
 
-# C1 — mixed-executor ticket: same shape as C0.
+# C1 — mixed-executor ticket dispatches like an agent ticket (LAB-211): it
+# proceeds (not refused), and the prompt handed to `herdr agent prompt`
+# carries the Awaiting-Deployment stop instruction.
 scenario_mixed_executor() {
     local repo log rc
     repo=$(make_repo) || { echo "FAIL: C1 setup (make_repo)" >&2; FAIL=1; return; }
@@ -504,10 +508,36 @@ scenario_mixed_executor() {
     install_stub_herdr "$repo"
     log="$repo/herdr.log"; : > "$log"
 
-    STUB_HERDR_LOG="$log" run_sut "$repo" PROJ-921 1 >/dev/null 2>&1 && rc=0 || rc=$?
+    STUB_HERDR_LOG="$log" STUB_LIST_JSON='{"id":"cli:worktree:list","result":{"worktrees":[]}}' \
+        STUB_CREATE_JSON="$CREATE_FIXTURE_JSON" run_sut "$repo" PROJ-921 1 >/dev/null 2>&1 && rc=0 || rc=$?
 
-    assert_nonzero "C1" "$rc"
-    assert_eq "C1 total herdr calls" "0" "$(wc -l < "$log" | tr -d ' ')"
+    assert_eq "C1 exit code" "0" "$rc"
+    assert_eq "C1 worktree create calls" "1" "$(call_count "$log" "worktree create")"
+    assert_eq "C1 agent start calls" "1" "$(call_count "$log" "agent start")"
+    assert_eq "C1 agent prompt calls" "1" "$(call_count "$log" "agent prompt")"
+    assert_contains "C1 prompt instructs stopping at Awaiting Deployment" "$(grep '^agent prompt' "$log" || true)" "Awaiting Deployment"
+}
+
+# C1b — agent-executor ticket's prompt carries NO Awaiting-Deployment
+# section: the addition in C1 is mixed-only, not a blanket brief change.
+scenario_agent_executor_prompt_has_no_mixed_section() {
+    local repo log rc
+    repo=$(make_repo) || { echo "FAIL: C1b setup (make_repo)" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10020 "Scratch agent-executor ticket"
+    install_stub_herdr "$repo"
+    log="$repo/herdr.log"; : > "$log"
+
+    STUB_HERDR_LOG="$log" STUB_LIST_JSON='{"id":"cli:worktree:list","result":{"worktrees":[]}}' \
+        STUB_CREATE_JSON="$CREATE_FIXTURE_JSON" run_sut "$repo" PROJ-923 1 >/dev/null 2>&1 && rc=0 || rc=$?
+
+    assert_eq "C1b exit code" "0" "$rc"
+    case "$(grep '^agent prompt' "$log" || true)" in
+        *"Awaiting Deployment"*)
+            echo "FAIL: C1b agent-executor prompt must not carry the mixed-only Awaiting Deployment section" >&2
+            FAIL=1
+            ;;
+        *) echo "ok: C1b agent-executor prompt has no Awaiting Deployment section" ;;
+    esac
 }
 
 # C2 — an unrecognized executor id is malformed input, not a understood
@@ -599,6 +629,24 @@ scenario_dry_run_no_wait() {
             ;;
         *) echo "ok: D2 --no-wait dry-run plan has no --wait" ;;
     esac
+}
+
+# D3 — LAB-211's own verify clause: a mixed-executor ticket under --dry-run
+# proceeds (exit 0, not refused) and the printed brief instructs the worker
+# to stop at Awaiting Deployment.
+scenario_dry_run_mixed_executor() {
+    local repo log out rc
+    repo=$(make_repo) || { echo "FAIL: D3 setup (make_repo)" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10022 "Scratch dry-run mixed-executor ticket"
+    install_stub_herdr "$repo"
+    log="$repo/herdr.log"; : > "$log"
+
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON='{"id":"cli:worktree:list","result":{"worktrees":[]}}' \
+        run_sut "$repo" PROJ-933 1 --dry-run) && rc=0 || rc=$?
+
+    assert_eq "D3 exit code (mixed dry-run proceeds, not refused)" "0" "$rc"
+    assert_contains "D3 printed brief instructs stopping at Awaiting Deployment" "$out" "Awaiting Deployment"
+    assert_contains "D3 states nothing was created" "$out" "Nothing was created"
 }
 
 # E0 — a workspace already open on this branch: exit 0, nothing created.
@@ -1077,10 +1125,12 @@ scenario_no_wait_then_wait_precedence
 scenario_bad_model
 scenario_human_executor
 scenario_mixed_executor
+scenario_agent_executor_prompt_has_no_mixed_section
 scenario_unrecognized_executor
 scenario_dry_run
 scenario_dry_run_wait
 scenario_dry_run_no_wait
+scenario_dry_run_mixed_executor
 scenario_idempotent_existing_workspace
 scenario_worktree_no_open_workspace
 scenario_bare_branch_trap
