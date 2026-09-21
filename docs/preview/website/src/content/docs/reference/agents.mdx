@@ -62,7 +62,7 @@ Reviews shell (and Python-lane) scripts in scripts/ against this project's share
 
 ## spec-reviewer
 
-Reviews a finished ticket branch against its own ticket, not against style — runs issues.py scope for undeclared paths, then reports missing or partial Solution items, behaviour the ticket did not ask for, and implementations whose verify would pass without the intended effect. Read-only; never edits, never spawns agents, never runs verify against a live system. Use before land-branch on any agent-executed ticket.
+Reviews a finished ticket branch against its own ticket, not against style — runs the repo's required checks and issues.py scope, then reports missing or partial Solution items, behaviour the ticket did not ask for, and implementations whose verify would pass without the intended effect. Read-only; never edits, never spawns agents, never runs verify against a live system. Use before land-branch on any agent-executed ticket.
 
 - **Model:** sonnet
 - **Tools:** Read, Grep, Glob, Bash

@@ -122,6 +122,19 @@ Usage:
   release.sh --help
 ```
 
+### scripts/required-checks.sh
+
+required-checks.sh — discover the checks that actually block a merge into
+this repo's default branch and run the ones that are runnable here, so a
+reviewer never has to guess the set and silence is never read as a pass.
+
+```text
+Usage: required-checks.sh [--list] [--source auto|ruleset|ci]
+                          [--repo-root DIR] [--ci-file PATH]
+                          [--only CONTEXT] [--skip CONTEXT]
+                          [--allow-run-steps]
+```
+
 ### scripts/script-analytics.py
 
 script-analytics.py — quantitative evidence on the script-author /
