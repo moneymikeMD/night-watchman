@@ -81,7 +81,7 @@ run_sut
 if [ "$RC" -eq 1 ] && [ -z "$OUT" ] \
     && [[ "$ERR" == *"cannot locate the work-order plugin"* ]] \
     && [[ "$ERR" == *"WORK_ORDER_ROOT"* ]] \
-    && [[ "$ERR" == *"claude plugin install work-order@work-order"* ]] \
+    && [[ "$ERR" == *"claude plugin install work-order@moneymike-plugins"* ]] \
     && [[ "$ERR" == *"errors"* ]]; then
     ok "nothing resolvable: exit 1, stderr names the env var, the install and the errors field"
 else
@@ -136,10 +136,10 @@ if command -v jq >/dev/null 2>&1; then
     CLI_WO="$WORK/cli-work-order"
     make_work_order "$CLI_WO"
 
-    stub_claude "work-order@work-order" "$CLI_WO"
+    stub_claude "work-order@moneymike-plugins" "$CLI_WO"
     run_sut
     if [ "$RC" -eq 0 ] && [ "$OUT" = "$CLI_WO" ]; then
-        ok "the plugin CLI's installPath for id work-order@work-order beats the sibling fallback"
+        ok "the plugin CLI's installPath for id work-order@moneymike-plugins beats the sibling fallback"
     else
         bad "plugin CLI: rc=$RC out='$OUT' err='$ERR'"
     fi
@@ -152,7 +152,7 @@ if command -v jq >/dev/null 2>&1; then
         bad "id keying: rc=$RC out='$OUT' err='$ERR'"
     fi
 
-    stub_claude "work-order@work-order" "$WORK/uninstalled"
+    stub_claude "work-order@moneymike-plugins" "$WORK/uninstalled"
     run_sut
     if [ "$RC" -eq 0 ] && [ "$OUT" = "$WORK/isolated/work-order" ]; then
         ok "an installPath that no longer holds reference/issues.py is not trusted"

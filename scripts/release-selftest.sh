@@ -392,6 +392,25 @@ else
     ok "test10: a failing git commit reverts plugin.json/marketplace.json/CHANGELOG.md and creates no tag"
 fi
 
+# ---- test 11: no marketplace.json (the repo is published by an external
+# marketplace) is fine; plugin.json alone is bumped and committed.
+
+REPO=$(fresh_repo t11 0.7.0)
+(cd "$REPO" && git rm -q .claude-plugin/marketplace.json && git commit -q -m "drop marketplace.json") >/dev/null
+(cd "$REPO" && ./scripts/release.sh minor) >"$WORK/t11.out" 2>&1
+RC=$?
+PLUGIN_AFTER=$(jq -r '.version' "$REPO/.claude-plugin/plugin.json" 2>/dev/null || echo "MISSING")
+if [ "$RC" -ne 0 ]; then
+    bad "test11 (no marketplace.json): release.sh exited $RC:
+$(cat "$WORK/t11.out")"
+elif [ "$PLUGIN_AFTER" != "0.8.0" ]; then
+    bad "test11: plugin.json ended up at '$PLUGIN_AFTER', expected '0.8.0'"
+elif [ -e "$REPO/.claude-plugin/marketplace.json" ]; then
+    bad "test11: release.sh created a marketplace.json"
+else
+    ok "test11: a repo with no marketplace.json releases from plugin.json alone"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $REL)"
 [ "$FAIL" -eq 0 ]

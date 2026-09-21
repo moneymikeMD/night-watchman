@@ -14,7 +14,7 @@
 #
 #     1. $WORK_ORDER_ROOT, when it holds reference/issues.py.
 #     2. claude plugin list --json — the .installPath of the entry whose .id is
-#        work-order@work-order. There is no .name field to key on.
+#        work-order@moneymike-plugins. There is no .name field to key on.
 #     3. A sibling checkout: work-order beside this plugin, then work-order
 #        beside the directory this plugin sits in. A plugin loaded from a local
 #        checkout has no plugin-list entry at all, so this is what makes
@@ -55,7 +55,7 @@ if [ -z "$ROOT" ] && command -v claude >/dev/null 2>&1 && command -v jq >/dev/nu
     LISTED=""
     set +e
     LISTED="$(claude plugin list --json 2>/dev/null \
-        | jq -r 'map(select(.id == "work-order@work-order")) | .[0].installPath // empty' 2>/dev/null)"
+        | jq -r 'map(select(.id == "work-order@moneymike-plugins")) | .[0].installPath // empty' 2>/dev/null)"
     set -e
     if is_work_order "$LISTED"; then
         ROOT="$LISTED"
@@ -74,10 +74,10 @@ fi
 if [ -z "$ROOT" ]; then
     die "cannot locate the work-order plugin. Set WORK_ORDER_ROOT to a work-order
 checkout, or install the dependency with:
-    claude plugin marketplace add moneymikeMD/work-order
-    claude plugin install work-order@work-order
+    claude plugin marketplace add moneymikeMD/moneymike-plugins
+    claude plugin install work-order@moneymike-plugins
 then confirm it arrived — the errors field, not the exit code:
-    claude plugin list --json | jq '.[] | select(.id == \"work-order@work-order\") | .errors'"
+    claude plugin list --json | jq '.[] | select(.id == \"work-order@moneymike-plugins\") | .errors'"
 fi
 
 if [ "$WANT_ISSUES_PY" -eq 1 ]; then

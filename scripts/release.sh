@@ -28,8 +28,9 @@
 #
 # Files touched (real run only):
 #   .claude-plugin/plugin.json        .version bumped
-#   .claude-plugin/marketplace.json   the "night-watchman" plugin entry's
-#                                      .version bumped (added if absent)
+#   .claude-plugin/marketplace.json   only if present: the "night-watchman"
+#                                      plugin entry's .version bumped (added
+#                                      if absent)
 #   CHANGELOG.md                      new section prepended (file created
 #                                      with a minimal header if absent)
 # ...then all three are committed together and an annotated tag `vX.Y.Z`
@@ -105,15 +106,23 @@ MARKETPLACE_JSON="$REPO_ROOT/.claude-plugin/marketplace.json"
 CHANGELOG="$REPO_ROOT/CHANGELOG.md"
 
 [ -r "$PLUGIN_JSON" ] || stop2 "cannot read $PLUGIN_JSON"
-[ -r "$MARKETPLACE_JSON" ] || stop2 "cannot read $MARKETPLACE_JSON"
+HAVE_MARKETPLACE=0
+if [ -e "$MARKETPLACE_JSON" ]; then
+    [ -r "$MARKETPLACE_JSON" ] || stop2 "cannot read $MARKETPLACE_JSON"
+    HAVE_MARKETPLACE=1
+fi
+TRACKED_FILES=("$PLUGIN_JSON")
+[ "$HAVE_MARKETPLACE" = 1 ] && TRACKED_FILES+=("$MARKETPLACE_JSON")
 
 CUR_VERSION=$(jq -r '.version // empty' "$PLUGIN_JSON" 2>/dev/null) || stop2 "could not parse $PLUGIN_JSON as JSON"
 [ -n "$CUR_VERSION" ] || stop2 "$PLUGIN_JSON has no .version field"
 
-MARKETPLACE_MATCHES=$(jq '[.plugins[]? | select(.name=="night-watchman")] | length' "$MARKETPLACE_JSON" 2>/dev/null) \
-    || stop2 "could not parse $MARKETPLACE_JSON as JSON"
-[ "$MARKETPLACE_MATCHES" = "1" ] \
-    || stop2 "expected exactly one 'night-watchman' entry in $MARKETPLACE_JSON's plugins[], found $MARKETPLACE_MATCHES"
+if [ "$HAVE_MARKETPLACE" = 1 ]; then
+    MARKETPLACE_MATCHES=$(jq '[.plugins[]? | select(.name=="night-watchman")] | length' "$MARKETPLACE_JSON" 2>/dev/null) \
+        || stop2 "could not parse $MARKETPLACE_JSON as JSON"
+    [ "$MARKETPLACE_MATCHES" = "1" ] \
+        || stop2 "expected exactly one 'night-watchman' entry in $MARKETPLACE_JSON's plugins[], found $MARKETPLACE_MATCHES"
+fi
 
 
 OLDIFS="$IFS"
@@ -259,18 +268,20 @@ jq --arg v "$NEW_VERSION" '.version = $v' "$PLUGIN_JSON" > "$NEW_PLUGIN_FILE" \
     || stop2 "could not update .version in $PLUGIN_JSON"
 [ -s "$NEW_PLUGIN_FILE" ] || stop2 "updating $PLUGIN_JSON produced an empty file"
 
-NEW_MARKETPLACE_FILE=$(tmpfile) || stop2 "could not create a temp file"
-jq --arg v "$NEW_VERSION" '
-    .plugins = [ .plugins[] | if .name == "night-watchman" then .version = $v else . end ]
-' "$MARKETPLACE_JSON" > "$NEW_MARKETPLACE_FILE" \
-    || stop2 "could not update night-watchman's .version in $MARKETPLACE_JSON"
-[ -s "$NEW_MARKETPLACE_FILE" ] || stop2 "updating $MARKETPLACE_JSON produced an empty file"
+if [ "$HAVE_MARKETPLACE" = 1 ]; then
+    NEW_MARKETPLACE_FILE=$(tmpfile) || stop2 "could not create a temp file"
+    jq --arg v "$NEW_VERSION" '
+        .plugins = [ .plugins[] | if .name == "night-watchman" then .version = $v else . end ]
+    ' "$MARKETPLACE_JSON" > "$NEW_MARKETPLACE_FILE" \
+        || stop2 "could not update night-watchman's .version in $MARKETPLACE_JSON"
+    [ -s "$NEW_MARKETPLACE_FILE" ] || stop2 "updating $MARKETPLACE_JSON produced an empty file"
+fi
 
 # rollback_files — restore plugin.json/marketplace.json/CHANGELOG.md to their
 # pre-run content. Relies on the clean-tree preflight above; a CHANGELOG.md
 # this run created is removed rather than checked out.
 rollback_files() {
-    git checkout -- "$PLUGIN_JSON" "$MARKETPLACE_JSON" 2>/dev/null \
+    git checkout -- "${TRACKED_FILES[@]}" 2>/dev/null \
         || warn "could not restore plugin.json/marketplace.json to their pre-release content — check by hand"
     if [ "$CHANGELOG_EXISTED" = 1 ]; then
         git checkout -- "$CHANGELOG" 2>/dev/null \
@@ -285,7 +296,7 @@ if ! mv "$NEW_PLUGIN_FILE" "$PLUGIN_JSON"; then
     rollback_files
     die "could not write $PLUGIN_JSON — reverted"
 fi
-if ! mv "$NEW_MARKETPLACE_FILE" "$MARKETPLACE_JSON"; then
+if [ "$HAVE_MARKETPLACE" = 1 ] && ! mv "$NEW_MARKETPLACE_FILE" "$MARKETPLACE_JSON"; then
     rollback_files
     die "could not write $MARKETPLACE_JSON — reverted"
 fi
@@ -299,12 +310,12 @@ COMMIT_MSG="release: $TAG
 
 $(cat "$NEWSEC_FILE")"
 
-if ! git add -- "$PLUGIN_JSON" "$MARKETPLACE_JSON" "$CHANGELOG"; then
+if ! git add -- "${TRACKED_FILES[@]}" "$CHANGELOG"; then
     rollback_files
     die "could not stage release files — reverted, nothing committed"
 fi
-if ! git commit -q -m "$COMMIT_MSG" -- "$PLUGIN_JSON" "$MARKETPLACE_JSON" "$CHANGELOG"; then
-    git reset -- "$PLUGIN_JSON" "$MARKETPLACE_JSON" "$CHANGELOG" >/dev/null 2>&1 || true
+if ! git commit -q -m "$COMMIT_MSG" -- "${TRACKED_FILES[@]}" "$CHANGELOG"; then
+    git reset -- "${TRACKED_FILES[@]}" "$CHANGELOG" >/dev/null 2>&1 || true
     rollback_files
     die "git commit failed — reverted, nothing committed"
 fi
