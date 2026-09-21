@@ -1,0 +1,4 @@
+{
+  "_": "Description pairs this repo has looked at and decided not to fix. Each entry is a judgement call, not a snooze: write why in the PR that adds it. Empty is the goal.",
+  "collisions": []
+}
