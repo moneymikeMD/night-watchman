@@ -29,6 +29,20 @@
 #   BASH_SHUNT_SCRIPT="$SCRATCH/mutant.sh" ./bash-result-shunt-selftest.sh   # expect FAIL (6 red)
 #   ./bash-result-shunt-selftest.sh                                         # expect PASS
 #
+# The NWM-136 redaction group was proven discriminating the same way, against
+# four mutants, all run 2026-09-20 (93 green unmutated):
+#   A  the pre-change script (`git show <parent>:hooks/bash-result-shunt.sh`)
+#      — 29 red. It has no --redact-stream at all.
+#   B  `name_is_secret` neutralised to `return 0` — 7 red, all name-only
+#      cases. Written first WITHOUT those cases, this mutant passed clean:
+#      every other fixture value also matched by shape or by prefix, so the
+#      allowlist was dead code no assertion reached. That is why
+#      `NAME=hunter2` exists.
+#   C  the pass-through `print scrub_tokens(line)` replaced by `print ""`, a
+#      redactor that eats all output — 12 red, caught by the negatives and by
+#      the surviving-control argument every assert_absent carries.
+#   D  `is_opaque`'s length gate inverted so every value is opaque — 4 red.
+#
 # Exit 0 if every assertion passes, 1 on the first failure summary printed.
 
 set -u
@@ -339,6 +353,132 @@ EOF
 )"
 OUT="$(run_hook Bash "$REGRESSION_COMMIT_CMD" "sess-regression-commit-prose")"
 assert_rc "[regression guard] gated prose inside a git-commit heredoc body is still not gated after the rework" "0" "$OUT"
+
+# --- NWM-136: secret redaction in command OUTPUT --------------------------
+#
+# Every value below is a fixture invention. None is, or ever was, a real
+# credential: FIXTURE/FAKE appears inside each one so a future reader and a
+# future secret scanner can both tell at a glance.
+
+FIX_OP_TOKEN='ops_FAKEFIXTUREtokenAAAAAAAAAAAAAAAAAAAAAAAA'
+FIX_MEMORY_PW='Kj8mQ2FIXTUREx7LpR4tW9zYc3BdFgH6sA1eU5iO0nM2k'
+FIX_OPAQUE='Zq4FIXTUREw8Nb2Hs6Yt1Rv9Lm3Kp7Xj0Cd5Gf8Ah2Bn'
+
+redact() { printf '%s\n' "$1" | "$SCRIPT" --redact-stream; }
+
+# An absence assertion over empty output is vacuous: a redactor that deleted
+# everything would satisfy it. $4 is a control string that MUST survive.
+assert_absent() {
+  _desc="$1"; _needle="$2"; _hay="$3"; _control="$4"
+  case "$_hay" in
+    *"$_needle"*) fail "$_desc (value still present in: $_hay)"; return ;;
+  esac
+  case "$_hay" in
+    *"$_control"*) pass "$_desc" ;;
+    *) fail "$_desc (vacuous: surviving control '$_control' absent from: $_hay)" ;;
+  esac
+}
+
+assert_contains() {
+  _desc="$1"; _needle="$2"; _hay="$3"
+  case "$_hay" in
+    *"$_needle"*) pass "$_desc" ;;
+    *) fail "$_desc (expected '$_needle' in: $_hay)" ;;
+  esac
+}
+
+assert_identical() {
+  _desc="$1"; _line="$2"
+  _got="$(redact "$_line")"
+  if [ "$_got" = "$_line" ]; then
+    pass "$_desc"
+  else
+    fail "$_desc (line was rewritten to: $_got)"
+  fi
+}
+
+# The three environment-dumping shapes the ticket names, each run for real
+# rather than hand-typed, so a change in their output format is caught.
+
+ENV_OUT="$(env OP_SERVICE_ACCOUNT_TOKEN="$FIX_OP_TOKEN" env | grep '^OP_SERVICE_ACCOUNT_TOKEN=' | "$SCRIPT" --redact-stream)"
+assert_absent "[NWM-136] real 'env' output: token value is gone" "$FIX_OP_TOKEN" "$ENV_OUT" "OP_SERVICE_ACCOUNT_TOKEN="
+assert_contains "[NWM-136] real 'env' output: marker names the variable" "[redacted: OP_SERVICE_ACCOUNT_TOKEN]" "$ENV_OUT"
+
+PRINTENV_OUT="$(env OP_SERVICE_ACCOUNT_TOKEN="$FIX_OP_TOKEN" printenv OP_SERVICE_ACCOUNT_TOKEN | sed 's/^/OP_SERVICE_ACCOUNT_TOKEN=/' | "$SCRIPT" --redact-stream)"
+assert_absent "[NWM-136] real 'printenv' output: token value is gone" "$FIX_OP_TOKEN" "$PRINTENV_OUT" "OP_SERVICE_ACCOUNT_TOKEN="
+
+EXPORTP_OUT="$(env OP_SERVICE_ACCOUNT_TOKEN="$FIX_OP_TOKEN" bash -c 'export -p' | grep 'OP_SERVICE_ACCOUNT_TOKEN' | "$SCRIPT" --redact-stream)"
+assert_absent "[NWM-136] real 'export -p' output: token value is gone" "$FIX_OP_TOKEN" "$EXPORTP_OUT" "declare -x OP_SERVICE_ACCOUNT_TOKEN="
+assert_contains "[NWM-136] 'export -p' marker keeps the declare -x quoting" 'OP_SERVICE_ACCOUNT_TOKEN="[redacted: OP_SERVICE_ACCOUNT_TOKEN]"' "$EXPORTP_OUT"
+
+SET_OUT="$(env OP_SERVICE_ACCOUNT_TOKEN="$FIX_OP_TOKEN" bash -c 'set' | grep '^OP_SERVICE_ACCOUNT_TOKEN=' | "$SCRIPT" --redact-stream)"
+assert_absent "[NWM-136] real 'set' output: token value is gone" "$FIX_OP_TOKEN" "$SET_OUT" "OP_SERVICE_ACCOUNT_TOKEN="
+
+# Shape alone, with a NAME that is on no allowlist.
+
+SHAPE_OUT="$(redact "NWM_FIXTURE_BLOB=$FIX_OPAQUE")"
+assert_absent "[NWM-136] opaque value under a non-allowlisted NAME is redacted on shape alone" "$FIX_OPAQUE" "$SHAPE_OUT" "NWM_FIXTURE_BLOB="
+assert_contains "[NWM-136] shape-only marker names the variable" "[redacted: NWM_FIXTURE_BLOB]" "$SHAPE_OUT"
+
+# Name-only cases: the value is short and ordinary, so ONLY the allowlist can
+# catch it. Without these the allowlist is dead code every other fixture
+# reaches by shape or by prefix instead.
+
+for NAME_ONLY in MEMORY_FALKORDB_PASSWORD OP_SESSION MY_API_KEY DB_PASSWD SOME_SECRET AWS_CREDENTIAL GH_TOKEN; do
+  NAME_ONLY_OUT="$(redact "$NAME_ONLY=hunter2")"
+  assert_absent "[NWM-136] name-only: $NAME_ONLY=hunter2 is redacted on the NAME alone" "hunter2" "$NAME_ONLY_OUT" "[redacted: $NAME_ONLY]"
+done
+
+PREFIX_OUT="$(redact "NWM_FIXTURE_BLOB=$FIX_OP_TOKEN")"
+assert_absent "[NWM-136] credential-prefixed value under a non-allowlisted NAME is redacted" "$FIX_OP_TOKEN" "$PREFIX_OUT" "NWM_FIXTURE_BLOB="
+
+BARE_OUT="$(redact "the value is $FIX_OP_TOKEN right there")"
+assert_absent "[NWM-136] a bare credential-prefixed token with no NAME= at all is redacted" "$FIX_OP_TOKEN" "$BARE_OUT" "the value is "
+
+# The exact reproduction that caused this ticket, run end to end through the
+# hook: the hook's own updatedInput rewrite is executed, not simulated.
+
+REPRO_PAYLOAD="$(jq -n --arg cmd "env | grep -iE 'memory|op_|herdr'" \
+  '{tool_name: "Bash", session_id: "sess-nwm136-repro", tool_input: {command: $cmd}}')"
+REPRO_WRAPPED="$(printf '%s' "$REPRO_PAYLOAD" | env BASH_SHUNT_STATE_ROOT="$STATE_ROOT" BASH_SHUNT_REDACT_OUTPUT=1 \
+  "$SCRIPT" | jq -r '.hookSpecificOutput.updatedInput.command // empty')"
+if [ -z "$REPRO_WRAPPED" ]; then
+  fail "[NWM-136] hook emits an updatedInput rewrite when BASH_SHUNT_REDACT_OUTPUT=1"
+else
+  pass "[NWM-136] hook emits an updatedInput rewrite when BASH_SHUNT_REDACT_OUTPUT=1"
+  printf '%s\n' "$REPRO_WRAPPED" > "$WORKDIR/repro.sh"
+  REPRO_OUT="$(env OP_SERVICE_ACCOUNT_TOKEN="$FIX_OP_TOKEN" MEMORY_FALKORDB_PASSWORD="$FIX_MEMORY_PW" \
+    NWM136_op_CONTROL=plainvalue bash "$WORKDIR/repro.sh" 2>&1)"
+  assert_absent "[NWM-136] the ticket's own 'env | grep -iE' repro shows no OP_SERVICE_ACCOUNT_TOKEN value" "$FIX_OP_TOKEN" "$REPRO_OUT" "NWM136_op_CONTROL=plainvalue"
+  assert_absent "[NWM-136] the ticket's own 'env | grep -iE' repro shows no MEMORY_FALKORDB_PASSWORD value" "$FIX_MEMORY_PW" "$REPRO_OUT" "NWM136_op_CONTROL=plainvalue"
+  assert_contains "[NWM-136] the repro output still names both redacted variables" "[redacted: OP_SERVICE_ACCOUNT_TOKEN]" "$REPRO_OUT"
+fi
+
+# The wrapper must not change what the shell sees: state survives, status is
+# replayed. A rewrite that subshells the command would break both.
+
+printf '%s\n' "$(jq -n --arg cmd 'cd /usr; pwd; false' '{tool_name: "Bash", session_id: "sess-nwm136-state", tool_input: {command: $cmd}}' \
+  | env BASH_SHUNT_STATE_ROOT="$STATE_ROOT" BASH_SHUNT_REDACT_OUTPUT=1 "$SCRIPT" \
+  | jq -r '.hookSpecificOutput.updatedInput.command // empty')" > "$WORKDIR/state.sh"
+STATE_OUT="$(bash -c 'cd /; . "$1"; printf "rc=%s pwd=%s\n" "$?" "$PWD"' _ "$WORKDIR/state.sh")"
+assert_contains "[NWM-136] the rewrite replays the real exit status" "rc=1" "$STATE_OUT"
+assert_contains "[NWM-136] the rewrite leaves 'cd' in effect (no subshell)" "pwd=/usr" "$STATE_OUT"
+
+OUT="$(run_hook Bash "ls -la" "sess-nwm136-default-off")"
+assert_rc "[NWM-136] redaction is off by default: no rewrite, plain allow" "0" "$OUT"
+
+# The NEGATIVE half. A redactor that eats ordinary output is the same defect
+# as a guard that over-blocks, and this repo has shipped one of those.
+
+assert_identical "[NWM-136 negative] a NAME mentioned with no value is untouched" "OP_SERVICE_ACCOUNT_TOKEN is not set in this shell"
+assert_identical "[NWM-136 negative] a NAME inside an ordinary command line is untouched" "grep -c MEMORY_FALKORDB_PASSWORD ~/.zshenv"
+assert_identical "[NWM-136 negative] an empty assignment is untouched" "OP_SERVICE_ACCOUNT_TOKEN="
+assert_identical "[NWM-136 negative] a short ordinary assignment is untouched" "FOO=bar"
+assert_identical "[NWM-136 negative] a long PATH value is untouched" "PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+assert_identical "[NWM-136 negative] a long PWD value is untouched" "PWD=/Users/someone/code/home_workspace/night-watchman"
+assert_identical "[NWM-136 negative] a prefixed-but-ordinary env var is untouched" "npm_config_prefix=/opt/homebrew"
+assert_identical "[NWM-136 negative] a flag that looks like an assignment is untouched" "git log --max-count=20 --oneline"
+assert_identical "[NWM-136 negative] ordinary prose is untouched" "Rotated the token on 2026-09-19; see docs/known-issues for the write-up."
 
 echo ""
 echo "bash-result-shunt-selftest.sh: $PASS passed, $FAIL failed"

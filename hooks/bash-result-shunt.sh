@@ -5,17 +5,37 @@
 # `jira-api.sh board`/`raw` search pulls) before they reach the calling
 # model's context.
 #
-# Usage: not a CLI. Fed the PreToolUse payload on stdin; reads `.tool_name`
-# and `.tool_input.command`. Nothing is ever summarised and no command output
-# is ever inspected — PreToolUse fires BEFORE the command runs, so the only
-# size signal available is the command string itself. Deliberately less
-# powerful than read-shunt.sh; see memory-graph on why no hook primitive can
-# substitute a command's real output.
+# Usage: not a CLI, with one exception: `--redact-stream` filters stdin to
+# stdout as the secret redactor described below, and is how the rewritten
+# command re-enters this script. Otherwise fed the PreToolUse payload on
+# stdin; reads `.tool_name` and `.tool_input.command`. Nothing is ever
+# summarised and no command output is inspected by the HOOK — PreToolUse
+# fires BEFORE the command runs, so the only size signal available for
+# gating is the command string itself. Deliberately less powerful than
+# read-shunt.sh; see memory-graph on why no hook primitive can substitute a
+# command's real output after the fact.
 #
 # Exit codes:
 #   0  allow
 #   2  block, with guidance naming the flag or pipe to add, on stderr —
 #      Claude Code surfaces a PreToolUse hook's stderr as the tool's result
+#
+# SECRET REDACTION (NWM-136), OFF BY DEFAULT — set BASH_SHUNT_REDACT_OUTPUT=1.
+# A worker running `env | grep` printed two live credentials into its
+# transcript; nothing covered command OUTPUT, only file reads. There is still
+# no PostToolUse primitive that can rewrite a tool result (re-verified against
+# the hook reference on 2026-09-20), so the only mechanism is the documented
+# PreToolUse `updatedInput`: this hook rewrites the command to capture its
+# stdout and stderr and replay them through `--redact-stream`. Shell state is
+# preserved — the command runs in a brace group in the live shell, not a
+# subshell, so `cd` and `export` still take effect, and the exit status is
+# replayed. stdout/stderr INTERLEAVING is not preserved.
+#
+# It defaults off because the rewrite touches every Bash call in a session and
+# has not been observed in a live one: guard-fs-writes.sh is a PreToolUse
+# Bash hook in this same plugin that blocks redirects outside the worktree,
+# and the rewrite adds exactly such redirects. Turn it on for one session and
+# watch before making it the default.
 #
 # Pipeline, in order: strip_heredocs() first, then a `;`/`&&`/`||`/`&`/newline
 # split into statements, each into `|`-separated stages, each into
@@ -71,6 +91,125 @@ fail_open() {
   echo "bash-result-shunt.sh: $1 — failing open (allow)" >&2
   exit 0
 }
+
+# --- secret redaction ------------------------------------------------------
+#
+# `--redact-stream` filters stdin to stdout, replacing a secret VALUE with
+# `[redacted: NAME]`. Two passes, in order, first match per line wins:
+#
+#   1. ASSIGNMENT. The first `NAME=VALUE` on a line, where NAME starts at the
+#      line start or after a space/tab (so `env`, `printenv`, `set` and
+#      `declare -x NAME="V"` from `export -p` all parse, and `--max-count=20`
+#      does not). Surrounding quotes are preserved around the marker. The
+#      value is redacted when the NAME is on the allowlist (contains TOKEN,
+#      SECRET, PASSWORD, PASSWD, CREDENTIAL or KEY, or starts OP_/MEMORY_) OR
+#      the VALUE carries a known credential prefix OR the VALUE is opaque
+#      enough on its own — 32+ chars of [A-Za-z0-9+=_-] with at least one
+#      letter and one digit.
+#   2. BARE TOKEN. Any remaining word carrying a known credential prefix,
+#      which catches `echo $OP_SERVICE_ACCOUNT_TOKEN` where no NAME is in the
+#      output at all. The marker cannot name a variable there.
+#
+# `/` and `.` are deliberately OUT of the opaque-value charset: without that,
+# every PWD, HOME and PATH-like value is 32+ chars of allowed characters and
+# the filter eats ordinary output, which is the same failure as a guard that
+# over-blocks. The cost is that an unprefixed base64 secret containing `/`
+# under a non-allowlisted NAME is not caught by shape alone.
+#
+# Known gaps, all deliberate: a value spanning multiple lines, a second
+# assignment on the same line, and an opaque value printed bare with no
+# recognised prefix.
+
+redact_stream() {
+  awk '
+function isdig(c) { return (c != "" && index("0123456789", c) > 0) }
+function isalp(c) { return (c != "" && index("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", c) > 0) }
+function isword(c) {
+  if (isdig(c) || isalp(c)) return 1
+  return (c == "+" || c == "/" || c == "=" || c == "_" || c == "-" || c == ".")
+}
+function name_is_secret(nm,   u) {
+  u = toupper(nm)
+  if (index(u, "TOKEN") > 0) return 1
+  if (index(u, "SECRET") > 0) return 1
+  if (index(u, "PASSWORD") > 0) return 1
+  if (index(u, "PASSWD") > 0) return 1
+  if (index(u, "CREDENTIAL") > 0) return 1
+  if (index(u, "KEY") > 0) return 1
+  if (substr(u, 1, 3) == "OP_") return 1
+  if (substr(u, 1, 7) == "MEMORY_") return 1
+  return 0
+}
+function has_prefix(v,   i) {
+  if (length(v) < 20) return 0
+  for (i = 1; i <= NPFX; i++) if (substr(v, 1, length(PFX[i])) == PFX[i]) return 1
+  return 0
+}
+function is_opaque(v,   n, i, c, hasd, hasa) {
+  n = length(v)
+  if (n < 32) return 0
+  hasd = 0; hasa = 0
+  for (i = 1; i <= n; i++) {
+    c = substr(v, i, 1)
+    if (isdig(c)) { hasd = 1; continue }
+    if (isalp(c)) { hasa = 1; continue }
+    if (c == "+" || c == "=" || c == "_" || c == "-") continue
+    return 0
+  }
+  return (hasd && hasa)
+}
+function scrub_tokens(s,   res, i, n, c, tok) {
+  res = ""; tok = ""; n = length(s)
+  for (i = 1; i <= n + 1; i++) {
+    c = (i <= n) ? substr(s, i, 1) : ""
+    if (c != "" && isword(c)) { tok = tok c; continue }
+    if (length(tok) > 0) { res = res (has_prefix(tok) ? "[redacted: secret-shaped value]" : tok); tok = "" }
+    res = res c
+  }
+  return res
+}
+BEGIN {
+  NPFX = split("ops_ ghp_ gho_ ghu_ ghs_ ghr_ github_pat_ xoxb- xoxa- xoxp- xoxr- xoxs- glpat- dop_v1_ shpat_ AKIA ASIA eyJ", PFX, " ")
+}
+{
+  line = $0
+  eq = index(line, "=")
+  if (eq > 1) {
+    s = eq - 1
+    while (s >= 1) {
+      c = substr(line, s, 1)
+      if (isdig(c) || isalp(c) || c == "_") { s-- } else break
+    }
+    nstart = s + 1
+    nm = substr(line, nstart, eq - nstart)
+    ok = 0
+    if (length(nm) > 0 && !isdig(substr(nm, 1, 1))) {
+      if (nstart == 1) ok = 1
+      else { b = substr(line, nstart - 1, 1); if (b == " " || b == "\t") ok = 1 }
+    }
+    if (ok) {
+      val = substr(line, eq + 1)
+      q = ""
+      if (length(val) >= 2) {
+        f = substr(val, 1, 1)
+        l = substr(val, length(val), 1)
+        if (f == l && (f == "\"" || f == "\047")) { q = f; val = substr(val, 2, length(val) - 2) }
+      }
+      if (length(val) > 0 && (name_is_secret(nm) || has_prefix(val) || is_opaque(val))) {
+        print substr(line, 1, eq) q "[redacted: " nm "]" q
+        next
+      }
+    }
+  }
+  print scrub_tokens(line)
+}
+'
+}
+
+if [ "${1:-}" = "--redact-stream" ]; then
+  redact_stream
+  exit 0
+fi
 
 command -v jq >/dev/null 2>&1 || fail_open "jq not found on PATH"
 
@@ -490,10 +629,47 @@ is_secret_command() {
   done
   return 1
 }
+# allow_exit: the single "this command runs" exit. With
+# BASH_SHUNT_REDACT_OUTPUT=1 it first emits a PreToolUse `updatedInput` that
+# routes the command's stdout and stderr through --redact-stream, so a secret
+# is redacted whatever command produced it. Default OFF: see the header.
+allow_exit() {
+  [ "${BASH_SHUNT_REDACT_OUTPUT:-0}" = "1" ] || exit 0
+
+  case "$CMD" in
+    *__nwm_rd_*) exit 0 ;;
+  esac
+  case "$SELF" in
+    *"'"*) exit 0 ;;
+  esac
+  [ "$(echo "$INPUT" | jq -r '.tool_input.run_in_background // false' 2>/dev/null)" = "true" ] && exit 0
+  command -v mktemp >/dev/null 2>&1 || exit 0
+
+  # A backgrounded statement outlives the wrapper, so its output would be
+  # deleted with the temp file rather than redacted.
+  split_segments "$CMD"
+  _ae_i=0
+  while [ "$_ae_i" -lt "${#SEG_SEP[@]}" ]; do
+    [ "${SEG_SEP[$_ae_i]}" = "&" ] && exit 0
+    _ae_i=$((_ae_i + 1))
+  done
+
+  _ae_t="\${TMPDIR:-/tmp}/nwm-redact.XXXXXX"
+  _ae_wrapped="__nwm_rd_o=\"\$(mktemp \"$_ae_t\")\"; __nwm_rd_e=\"\$(mktemp \"$_ae_t\")\"; { $CMD
+} >\"\$__nwm_rd_o\" 2>\"\$__nwm_rd_e\"; __nwm_rd_rc=\$?; '$SELF' --redact-stream <\"\$__nwm_rd_o\"; '$SELF' --redact-stream <\"\$__nwm_rd_e\" >&2; rm -f \"\$__nwm_rd_o\" \"\$__nwm_rd_e\"; unset __nwm_rd_o __nwm_rd_e; ( exit \$__nwm_rd_rc )"
+
+  echo "$INPUT" | jq -c --arg c "$_ae_wrapped" \
+    '{hookSpecificOutput: {hookEventName: "PreToolUse", updatedInput: ((.tool_input // {}) + {command: $c})}}' \
+    2>/dev/null || exit 0
+  exit 0
+}
+
+SELF="$(cd "$(dirname "$0")" 2>/dev/null && pwd)/$(basename "$0")"
+
 # Every check from here on reads $STRIPPED_CMD, never raw $CMD.
 STRIPPED_CMD="$(strip_heredocs "$CMD")"
 
-is_secret_command "$STRIPPED_CMD" && exit 0
+is_secret_command "$STRIPPED_CMD" && allow_exit
 
 # key_for_string: collision-resistant marker key, same rationale as
 # read-shunt.sh's key_for_path.
@@ -615,7 +791,7 @@ if is_uncapped_git_log "$STRIPPED_CMD"; then
 elif is_uncapped_jira_board "$STRIPPED_CMD"; then
   GUIDANCE="An unfiltered 'jira-api.sh board'/'raw' pull can return a large result set into your context. Re-run with '--limit', or pipe the output through 'jq' to extract only the fields you need."
 else
-  exit 0
+  allow_exit
 fi
 
 [ -n "$SESSION_ID" ] || fail_open "no .session_id in hook payload, cannot dedupe safely"
@@ -637,7 +813,7 @@ MARKER="$SESSION_DIR/$KEY"
 
 if [ -e "$MARKER" ]; then
   # Already gated once this session with this exact command — let it run.
-  exit 0
+  allow_exit
 fi
 
 : > "$MARKER" 2>/dev/null || fail_open "could not write gate marker $MARKER"
