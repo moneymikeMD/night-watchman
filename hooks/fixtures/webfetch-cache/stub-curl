@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+# Offline stand-in for curl, used only by webfetch-cache-selftest.sh via
+# NW_WEBFETCH_CURL. It parses the conditional-request headers the hooks send
+# and answers from environment variables, so no assertion in that selftest
+# ever opens a socket.
+#
+# Env:
+#   STUB_ETAG            the validator the "origin" currently advertises
+#   STUB_LAST_MODIFIED   likewise
+#   STUB_FAIL            non-empty: exit 7, as curl does on a connect failure
+#   STUB_HEAD_STATUS     status for the header-block (post-hook) call (200)
+
+set -u
+
+if [ -n "${STUB_FAIL:-}" ]; then
+  exit 7
+fi
+
+WANT_STATUS=""
+INM=""
+IMS=""
+prev=""
+for arg in "$@"; do
+  case "$prev" in
+    -H)
+      case "$arg" in
+        If-None-Match:\ *) INM="${arg#If-None-Match: }" ;;
+        If-Modified-Since:\ *) IMS="${arg#If-Modified-Since: }" ;;
+      esac
+      ;;
+    -w) WANT_STATUS=1 ;;
+  esac
+  prev="$arg"
+done
+
+if [ -n "$WANT_STATUS" ]; then
+  if [ -n "$INM" ]; then
+    if [ "$INM" = "${STUB_ETAG:-}" ]; then printf '304'; else printf '200'; fi
+  elif [ -n "$IMS" ]; then
+    if [ "$IMS" = "${STUB_LAST_MODIFIED:-}" ]; then printf '304'; else printf '200'; fi
+  else
+    printf '200'
+  fi
+  exit 0
+fi
+
+printf 'HTTP/2 %s\r\n' "${STUB_HEAD_STATUS:-200}"
+printf 'content-type: text/html; charset=utf-8\r\n'
+[ -n "${STUB_ETAG:-}" ] && printf 'etag: %s\r\n' "$STUB_ETAG"
+[ -n "${STUB_LAST_MODIFIED:-}" ] && printf 'last-modified: %s\r\n' "$STUB_LAST_MODIFIED"
+printf '\r\n'
+exit 0

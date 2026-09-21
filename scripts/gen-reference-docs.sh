@@ -264,21 +264,22 @@ render_hooks() {
     local plugin_json="$ROOT/.claude-plugin/plugin.json"
     [ -f "$plugin_json" ] || die "no such file: $plugin_json"
     printf '## Registered hooks (.claude-plugin/plugin.json)\n\n'
-    printf '| Matcher | Command | Timeout |\n'
-    printf '| --- | --- | --- |\n'
-    local matcher command timeout hooks_tsv
+    printf '| Event | Matcher | Command | Timeout |\n'
+    printf '| --- | --- | --- | --- |\n'
+    local event matcher command timeout hooks_tsv
     # Captured into a variable so jq's exit status is checked: a `while read`
     # never sees it, so a malformed plugin.json would exit 0 with an empty table.
     hooks_tsv="$(jq -r '
-        .hooks.PreToolUse[] as $grp
+        .hooks | to_entries[] as $ev
+        | $ev.value[] as $grp
         | $grp.hooks[]
-        | [$grp.matcher, .command, (.timeout | tostring)]
+        | [$ev.key, ($grp.matcher // "-"), .command, (.timeout | tostring)]
         | @tsv
     ' "$plugin_json")" || die "gen-reference-docs.sh: jq failed to parse $plugin_json"
     if [ -n "$hooks_tsv" ]; then
-        while IFS="$(printf '\t')" read -r matcher command timeout; do
+        while IFS="$(printf '\t')" read -r event matcher command timeout; do
             # shellcheck disable=SC2016  # literal backticks around the command cell, not command substitution
-            printf '| %s | `%s` | %s |\n' "$(blank "$matcher")" "$(blank "$command")" "$(blank "$timeout")"
+            printf '| %s | %s | `%s` | %s |\n' "$(blank "$event")" "$(blank "$matcher")" "$(blank "$command")" "$(blank "$timeout")"
         done < <(printf '%s\n' "$hooks_tsv")
     fi
     printf '\n'

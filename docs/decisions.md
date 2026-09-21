@@ -959,3 +959,46 @@ Not deleted: `skills/to-issues/assets/ticket-template.md`. work-order v1.3.0
 ships `SPEC.md`, `bindings/file/BINDING.md` and example tickets, but no bare
 template, so deleting it would remove something the dependency does not
 replace. It stays until work-order carries an equivalent.
+
+### 2026-09-21 — WebFetch results are cached and reused only on an HTTP 304 revalidation (NWM-142)
+
+The mechanism, adopted from `addyosmani/agent-skills` (`hooks/sdd-cache-pre.sh`
+and `sdd-cache-post.sh`, audited 2026-09-20): a PreToolUse hook matching
+WebFetch looks the URL up in a local cache. If an entry exists, it issues a
+conditional HEAD carrying `If-None-Match` and `If-Modified-Since`. On a 304 it
+blocks the fetch (exit 2) and hands the model the cached reading through
+stderr; on anything else it allows the real fetch. A PostToolUse hook stores
+the reading together with the validators the origin is advertising.
+
+Shipped here as `hooks/webfetch-cache-pre.sh` and `hooks/webfetch-cache-post.sh`
+because the ownership table gives the cheap-reader hooks to night-watchman, and
+the whole point is not paying twice for a body the model has already read.
+
+There is deliberately no TTL and the prompt is not part of the cache key.
+Freshness is delegated entirely to the origin, so a reuse is a fresh
+verification rather than a memory read — which is what keeps this compatible
+with the standing rule that anything carrying a version or a release cadence is
+looked up, not recalled. A hit asserts only what the origin just asserted: the
+bytes have not changed since the reading was taken.
+
+The cached body is not raw HTML. It is one agent's model-processed reading of
+the page under its own prompt, so the originating prompt is stored alongside and
+printed on every hit; the next agent has to judge whether that reading answers
+its question. There is no "ask twice and it passes through" escape hatch of the
+kind `read-shunt.sh` has, because a second WebFetch of the same URL in one
+session is exactly the case this hook exists to serve. The escape hatch is a
+plain `curl` in Bash, which the hook never matches.
+
+Three consequences of delegating freshness that the implementation had to
+absorb. An origin advertising no ETag and no Last-Modified is never cached at
+all, since without a TTL there would be nothing to revalidate against. Claude
+Code does not hand a hook the tool's response headers, so the post hook issues
+its own HEAD to observe them, and skips the write unless that HEAD is a clean
+200. And a credentialed URL — userinfo before the host, or a
+token/secret/signature-shaped query parameter — is never stored or served,
+checked before the URL is hashed so it leaves no trace in the cache directory.
+
+Both hooks fail open on every ambiguity: no cache directory, an unwritable one,
+a missing `jq` or `curl`, a HEAD that errors or times out, a malformed entry, an
+empty body. A needless refetch costs tokens; serving a stale body would be a
+correctness bug.
