@@ -11,15 +11,16 @@ description: Generated from every hooks/*.sh header (excluding selftests), plus 
 bash-result-shunt.sh — Claude Code PreToolUse hook for Bash. Gates the
 largest known-noisy Bash tool results (uncapped `git log`, unfiltered
 `jira-api.sh board`/`raw` search pulls) before they reach the calling
-model's context.
+model's context, and optionally redacts secret-shaped values out of a
+command's OUTPUT.
 
 ```text
-Usage: not a CLI. Fed the PreToolUse payload on stdin; reads `.tool_name`
-and `.tool_input.command`. Nothing is ever summarised and no command output
-is ever inspected — PreToolUse fires BEFORE the command runs, so the only
-size signal available is the command string itself. Deliberately less
-powerful than read-shunt.sh; see memory-graph on why no hook primitive can
-substitute a command's real output.
+Usage: not a CLI, with one exception: `--redact-stream` filters stdin to
+stdout as the secret redactor, and is how the rewritten command re-enters
+this script. Otherwise fed the PreToolUse payload on stdin; reads
+`.tool_name` and `.tool_input.command`. The HOOK never sees command output:
+PreToolUse fires BEFORE the command runs, so the command string is the only
+size signal available for gating.
 ```
 
 ### hooks/guard-fs-writes.sh
@@ -69,12 +70,38 @@ session-cost.sh — Claude Code SessionEnd hook.
 Usage: fed the SessionEnd hook JSON on stdin, no arguments.
 ```
 
+### hooks/webfetch-cache-post.sh
+
+webfetch-cache-post.sh — Claude Code PostToolUse hook for WebFetch. Stores
+the reading WebFetch just produced together with the ETag and Last-Modified
+the origin is advertising right now, so webfetch-cache-pre.sh can
+revalidate it on the next request for the same URL.
+
+```text
+Usage: not a CLI. Fed the PostToolUse payload on stdin.
+```
+
+### hooks/webfetch-cache-pre.sh
+
+webfetch-cache-pre.sh — Claude Code PreToolUse hook for WebFetch. If this
+URL has been fetched before, revalidates it against the origin with a
+conditional HEAD; a 304 blocks the fetch and hands the model the cached
+reading instead. Anything other than 304 allows the real fetch through.
+
+```text
+Usage: not a CLI. Fed the PreToolUse payload on stdin.
+```
+
 ## Registered hooks (.claude-plugin/plugin.json)
 
-| Matcher | Command | Timeout |
-| --- | --- | --- |
-| Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/guard-fs-writes.sh` | 10 |
-| Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/bash-result-shunt.sh` | 10 |
-| Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/read-shunt.sh` | 60 |
-| Read | `${CLAUDE_PLUGIN_ROOT}/hooks/read-shunt.sh` | 60 |
+| Event | Matcher | Command | Timeout |
+| --- | --- | --- | --- |
+| PreToolUse | Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/guard-fs-writes.sh` | 10 |
+| PreToolUse | Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/bash-result-shunt.sh` | 10 |
+| PreToolUse | Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/read-shunt.sh` | 60 |
+| PreToolUse | Read | `${CLAUDE_PLUGIN_ROOT}/hooks/read-shunt.sh` | 60 |
+| PreToolUse | WebFetch | `${CLAUDE_PLUGIN_ROOT}/hooks/webfetch-cache-pre.sh` | 20 |
+| PostToolUse | WebFetch | `${CLAUDE_PLUGIN_ROOT}/hooks/webfetch-cache-post.sh` | 20 |
+| SessionEnd | - | `${CLAUDE_PLUGIN_ROOT}/hooks/session-cost.sh` | 30 |
+| SubagentStop | script-author|script-reviewer | `${CLAUDE_PLUGIN_ROOT}/hooks/script-events-hook.sh` | 30 |
 

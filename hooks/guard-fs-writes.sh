@@ -290,68 +290,9 @@ _ss_opaque_pop() {
   unset "_SS_OPAQUE_STACK[$_sop_last]"
 }
 
-# Recursion-safe state frames: these functions keep per-call state in globals
-# and re-enter each other, so each saves and restores its own variables.
-_FRAME_STACK=()
-_ss_words=()
-_ss_find_paths=()
-_ss_git_opts=()
-_frame_push() {
-  local _fp_v _fp_a _fp_n _fp_i
-  for _fp_v in $1; do
-    if [ -n "${!_fp_v+x}" ]; then
-      _FRAME_STACK+=("1" "${!_fp_v}")
-    else
-      _FRAME_STACK+=("0" "")
-    fi
-  done
-  for _fp_a in $2; do
-    eval "_fp_n=\${#${_fp_a}[@]}"
-    _fp_i=0
-    while [ "$_fp_i" -lt "$_fp_n" ]; do
-      eval "_FRAME_STACK+=(\"\${${_fp_a}[${_fp_i}]}\")"
-      _fp_i=$((_fp_i + 1))
-    done
-    _FRAME_STACK+=("$_fp_n")
-  done
-}
-_frame_pop() {
-  local _fq_v _fq_a _fq_n _fq_last _fq_start _fq_i _fq_rev=""
-  for _fq_a in $2; do _fq_rev="$_fq_a $_fq_rev"; done
-  for _fq_a in $_fq_rev; do
-    _fq_last=$((${#_FRAME_STACK[@]} - 1))
-    _fq_n="${_FRAME_STACK[$_fq_last]}"
-    unset "_FRAME_STACK[$_fq_last]"
-    _fq_start=$((_fq_last - _fq_n))
-    eval "$_fq_a=()"
-    _fq_i=0
-    while [ "$_fq_i" -lt "$_fq_n" ]; do
-      eval "$_fq_a+=(\"\${_FRAME_STACK[$((_fq_start + _fq_i))]}\")"
-      _fq_i=$((_fq_i + 1))
-    done
-    _fq_i=$((_fq_n - 1))
-    while [ "$_fq_i" -ge 0 ]; do
-      unset "_FRAME_STACK[$((_fq_start + _fq_i))]"
-      _fq_i=$((_fq_i - 1))
-    done
-  done
-  _fq_rev=""
-  for _fq_v in $1; do _fq_rev="$_fq_v $_fq_rev"; done
-  for _fq_v in $_fq_rev; do
-    _fq_last=$((${#_FRAME_STACK[@]} - 1))
-    if [ "${_FRAME_STACK[$((_fq_last - 1))]}" = "1" ]; then
-      printf -v "$_fq_v" '%s' "${_FRAME_STACK[$_fq_last]}"
-    else
-      unset "$_fq_v"
-    fi
-    unset "_FRAME_STACK[$_fq_last]" "_FRAME_STACK[$((_fq_last - 1))]"
-  done
-}
-_SS_FRAME_ARRAYS="_ss_words _ss_find_paths _ss_git_opts"
-_SS_FRAME_VARS="_ss_after _ss_cmd_word_idx _ss_ek _ss_et _ss_eval_rest _ss_exec_cmd _ss_find_has_action _ss_fk2 _ss_flag _ss_ftok _ss_git_block _ss_git_linked _ss_git_subcmd _ss_gj _ss_gk _ss_gk2 _ss_gtok _ss_i _ss_j _ss_k _ss_line _ss_match _ss_n _ss_next_i _ss_opaque _ss_saw_recursive _ss_stash_action _ss_tgt _ss_word _ss_xargs_cmd _ss_xeval _ss_xj2 _ss_xk _ss_xtok"
-_SDP_FRAME_VARS="_sdp_body _sdp_c _sdp_c2 _sdp_cj _sdp_depth _sdp_i _sdp_j _sdp_len _sdp_text"
-_SCT_FRAME_ARRAYS="_sct_seglist"
-_SCT_FRAME_VARS="_sct_n _sct_no_heredoc _sct_seg _sct_text"
+# Re-entrancy: the three mutually recursive scanners declare their per-call
+# state `local`, which bash scopes DYNAMICALLY — a callee writes the
+# declaring frame's copy, and a re-entry gets its own. See docs/decisions.md.
 
 # tokenize_quoted_cca: tokenize_quoted's logic writing to its OWN _CCA_WORDS —
 # reusing _ss_words would clobber an outer scan_segment loop mid-iteration.
@@ -700,7 +641,9 @@ is_quoted_word() {
 # scan_dollar_parens_in_word: command substitution still executes inside DOUBLE
 # quotes, so every `$( ... )` body of such a word is extracted (paren-depth-
 # aware) and scanned. Single-quoted words and backticks get none of this.
-_scan_dollar_parens_in_word_body() {
+scan_dollar_parens_in_word() {
+  local _sdp_body="" _sdp_c="" _sdp_c2="" _sdp_cj="" _sdp_depth=0
+  local _sdp_i=0 _sdp_j=0 _sdp_len=0 _sdp_text=""
   _sdp_text="$1"
   _sdp_len=${#_sdp_text}
   _sdp_i=0
@@ -742,18 +685,10 @@ _scan_dollar_parens_in_word_body() {
   return 0
 }
 
-scan_dollar_parens_in_word() {
-  local _fw_rc
-  _frame_push "$_SDP_FRAME_VARS" ""
-  _scan_dollar_parens_in_word_body "$@"
-  _fw_rc=$?
-  _frame_pop "$_SDP_FRAME_VARS" ""
-  return "$_fw_rc"
-}
-
-# tokenize_quoted: quote-AWARE word splitting into the global array _ss_words.
-# A quoted span joins the CURRENT word rather than ending it at internal
-# whitespace; an unterminated quote consumes to end-of-segment, not forever.
+# tokenize_quoted: quote-AWARE word splitting into _ss_words, which scan_segment
+# declares `local` — call it only from scan_segment's dynamic extent. A quoted
+# span joins the CURRENT word rather than ending it at internal whitespace; an
+# unterminated quote consumes to end-of-segment, not forever.
 tokenize_quoted() {
   _tq_line="$1"
   _ss_words=()
@@ -811,7 +746,6 @@ tokenize_quoted() {
 # split on ; && || | — a separator inside a quoted span is data, never a
 # boundary (the fixed false positive). `\;` (find's -exec terminator) stays
 # literal outside quotes; a literal newline splits too, as it did before.
-_sct_seglist=()
 split_unquoted_segments() {
   _sus_text="$1"
   _sct_seglist=()
@@ -896,7 +830,15 @@ split_unquoted_segments() {
   return 0
 }
 
-_scan_segment_body() {
+scan_segment() {
+  local _ss_words=() _ss_find_paths=() _ss_git_opts=()
+  local _ss_after="" _ss_cmd_word_idx=0 _ss_ek=0 _ss_et="" _ss_eval_rest=""
+  local _ss_exec_cmd="" _ss_find_has_action=0 _ss_fk2=0 _ss_flag="" _ss_fp=""
+  local _ss_ftok="" _ss_git_block=0 _ss_git_linked=0 _ss_git_subcmd=""
+  local _ss_gj=0 _ss_gk=0 _ss_gk2=0 _ss_gtok="" _ss_i=0 _ss_j=0 _ss_k=0
+  local _ss_line="" _ss_match="" _ss_n=0 _ss_next_i=0 _ss_opaque=0
+  local _ss_saw_recursive=0 _ss_stash_action="" _ss_tgt="" _ss_word=""
+  local _ss_xargs_cmd="" _ss_xeval="" _ss_xj2=0 _ss_xk=0 _ss_xtok=""
   _ss_line="$1"
   tokenize_quoted "$_ss_line"
   _ss_n="${#_ss_words[@]}"
@@ -1223,15 +1165,6 @@ _scan_segment_body() {
   return 0
 }
 
-scan_segment() {
-  local _fw_rc
-  _frame_push "$_SS_FRAME_VARS" "$_SS_FRAME_ARRAYS"
-  _scan_segment_body "$@"
-  _fw_rc=$?
-  _frame_pop "$_SS_FRAME_VARS" "$_SS_FRAME_ARRAYS"
-  return "$_fw_rc"
-}
-
 # Strip heredoc BODIES (opener through terminator line) before the text is
 # split into segments — heredoc content is literal data, not further commands.
 # Only the first `<<` marker per physical line is recognised.
@@ -1300,7 +1233,9 @@ strip_heredocs() {
 # scan_command_text: the shared entry point for the top-level command and every
 # nested re-execution context. A literal `\;` is protected from the `;`-split
 # first: it is find's own escaped -exec terminator, not a command separator.
-_scan_command_text_body() {
+scan_command_text() {
+  local _sct_seglist=()
+  local _sct_n=0 _sct_no_heredoc="" _sct_seg="" _sct_text=""
   _sct_text="$1"
   _sct_no_heredoc="$(strip_heredocs "$_sct_text")"
   collect_same_command_assignments "$_sct_no_heredoc"
@@ -1312,15 +1247,6 @@ _scan_command_text_body() {
     done
   fi
   return 0
-}
-
-scan_command_text() {
-  local _fw_rc
-  _frame_push "$_SCT_FRAME_VARS" "$_SCT_FRAME_ARRAYS"
-  _scan_command_text_body "$@"
-  _fw_rc=$?
-  _frame_pop "$_SCT_FRAME_VARS" "$_SCT_FRAME_ARRAYS"
-  return "$_fw_rc"
 }
 
 scan_command_text "$CMD"

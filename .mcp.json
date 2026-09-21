@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": ["${HOME}/.claude/mcp/memory/server.js"]
+    },
+    "release": {
+      "command": "node",
+      "args": ["${HOME}/.claude/mcp/release/server.js"],
+      "env": {
+        "AI_TOOLKIT_ROOT": "${HOME}/code/home_workspace/ai-toolkit"
+      }
+    }
+  }
+}

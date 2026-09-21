@@ -13,7 +13,9 @@ gen-reference-docs-selftest.sh.
 
 ## Registered hooks (.claude-plugin/plugin.json)
 
-| Matcher | Command | Timeout |
-| --- | --- | --- |
-| Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/fake-hook.sh` | 5 |
+| Event | Matcher | Command | Timeout |
+| --- | --- | --- | --- |
+| PreToolUse | Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/fake-hook.sh` | 5 |
+| PostToolUse | WebFetch | `${CLAUDE_PLUGIN_ROOT}/hooks/fake-hook.sh` | 7 |
+| SessionEnd | - | `${CLAUDE_PLUGIN_ROOT}/hooks/fake-hook.sh` | 9 |
 
