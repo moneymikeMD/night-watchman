@@ -5,11 +5,19 @@
 # and answers from environment variables, so no assertion in that selftest
 # ever opens a socket.
 #
+# Redirects are modelled the way curl really behaves, because whether a hook
+# passes -L is the difference between observing the source URL's 301 and
+# silently observing the target's 200 and its validators.
+#
 # Env:
 #   STUB_ETAG            the validator the "origin" currently advertises
 #   STUB_LAST_MODIFIED   likewise
 #   STUB_FAIL            non-empty: exit 7, as curl does on a connect failure
 #   STUB_HEAD_STATUS     status for the header-block (post-hook) call (200)
+#   STUB_REDIRECT_TO     non-empty: the URL 301s here. Without -L the answer
+#                        is that 301 and no validators; with -L it is the
+#                        target's clean 200 and STUB_REDIRECT_ETAG.
+#   STUB_REDIRECT_ETAG   the target's ETag, seen only when -L is passed
 
 set -u
 
@@ -18,10 +26,14 @@ if [ -n "${STUB_FAIL:-}" ]; then
 fi
 
 WANT_STATUS=""
+FOLLOW=""
 INM=""
 IMS=""
 prev=""
 for arg in "$@"; do
+  case "$arg" in
+    -L) FOLLOW=1 ;;
+  esac
   case "$prev" in
     -H)
       case "$arg" in
@@ -34,20 +46,39 @@ for arg in "$@"; do
   prev="$arg"
 done
 
+ETAG_NOW="${STUB_ETAG:-}"
+LMOD_NOW="${STUB_LAST_MODIFIED:-}"
+STATUS_NOW="${STUB_HEAD_STATUS:-200}"
+
+if [ -n "${STUB_REDIRECT_TO:-}" ]; then
+  if [ -n "$FOLLOW" ]; then
+    ETAG_NOW="${STUB_REDIRECT_ETAG:-}"
+    LMOD_NOW=""
+    STATUS_NOW=200
+  else
+    ETAG_NOW=""
+    LMOD_NOW=""
+    STATUS_NOW=301
+  fi
+fi
+
 if [ -n "$WANT_STATUS" ]; then
-  if [ -n "$INM" ]; then
-    if [ "$INM" = "${STUB_ETAG:-}" ]; then printf '304'; else printf '200'; fi
+  if [ "$STATUS_NOW" = "301" ]; then
+    printf '301'
+  elif [ -n "$INM" ]; then
+    if [ "$INM" = "$ETAG_NOW" ]; then printf '304'; else printf '200'; fi
   elif [ -n "$IMS" ]; then
-    if [ "$IMS" = "${STUB_LAST_MODIFIED:-}" ]; then printf '304'; else printf '200'; fi
+    if [ "$IMS" = "$LMOD_NOW" ]; then printf '304'; else printf '200'; fi
   else
     printf '200'
   fi
   exit 0
 fi
 
-printf 'HTTP/2 %s\r\n' "${STUB_HEAD_STATUS:-200}"
+printf 'HTTP/2 %s\r\n' "$STATUS_NOW"
 printf 'content-type: text/html; charset=utf-8\r\n'
-[ -n "${STUB_ETAG:-}" ] && printf 'etag: %s\r\n' "$STUB_ETAG"
-[ -n "${STUB_LAST_MODIFIED:-}" ] && printf 'last-modified: %s\r\n' "$STUB_LAST_MODIFIED"
+[ "$STATUS_NOW" = "301" ] && printf 'location: %s\r\n' "${STUB_REDIRECT_TO:-}"
+[ -n "$ETAG_NOW" ] && printf 'etag: %s\r\n' "$ETAG_NOW"
+[ -n "$LMOD_NOW" ] && printf 'last-modified: %s\r\n' "$LMOD_NOW"
 printf '\r\n'
 exit 0

@@ -998,7 +998,23 @@ its own HEAD to observe them, and skips the write unless that HEAD is a clean
 token/secret/signature-shaped query parameter — is never stored or served,
 checked before the URL is hashed so it leaves no trace in the cache directory.
 
+Having no TTL creates one failure mode that is not a refetch, and the post
+hook is where it has to be stopped. Not every successful WebFetch carries page
+content: a cross-host redirect comes back as a short notice asking the model to
+fetch the target instead, and a robots.txt or 403 refusal comes back as error
+prose, both reported as success. Cached, either one would be served forever,
+because the pre hook would keep revalidating against a validator that keeps
+matching and keep printing the notice under a banner asserting the content is
+current. Three gates refuse it: the tool's own `.tool_response.code` must be
+200 when the payload carries one, the validator HEAD does not follow redirects
+so a redirecting URL answers 3xx and fails the 200 gate rather than being keyed
+under the target's validators, and a reading under `NW_WEBFETCH_MIN_BYTES`
+(200) is refused because the notice shapes are short and a page reading is not.
+
 Both hooks fail open on every ambiguity: no cache directory, an unwritable one,
 a missing `jq` or `curl`, a HEAD that errors or times out, a malformed entry, an
 empty body. A needless refetch costs tokens; serving a stale body would be a
-correctness bug.
+correctness bug. The credentialed-URL match is over-broad on purpose — the
+substrings are looked for anywhere in the query string, so `author=` and
+`session_type=` also opt a URL out — because a false positive costs one refetch
+and a false negative puts a credential on disk.

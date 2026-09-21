@@ -23,8 +23,22 @@
 # catch. Cheap insurance against it is that the write is skipped whenever the
 # HEAD is not a clean 200.
 #
+# Not every successful WebFetch carries page content. A cross-host redirect
+# comes back as a short notice asking the model to fetch the target instead,
+# and a robots.txt or 403 refusal comes back as error prose — both with the
+# tool reporting success. Caching either would be the one way this design can
+# fail WRONG rather than merely costing a refetch, because there is no TTL to
+# expire it: the pre hook would keep revalidating, keep getting a 304, and
+# keep serving the notice under a banner asserting the content is current.
+# Three gates stop that. The tool's own `.tool_response.code`, when it carries
+# one, must be 200. The validator HEAD does not follow redirects, so a URL
+# that redirects answers 3xx and fails the 200 gate rather than being keyed
+# under the target's validators. And a reading below NW_WEBFETCH_MIN_BYTES is
+# refused, because the notice shapes are all short and a page reading is not.
+#
 # Overridable for testing — same variables as webfetch-cache-pre.sh, plus:
 #   NW_WEBFETCH_MAX_BYTES   largest reading stored, in bytes (262144)
+#   NW_WEBFETCH_MIN_BYTES   smallest reading stored, in bytes (200)
 #
 # Dependencies: bash 3.2, jq, curl, and one of shasum/md5/openssl.
 
@@ -34,6 +48,7 @@ CACHE_DIR="${NW_WEBFETCH_CACHE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/night-
 CURL_BIN="${NW_WEBFETCH_CURL:-curl}"
 HEAD_TIMEOUT="${NW_WEBFETCH_TIMEOUT:-10}"
 MAX_BYTES="${NW_WEBFETCH_MAX_BYTES:-262144}"
+MIN_BYTES="${NW_WEBFETCH_MIN_BYTES:-200}"
 
 skip() {
   [ "${NW_WEBFETCH_DEBUG:-}" = "1" ] && echo "webfetch-cache-post.sh: ${1:-skip} — not caching" >&2
@@ -63,6 +78,18 @@ BODY_TEXT="$(printf '%s' "$INPUT" | jq -r '
     end' 2>/dev/null)"
 [ -n "$BODY_TEXT" ] || skip "no usable .tool_response in hook payload"
 
+RESPONSE_CODE="$(printf '%s' "$INPUT" | jq -r '
+  (.tool_response // empty) as $r
+  | if ($r | type) == "object" then (($r.code // $r.status // empty) | tostring)
+    else ""
+    end' 2>/dev/null)"
+case "$RESPONSE_CODE" in
+  ""|200) : ;;
+  *) skip "WebFetch reported HTTP $RESPONSE_CODE, so .tool_response is not page content" ;;
+esac
+
+# is_credentialed_url: true when $1 must never be cached. The query-string
+# match is deliberately over-broad — see webfetch-cache-pre.sh for why.
 is_credentialed_url() {
   _icu_url="$1"
   case "$_icu_url" in
@@ -101,8 +128,7 @@ key_for_url() {
   return 1
 }
 
-# header_value: last occurrence of header $2 in the header block on stdin,
-# so a redirect chain yields the final response's validator, not the 301's.
+# header_value: last occurrence of header $1 in the header block on stdin.
 header_value() {
   awk -v want="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" '
     { line = $0; sub(/\r$/, "", line)
@@ -120,17 +146,18 @@ is_credentialed_url "$URL" && skip "credentialed or non-http(s) URL, never cache
 
 BODY_BYTES="$(printf '%s' "$BODY_TEXT" | wc -c | tr -d ' ')"
 [ "${BODY_BYTES:-0}" -le "$MAX_BYTES" ] || skip "reading is $BODY_BYTES bytes, over the $MAX_BYTES cap"
+[ "${BODY_BYTES:-0}" -ge "$MIN_BYTES" ] || skip "reading is $BODY_BYTES bytes, under the $MIN_BYTES floor — notice-shaped, not a page reading"
 
 command -v "$CURL_BIN" >/dev/null 2>&1 || skip "$CURL_BIN not found on PATH"
 
 KEY="$(key_for_url "$URL")" || skip "no hashing tool (shasum/md5/openssl) on PATH"
 [ -n "$KEY" ] || skip "empty cache key derived for the URL"
 
-HEADERS="$("$CURL_BIN" -sS -L -I -m "$HEAD_TIMEOUT" -- "$URL" 2>/dev/null)" || skip "validator HEAD failed"
+HEADERS="$("$CURL_BIN" -sS -I -m "$HEAD_TIMEOUT" -- "$URL" 2>/dev/null)" || skip "validator HEAD failed"
 [ -n "$HEADERS" ] || skip "validator HEAD returned no headers"
 
 STATUS_LINE="$(printf '%s\n' "$HEADERS" | awk '/^HTTP\// { code = $2; gsub(/\r/, "", code); last = code } END { print last }')"
-[ "$STATUS_LINE" = "200" ] || skip "validator HEAD answered $STATUS_LINE, not 200"
+[ "$STATUS_LINE" = "200" ] || skip "validator HEAD answered $STATUS_LINE, not 200 (a redirect target's validators are never keyed under the source URL)"
 
 ETAG="$(printf '%s\n' "$HEADERS" | header_value etag)"
 LAST_MODIFIED="$(printf '%s\n' "$HEADERS" | header_value last-modified)"

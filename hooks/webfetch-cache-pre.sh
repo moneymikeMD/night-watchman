@@ -29,7 +29,16 @@
 #
 # Never serves a credentialed URL from cache: a non-http(s) scheme, userinfo
 # before the host, or a query string carrying a token/key/secret/signature/
-# password-shaped parameter is passed straight through and never stored.
+# password-shaped parameter is passed straight through and never stored. That
+# last match is deliberately over-broad — the substrings are looked for
+# anywhere in the query string, not only in parameter-name position, so
+# ordinary parameters such as author=, session_type= or signature_algorithm=
+# also opt a URL out of the cache. The cost of a false positive is one
+# refetch; the cost of a false negative is a credential on disk.
+#
+# The revalidating HEAD does not follow redirects. A URL that has started
+# redirecting since the entry was stored answers 3xx, which is not 304, so
+# the fetch is allowed rather than revalidated against the target's page.
 #
 # Fails open (exit 0, the real fetch runs) on every ambiguity: missing jq or
 # curl, no cache directory, an unreadable or malformed entry, no stored
@@ -143,7 +152,7 @@ STORED_AT="$(meta_field "$META" stored_at)"
 
 [ -n "$ETAG" ] || [ -n "$LAST_MODIFIED" ] || allow "cache entry has no validators to revalidate with"
 
-set -- -sS -L -I -m "$HEAD_TIMEOUT" -o /dev/null -w '%{http_code}'
+set -- -sS -I -m "$HEAD_TIMEOUT" -o /dev/null -w '%{http_code}'
 [ -n "$ETAG" ] && set -- "$@" -H "If-None-Match: $ETAG"
 [ -n "$LAST_MODIFIED" ] && set -- "$@" -H "If-Modified-Since: $LAST_MODIFIED"
 
