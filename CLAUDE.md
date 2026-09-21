@@ -165,9 +165,13 @@ regression. Jobs:
   `providers/tracker/jira/jira-workflow-apply-selftest.sh`, each failing one
   known assertion) — skipped in the gating step, re-run informationally
   with `continue-on-error`.
-- **known-issues index is not drifted** — `scripts/known-issue.sh lint`.
-  `docs/known-issues.md` is **generated** from `docs/known-issues/*.md`
-  frontmatter by `scripts/known-issue.sh reindex`
+- **known-issues index is not drifted** — `known-issue.sh lint`, run out of
+  an **ai-toolkit checkout**: the script left this repo under NWM-128 and is
+  resolved at run time by `scripts/ai-toolkit-root.sh --known-issue`
+  (`$AI_TOOLKIT_ROOT`, then a sibling checkout). The CI job clones ai-toolkit's
+  default branch for it, because `scripts/` there is the unpinned surface with
+  no tag to resolve. `docs/known-issues.md` is **generated** from
+  `docs/known-issues/*.md` frontmatter by `known-issue.sh reindex`
   (`add`/`resolve`/`severity` call it too); never hand-edit the index.
 - **generated reference docs are not drifted** — `scripts/gen-reference-docs.sh
   --check` diffs against `docs/preview/website/src/content/docs/reference/`.
@@ -229,8 +233,9 @@ opposite.
 ```bash
 providers/lib/provider.sh doctor                     # what does this repo talk to, and why
 scripts/work-order-root.sh --issues-py                # resolve the work-order dependency
+scripts/ai-toolkit-root.sh --known-issue              # resolve the ai-toolkit dependency
 scripts/land-branch-selftest.sh [old-land-branch.sh] [issues.py]
-scripts/known-issue.sh add|reindex|resolve <slug>     # never hand-edit docs/known-issues.md
+"$(scripts/ai-toolkit-root.sh --known-issue)" add|reindex|resolve <slug>
 scripts/gen-reference-docs.sh --check                 # CI's drift check
 scripts/gen-reference-docs.sh                         # regenerate after editing a source
 find hooks providers scripts -name '*.sh' -not -path 'scripts/fixtures/*' \

@@ -246,8 +246,8 @@ DEFAULT_AGENT_TYPE_MAP = {
 # under either.
 SCRIPT_RE = re.compile(r"(?:scripts|hooks)/[A-Za-z0-9_./-]+\.(?:sh|py)")
 # A generic TICKET-123-shaped id, not tied to one tracker's prefix (see
-# scripts/known-issue.sh's own TICKET_RE — kept identical on purpose so
-# the two scripts agree on what a ticket reference looks like).
+# ai-toolkit's known-issue.sh TICKET_RE — kept identical on purpose so the
+# two agree on what a ticket reference looks like, now across two repos).
 TICKET_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9_]*-\d+\b")
 LINT_CMD_RE = re.compile(r"shellcheck|ruff check|lint")
 SELFTEST_CMD_RE = re.compile(r"selftest")

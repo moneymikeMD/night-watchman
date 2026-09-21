@@ -169,7 +169,7 @@ When the reports come back:
   touch the ticket body only if the acceptance criteria moved; it stays put.
 - New fact about the project → the matching `docs/` topic file, updated in
   place; new "why" → a dated append to the decisions log; problem found,
-  not fixed → `${CLAUDE_PLUGIN_ROOT}/scripts/known-issue.sh add`.
+  not fixed → `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" add`, with cwd in this repo (NWM-145).
 - Run `"$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)" lint` before any ticket transition.
 - Every user answer this session → a row in `ethos.md`'s decision log, and
   a default adjusted if the pattern moved.
@@ -193,7 +193,7 @@ taking one side wholesale.
 
 Re-run both tickets' `verify` and `issues.py lint`, then re-run
 `land-branch.sh`. A same-wave conflict means `touches` was under-declared:
-file it with `known-issue.sh add`, or fix the ticket's `touches`.
+file it with `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" add`, or fix the ticket's `touches`.
 
 Adapted from mattpocock/skills resolving-merge-conflicts, 2026-09-14.
 

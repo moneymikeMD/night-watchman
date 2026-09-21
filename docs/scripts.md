@@ -22,3 +22,5 @@ retired, one-line purpose, and reason.
 
 - `comment-lint.py` — retired 2026-09-18. Fail a build when comments run longer than the project's comment rule allows. Reason: relocated to the public moneymikeMD/ai-toolkit and consumed here as `actions/comment-lint@v1` (NWM-126).
 - `comment-lint-selftest.sh` — retired 2026-09-18. Selftest for comment-lint.py. Reason: relocated with comment-lint.py to moneymikeMD/ai-toolkit (NWM-126).
+- `known-issue.sh` — retired 2026-09-21. Manage `docs/known-issues/` as one file per finding under a generated index. Reason: relocated to the public moneymikeMD/ai-toolkit and consumed here through `scripts/ai-toolkit-root.sh --known-issue` (NWM-128).
+- `known-issue-selftest.sh` — retired 2026-09-21. Selftest for known-issue.sh. Reason: relocated with known-issue.sh to moneymikeMD/ai-toolkit (NWM-128).
