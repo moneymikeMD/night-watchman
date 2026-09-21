@@ -696,6 +696,108 @@ assert_block "still blocks a write into an UNRELATED repo's worktree from this r
 assert_block "still blocks appending into a sibling worktree when cwd is NOT a git repo at all (WO-023 fix 2, the no-repo fallback is unchanged, not widened)" \
   "$NOT_WORKTREE_NOT_SCRATCH" "echo x >> $FAKE_LINKED_WORKTREE/wo023.log" "target outside worktree and scratchpad"
 
+# NWM-122 re-entrancy oracle. The three mutually recursive scanners keep their
+# per-call state in bash `local`, whose DYNAMIC scope is the whole reason
+# re-entry is safe. These assertions are the only thing checking that, and they
+# fail against the pre-NWM-122 shape, which no behavioural assertion here does.
+
+scanner_scope_audit() {
+  awk '
+    BEGIN {
+      np = 3
+      pfx[1] = "_ss_";  own[1] = "scan_segment"
+      pfx[2] = "_sct_"; own[2] = "scan_command_text"
+      pfx[3] = "_sdp_"; own[3] = "scan_dollar_parens_in_word"
+      nh = 2
+      helper[1] = "tokenize_quoted";         howner[1] = "scan_segment"
+      helper[2] = "split_unquoted_segments"; howner[2] = "scan_command_text"
+      fn = ""
+    }
+    {
+      line = $0
+      t = line
+      sub(/^[[:space:]]+/, "", t)
+      if (substr(t, 1, 1) == "#") next
+      if (match(line, /^[A-Za-z_][A-Za-z0-9_]*\(\)[[:space:]]*\{/)) {
+        fn = substr(line, 1, index(line, "(") - 1)
+        next
+      }
+      if (line == "}") { fn = ""; next }
+      if (match(t, /^local[[:space:]]/)) {
+        n = split(substr(t, 6), parts, /[[:space:]]+/)
+        for (i = 1; i <= n; i++) {
+          nm = parts[i]
+          sub(/=.*$/, "", nm)
+          if (nm ~ /^_(ss|sct|sdp)_/) declared[nm] = fn
+        }
+        next
+      }
+      rest = line
+      while (match(rest, /(^|[^A-Za-z0-9_$])_(ss|sct|sdp)_[A-Za-z0-9_]*\+?=/)) {
+        tok = substr(rest, RSTART, RLENGTH)
+        rest = substr(rest, RSTART + RLENGTH)
+        sub(/^[^A-Za-z0-9_]/, "", tok)
+        sub(/\+?=$/, "", tok)
+        seen[tok] = 1
+        if (fn == "") top[tok] = NR
+      }
+      if (match(t, /^for[[:space:]]+_(ss|sct|sdp)_[A-Za-z0-9_]+[[:space:]]/)) {
+        nm = substr(t, RSTART, RLENGTH)
+        sub(/^for[[:space:]]+/, "", nm)
+        sub(/[[:space:]]+$/, "", nm)
+        seen[nm] = 1
+        if (fn == "") top[nm] = NR
+      }
+      for (i = 1; i <= nh; i++)
+        if (line ~ ("(^|[^A-Za-z0-9_])" helper[i] "([^A-Za-z0-9_(]|$)"))
+          calls[i] = calls[i] " " (fn == "" ? "<file-scope>" : fn)
+    }
+    END {
+      nseen = 0
+      for (nm in seen) {
+        want = ""
+        for (i = 1; i <= np; i++) if (index(nm, pfx[i]) == 1) want = own[i]
+        if (want == "") continue
+        nseen++
+        if (!(nm in declared)) print "UNDECLARED " nm " (want: local in " want ")"
+        else if (declared[nm] != want) print "WRONG-OWNER " nm " (local in " declared[nm] ", want " want ")"
+        if (nm in top) print "FILE-SCOPE " nm " (assigned outside any function, line " top[nm] ")"
+      }
+      if (nseen < 40) print "ORACLE-BLIND matched only " nseen " scanner variables; the audit has stopped seeing them"
+      for (i = 1; i <= nh; i++) {
+        c = calls[i]
+        sub(/^[[:space:]]+/, "", c)
+        if (c == "") { print "NO-CALLER " helper[i] " (expected a call from " howner[i] ")"; continue }
+        n = split(c, cs, /[[:space:]]+/)
+        for (j = 1; j <= n; j++)
+          if (cs[j] != howner[i]) print "OUT-OF-EXTENT " helper[i] " called from " cs[j] " (it writes a local of " howner[i] ")"
+      }
+    }
+  ' "$1"
+}
+
+SCOPE_AUDIT="$(scanner_scope_audit "$GUARD")"
+GUARD_NAME="$(basename "$GUARD")"
+
+assert_scope() {
+  desc="$1"; pattern="$2"
+  hits="$(printf '%s\n' "$SCOPE_AUDIT" | grep -E "$pattern" | tr '\n' ';')" || true
+  if [ -z "$hits" ]; then
+    pass "$desc (oracle: static scope audit of $GUARD_NAME, 0 violations)"
+  else
+    fail "$desc (oracle: static scope audit of $GUARD_NAME, violations: $hits)"
+  fi
+}
+
+assert_scope "every _ss_/_sct_/_sdp_ scanner variable is declared 'local' in its owning scanner (NWM-122: bash 'local' replaced the hand-maintained _*_FRAME_VARS lists, and an undeclared one is a silent re-entrancy hole of the class NWM-118 was opened to fix)" \
+  '^(UNDECLARED|WRONG-OWNER|ORACLE-BLIND)'
+
+assert_scope "no scanner variable is assigned at file scope (NWM-122: a file-scope assignment survives the scanner's return and is what the 'local' declarations replace)" \
+  '^FILE-SCOPE'
+
+assert_scope "tokenize_quoted and split_unquoted_segments are called only from the scanner whose 'local' they write (NWM-122: writing another frame's variable is correct only inside that function's dynamic extent)" \
+  '^(OUT-OF-EXTENT|NO-CALLER)'
+
 echo
 echo "$N assertion(s), $((N - FAIL)) passed" >&2
 if [ "$FAIL" -ne 0 ]; then
