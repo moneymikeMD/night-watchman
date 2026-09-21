@@ -39,6 +39,20 @@ jobs:
       - name: the dependency resolves
         run: scripts/work-order-root.sh --issues-py
 
+      - name: ai-toolkit dependency
+        run: |
+          set -euo pipefail
+          # ai-toolkit's scripts/ is its UNPINNED surface: consumed by absolute
+          # path out of a working checkout, live to every caller on merge. There
+          # is no tag to resolve, so this tracks the default branch on purpose.
+          git clone --depth 1 \
+            https://github.com/moneymikeMD/ai-toolkit.git "$RUNNER_TEMP/ai-toolkit"
+          test -f "$RUNNER_TEMP/ai-toolkit/scripts/known-issue.sh"
+          echo "AI_TOOLKIT_ROOT=$RUNNER_TEMP/ai-toolkit" >> "$GITHUB_ENV"
+
+      - name: the ai-toolkit dependency resolves
+        run: scripts/ai-toolkit-root.sh --known-issue
+
       - name: shellcheck
         run: |
           set -euo pipefail
@@ -76,7 +90,9 @@ jobs:
           providers/tracker/jira/jira-workflow-apply-selftest.sh || true
 
       - name: known-issues index is not drifted
-        run: scripts/known-issue.sh lint
+        # NWM-145: known-issue.sh resolves its target repo from cwd, so this
+        # runs with cwd in this checkout and never inside ai-toolkit's.
+        run: "$(scripts/ai-toolkit-root.sh --known-issue)" lint
 
       - name: generated reference docs are not drifted
         run: |

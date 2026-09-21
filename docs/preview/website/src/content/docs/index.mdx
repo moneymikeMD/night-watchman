@@ -81,13 +81,13 @@ full contract.
   skipping a line it did not understand.
 
 **Scripts**
-- `known-issue.sh` — one file per finding under a generated index, so the
-  index can never silently drift from the entries it summarizes.
+- `ai-toolkit-root.sh` — resolves the ai-toolkit checkout this plugin takes
+  `known-issue.sh` from, so there is no second copy of it here.
 - `land-branch.sh` — merges a finished ticket branch, moves its ticket to
   completed (file mode), and stops at the first failure rather than
   half-landing.
 - `lib/kit.sh` — the small die/warn/need/show_help/tmpfile shell helpers
-  the two scripts above share; deliberately minimal so the core stays
+  the scripts above share; deliberately minimal so the core stays
   dependency-free.
 
 **Docs**

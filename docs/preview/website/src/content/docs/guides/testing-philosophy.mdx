@@ -56,8 +56,8 @@ Run it from inside `scripts/`, with `-P .` so it can resolve the relative
 `source`/`.` lines between the scripts and `lib/kit.sh`:
 
 ```
-cd scripts && shellcheck -x -P . land-branch.sh known-issue.sh \
-    land-branch-selftest.sh known-issue-selftest.sh lib/kit.sh
+cd scripts && shellcheck -x -P . land-branch.sh ai-toolkit-root.sh \
+    land-branch-selftest.sh ai-toolkit-root-selftest.sh lib/kit.sh
 ```
 
 `providers/` carries its own copy of `lib/kit.sh` (see that file's header

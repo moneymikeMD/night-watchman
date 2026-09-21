@@ -2,7 +2,7 @@
 #
 # Manage docs/decisions.d/ — one markdown file per dated decision, with
 # docs/decisions.md as a GENERATED index concatenating every entry in
-# order. Modelled on scripts/known-issue.sh's shape (add/index/lint); no
+# order. Modelled on ai-toolkit's known-issue.sh shape (add/index/lint); no
 # manifest/hash tamper-check (WO-022 found known-issue.sh's had drifted
 # from every entry) and no status/severity, since a decision is never
 # resolved or reopened, only superseded by a later entry.

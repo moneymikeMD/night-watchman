@@ -3,7 +3,8 @@
 - `faq.md` — what this is, and why it is neither a Claude Code workflow nor an
   agent team. Explanation, with the evidence.
 - `ethos.md` — capped defaults the owner has already decided; check before asking.
-- `known-issues.md` — generated index of `known-issues/` (use `scripts/known-issue.sh`).
+- `known-issues.md` — generated index of `known-issues/` (use ai-toolkit's
+  `known-issue.sh`, resolved by `scripts/ai-toolkit-root.sh --known-issue`).
 - `cost.md` — cost ledger schema and the cost-reviewer agent.
 - `testing-philosophy.md` — why selftests are structurally offline.
 - `writing-style.md` — Diátaxis compass mapped to docs/, review checklist, em-dash rule.

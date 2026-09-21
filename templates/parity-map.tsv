@@ -26,8 +26,6 @@ scripts/api/confluence-api.sh	providers/publish/atlassian/confluence.sh
 scripts/api/confluence-api-selftest.sh	providers/publish/atlassian/selftest.sh
 scripts/api/atlassian-graphql.sh	providers/publish/atlassian/townsquare.sh
 scripts/api/atlassian-graphql-selftest.sh	providers/publish/atlassian/selftest.sh
-scripts/docs/known-issue.sh	scripts/known-issue.sh
-scripts/docs/known-issue-selftest.sh	scripts/known-issue-selftest.sh
 scripts/dev/claude-cost.py	scripts/claude-cost.py
 scripts/dev/claude-cost-selftest.sh	scripts/claude-cost-selftest.sh
 scripts/dev/script-analytics.py	scripts/script-analytics.py
