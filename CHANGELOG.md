@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [1.3.0](https://github.com/moneymikeMD/night-watchman/compare/v1.2.1...v1.3.0) (2026-09-21)
+
+
+### Features
+
+* take known-issue.sh from ai-toolkit instead of carrying a copy (NWM-128) ([#58](https://github.com/moneymikeMD/night-watchman/issues/58)) ([7acb1ab](https://github.com/moneymikeMD/night-watchman/commit/7acb1ab7097bb05b32ff91ac5079aa0c5bb95c89))
+
+
+### Bug Fixes
+
+* ignore the dated wave-trail files a wave actually writes (NWM-150) ([#57](https://github.com/moneymikeMD/night-watchman/issues/57)) ([c223e50](https://github.com/moneymikeMD/night-watchman/commit/c223e505d97caa8e7f52145968d4da1f76d3aeef))
+
 ## [1.2.1](https://github.com/moneymikeMD/night-watchman/compare/v1.2.0...v1.2.1) (2026-09-21)
 
 
