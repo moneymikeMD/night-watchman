@@ -68,6 +68,10 @@
 #   LAND_BRANCH_HANDOFF_FILE          closing-state path; unreadable = no closing state.
 #   LAND_BRANCH_ORCHESTRATOR_PANE     override the orchestrator pane id.
 #   LAND_BRANCH_EXECUTOR_FIELD        jira executor field (customfield_10047).
+#   LAND_BRANCH_CLOSING_READBACK_ATTEMPTS jira mode: read-back attempts before
+#                                         giving up (default 4).
+#   LAND_BRANCH_CLOSING_READBACK_DELAY_S  linear-backoff whole seconds between
+#                                         those attempts (default 1).
 #   --reset-land                      (flag only) discard uncommitted changes in
 #                                     the integration worktree before syncing.
 #
@@ -408,6 +412,34 @@ $(jira_err)"
         fi
         [ "$after_id" = "$2" ] && return 0
         MOVE_MSG="transition POST returned 2xx but $TICKET_ID reads back as '$MOVE_AFTER_NAME', not status id $2"
+        return 1
+    }
+
+    # jira_closing_readback MARK — retries the comment read-back with a
+    # bounded, linearly-backed-off wait, absorbing Jira's read-after-write
+    # window. Sets CLOSING_READBACK_MSG to say whether the GET itself failed
+    # or merely came back without MARK; returns 0 the first time MARK appears.
+    jira_closing_readback() {
+        local mark="$1" attempts="${LAND_BRANCH_CLOSING_READBACK_ATTEMPTS:-4}" \
+            delay="${LAND_BRANCH_CLOSING_READBACK_DELAY_S:-1}" n=1 body
+        # Both knobs feed a bash arithmetic expansion; a non-whole-number
+        # value (e.g. "0.5" or "abc") would abort or kill the shell, so fall
+        # back to the default instead of trusting operator input.
+        case "$attempts" in (*[!0-9]*|'') attempts=4 ;; esac
+        case "$delay" in (*[!0-9]*|'') delay=1 ;; esac
+        CLOSING_READBACK_MSG=""
+        while :; do
+            if body=$(jira_read "/issue/$TICKET_ID/comment?maxResults=100&orderBy=-created"); then
+                printf '%s' "$body" | grep -Fq "$mark" && return 0
+                CLOSING_READBACK_MSG="attempt $n: the GET succeeded but the comment list did not carry '$mark' yet"
+            else
+                CLOSING_READBACK_MSG="attempt $n: GET /issue/$TICKET_ID/comment failed. jira-api said:
+$(jira_err)"
+            fi
+            [ "$n" -lt "$attempts" ] || break
+            sleep "$((delay * n))"
+            n=$((n + 1))
+        done
         return 1
     }
 
@@ -975,9 +1007,8 @@ if [ "$CLOSING" = 1 ] && [ "$TRACKER" = jira ]; then
     echo "Writing $TICKET_ID's closing state to the tracker..."
     if ! jira_post_comment "$TICKET_ID" "$CLOSING_TEXT"; then
         CLOSING_FAILED="POST of the closing-state comment failed"
-    elif ! CLOSING_READBACK=$(jira_read "/issue/$TICKET_ID/comment?maxResults=100&orderBy=-created") \
-        || ! printf '%s' "$CLOSING_READBACK" | grep -Fq "$CLOSING_MARK"; then
-        CLOSING_FAILED="the closing-state comment was POSTed but '$CLOSING_MARK' did not read back from $TICKET_ID's comments"
+    elif ! jira_closing_readback "$CLOSING_MARK"; then
+        CLOSING_FAILED="the closing-state comment was POSTed but '$CLOSING_MARK' did not read back from $TICKET_ID's comments after retrying — $CLOSING_READBACK_MSG"
     else
         echo "closing state written and read back."
     fi
