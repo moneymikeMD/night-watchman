@@ -60,6 +60,13 @@ cat > "$JIRA_MOCK" <<'PYEOF'
 #   JIRA_MOCK_FAIL_TO        a transition id whose POST fails (no state change)
 #   JIRA_MOCK_STUCK_TO       a transition id whose POST "succeeds" but moves nothing
 #   JIRA_MOCK_FAIL_COMMENT   "1" -> the comment POST fails
+#   JIRA_MOCK_COMMENT_GET_DELAY  the newest comment is missing from the /comment
+#                                GET response for its first N calls (NWM-138:
+#                                models Jira's read-after-write window)
+#   JIRA_MOCK_COMMENT_GET_NEVER  "1" -> the newest comment is missing from every
+#                                /comment GET response, regardless of N
+#   JIRA_MOCK_COMMENT_GET_FAIL_N the /comment GET itself fails for its first N
+#                                calls (a transport failure, not a stale read)
 import json, os, subprocess, sys
 
 STATE = os.environ["JIRA_MOCK_STATE"]
@@ -111,7 +118,20 @@ def main():
             print(json.dumps({"fields": {path.split("fields=")[1]: {
                 "value": os.environ.get("JIRA_MOCK_EXECUTOR", "agent")}}}))
         elif "/comment" in path:
-            print(json.dumps({"comments": [{"body": c} for c in load()["comments"]]}))
+            st = load()
+            n = st.get("comment_gets", 0) + 1
+            st["comment_gets"] = n
+            save(st)
+            fail_n = int(os.environ.get("JIRA_MOCK_COMMENT_GET_FAIL_N", "0") or "0")
+            if n <= fail_n:
+                print("jira-api: HTTP 500 GET %s" % path, file=sys.stderr)
+                return 1
+            comments = list(st["comments"])
+            delay = os.environ.get("JIRA_MOCK_COMMENT_GET_DELAY")
+            never = os.environ.get("JIRA_MOCK_COMMENT_GET_NEVER") == "1"
+            if comments and (never or (delay and n <= int(delay))):
+                comments = comments[:-1]
+            print(json.dumps({"comments": [{"body": c} for c in comments]}))
         else:
             sys.exit("mock: unexpected GET %s" % path)
         return 0
@@ -564,6 +584,143 @@ elif ! grep -q "NOT written durably" "$WORK/jc2.out"; then
 $(cat "$WORK/jc2.out")"
 else
     ok "testJC2: a failed closing-state write exits 1 loudly, keeps the landing, and leaves the worker's pane alone"
+fi
+
+# ---- NWM-138 testJC3: regression fixture for the exact NWM-123 shape — the
+# closing-state comment is present the moment it is POSTed, but the FIRST
+# read-back misses it (Jira's read-after-write window); a second read finds
+# it. This must exit 0 and tear the workspace down as normal, not report a durable write as failed.
+
+fresh_jira_repo jc3 3 10009 >/dev/null
+closing_stub jc3
+JC3_START=$SECONDS
+run_closing jc3 JIRA_MOCK_COMMENT_GET_DELAY=1 LAND_BRANCH_CLOSING_READBACK_DELAY_S=0
+JC3_ELAPSED=$((SECONDS - JC3_START))
+STATE="$WORK/jc3.jira-state.json"
+if [ "$RC" -ne 0 ]; then
+    bad "testJC3 (NWM-123 regression: one missed read-back): exit $RC:
+$(cat "$WORK/jc3.out")"
+elif [ "$(state_field "$STATE" comment_gets)" -lt 2 ]; then
+    bad "testJC3: expected at least 2 read-back attempts, got $(state_field "$STATE" comment_gets)"
+elif ! grep -q "closing state written and read back" "$WORK/jc3.out"; then
+    bad "testJC3: no read-back confirmation logged:
+$(cat "$WORK/jc3.out")"
+elif grep -q "NOT written durably" "$WORK/jc3.out"; then
+    bad "testJC3: a durable write was reported failed on nothing but a first-read miss:
+$(cat "$WORK/jc3.out")"
+elif ! grep -q '^worktree remove' "$WORK/jc3.herdr.log"; then
+    bad "testJC3: the worker's workspace was not torn down despite the write eventually reading back:
+$(cat "$WORK/jc3.herdr.log")"
+else
+    ok "testJC3: NWM-123 regression — a first read-back miss is retried and reported as success, workspace torn down"
+fi
+
+# ---- NWM-138 testJC3b: same one-miss-then-hit shape as testJC3, but with a
+# real non-zero LAND_BRANCH_CLOSING_READBACK_DELAY_S, so the backoff
+# arithmetic (every other test pins DELAY_S=0) has coverage — measured
+# against testJC3's own elapsed time to absorb this runner's timing noise.
+
+fresh_jira_repo jc3b 3 10009 >/dev/null
+closing_stub jc3b
+JC3B_START=$SECONDS
+run_closing jc3b JIRA_MOCK_COMMENT_GET_DELAY=1 LAND_BRANCH_CLOSING_READBACK_DELAY_S=3
+JC3B_ELAPSED=$((SECONDS - JC3B_START))
+JC3B_EXTRA=$((JC3B_ELAPSED - JC3_ELAPSED))
+if [ "$RC" -ne 0 ]; then
+    bad "testJC3b (real backoff delay): exit $RC:
+$(cat "$WORK/jc3b.out")"
+elif [ "$JC3B_EXTRA" -lt 2 ]; then
+    bad "testJC3b: one miss with delay=3 should cost ~3s more than testJC3's delay=0 run (delay * attempt 1), got only ${JC3B_EXTRA}s more (testJC3=${JC3_ELAPSED}s, testJC3b=${JC3B_ELAPSED}s) — the backoff sleep does not look like it ran"
+else
+    ok "testJC3b: a real LAND_BRANCH_CLOSING_READBACK_DELAY_S actually backs off (+${JC3B_EXTRA}s over testJC3's delay=0 run)"
+fi
+
+# ---- NWM-138 testJC4: three consecutive misses, all inside the default
+# retry budget (4 attempts) — proves this is a bounded RETRY, not one extra
+# read tacked onto the original.
+
+fresh_jira_repo jc4 3 10009 >/dev/null
+closing_stub jc4
+run_closing jc4 JIRA_MOCK_COMMENT_GET_DELAY=3 LAND_BRANCH_CLOSING_READBACK_DELAY_S=0
+STATE="$WORK/jc4.jira-state.json"
+if [ "$RC" -ne 0 ]; then
+    bad "testJC4 (three misses, within budget): exit $RC:
+$(cat "$WORK/jc4.out")"
+elif [ "$(state_field "$STATE" comment_gets)" != "4" ]; then
+    bad "testJC4: expected exactly 4 read-back attempts (3 misses + the hit), got $(state_field "$STATE" comment_gets)"
+elif ! grep -q "closing state written and read back" "$WORK/jc4.out"; then
+    bad "testJC4: no read-back confirmation logged:
+$(cat "$WORK/jc4.out")"
+else
+    ok "testJC4: three consecutive misses inside the retry budget still end in a reported success"
+fi
+
+# ---- NWM-138 testJC5: the closing-state comment NEVER reads back — assert
+# the other direction too, so a fix that just stops checking cannot pass.
+# After the retries are exhausted this must still be reported failed, the
+# landing must stand, and the worker's pane/workspace must be left alone.
+
+fresh_jira_repo jc5 3 10009 >/dev/null
+closing_stub jc5
+BEFORE=$(git -C "$WORK/jc5.git" rev-parse main)
+run_closing jc5 JIRA_MOCK_COMMENT_GET_NEVER=1 LAND_BRANCH_CLOSING_READBACK_DELAY_S=0 LAND_BRANCH_CLOSING_READBACK_ATTEMPTS=3
+STATE="$WORK/jc5.jira-state.json"
+if [ "$RC" -ne 1 ]; then
+    bad "testJC5 (never reads back): exit $RC, expected 1:
+$(cat "$WORK/jc5.out")"
+elif [ "$(git -C "$WORK/jc5.git" rev-parse main)" = "$BEFORE" ]; then
+    bad "testJC5: the landing was reverted/never pushed — a failed read-back must not undo it"
+elif [ "$(state_field "$STATE" comment_gets)" != "3" ]; then
+    bad "testJC5: expected exactly 3 read-back attempts (the configured budget), got $(state_field "$STATE" comment_gets)"
+elif grep -q '^worktree remove\|/exit' "$WORK/jc5.herdr.log"; then
+    bad "testJC5: the worker was exited or its workspace removed despite the write never reading back:
+$(cat "$WORK/jc5.herdr.log")"
+elif ! grep -q "NOT written durably" "$WORK/jc5.out"; then
+    bad "testJC5: failure was not loud:
+$(cat "$WORK/jc5.out")"
+elif ! grep -q "the GET succeeded but the comment list did not carry" "$WORK/jc5.out"; then
+    bad "testJC5: the failure message does not say the GET succeeded without the marker:
+$(cat "$WORK/jc5.out")"
+else
+    ok "testJC5: a closing-state write that never reads back is still reported failed once retries are exhausted, landing stands, pane untouched"
+fi
+
+# ---- NWM-138 testJC6: the read-back GET fails outright (a transport error,
+# not a stale read) on every attempt — the message must say the GET failed,
+# never the 'succeeded but missing' wording, so the two failure shapes are
+# distinguishable in the tracker comment or a hand-back.
+
+fresh_jira_repo jc6 3 10009 >/dev/null
+closing_stub jc6
+run_closing jc6 JIRA_MOCK_COMMENT_GET_FAIL_N=9 LAND_BRANCH_CLOSING_READBACK_DELAY_S=0 LAND_BRANCH_CLOSING_READBACK_ATTEMPTS=2
+if [ "$RC" -ne 1 ]; then
+    bad "testJC6 (read-back GET always fails): exit $RC, expected 1:
+$(cat "$WORK/jc6.out")"
+elif ! grep -q "GET /issue/PROJ-1/comment failed" "$WORK/jc6.out"; then
+    bad "testJC6: failure message does not say the GET itself failed:
+$(cat "$WORK/jc6.out")"
+elif grep -q "the GET succeeded but" "$WORK/jc6.out"; then
+    bad "testJC6: a GET failure was reported with the 'succeeded but missing' wording — the two failure shapes are not distinguishable:
+$(cat "$WORK/jc6.out")"
+else
+    ok "testJC6: a read-back GET that fails outright is reported distinctly from a GET that succeeds without the marker"
+fi
+
+# ---- NWM-138 testJC7: both backoff knobs set to non-numeric values must
+# fall back to their defaults rather than aborting the arithmetic or killing
+# the shell under set -u — the one-miss-then-hit shape must still succeed.
+
+fresh_jira_repo jc7 3 10009 >/dev/null
+closing_stub jc7
+run_closing jc7 JIRA_MOCK_COMMENT_GET_DELAY=1 LAND_BRANCH_CLOSING_READBACK_DELAY_S=abc LAND_BRANCH_CLOSING_READBACK_ATTEMPTS=0.5
+if [ "$RC" -ne 0 ]; then
+    bad "testJC7 (malformed backoff knobs): exit $RC, expected 0 (fall back to defaults):
+$(cat "$WORK/jc7.out")"
+elif ! grep -q "closing state written and read back" "$WORK/jc7.out"; then
+    bad "testJC7: no read-back confirmation logged despite the malformed knobs:
+$(cat "$WORK/jc7.out")"
+else
+    ok "testJC7: non-numeric LAND_BRANCH_CLOSING_READBACK_DELAY_S/_ATTEMPTS fall back to their defaults instead of crashing"
 fi
 
 # ---- NWM-134 testJG1: HERDR_ENV=1 with no hand-off must leave the tracker and
