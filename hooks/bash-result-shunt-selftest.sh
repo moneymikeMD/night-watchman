@@ -30,11 +30,12 @@
 #   ./bash-result-shunt-selftest.sh                                         # expect PASS
 #
 # The NWM-136 redaction group was proven discriminating the same way. Every
-# count below was re-measured 2026-09-21 against the current fixtures, with
-# 104 green unmutated; D's earlier figure of 4 was wrong and never
-# reproducible, which is why the whole table was re-run rather than extended:
+# count below is the redaction group's own, re-measured 2026-09-21 against the
+# current fixtures, with 108 green unmutated; D's earlier figure of 4 was wrong
+# and never reproducible, which is why the table was re-run, not extended:
 #   A  the pre-change script (`git show <parent>:hooks/bash-result-shunt.sh`)
-#      — 37 red. It has no --redact-stream at all.
+#      — 37 red. It has no --redact-stream at all. That script also predates
+#      LAB-187, so the run totals 38 red, the 38th being LAB-187a.
 #   B  `name_is_secret` neutralised to `return 0` — 7 red, all name-only
 #      cases. Written first WITHOUT those cases, this mutant passed clean:
 #      every other fixture value also matched by shape or by prefix, so the
