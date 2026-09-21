@@ -44,7 +44,7 @@
 # Refusals, checked in this order, before anything is created:
 #   1. bad --model, or --jira-progress-status missing or not numeric
 #   2. HERDR_ENV is not "1"
-#   3. the issue's executor field is not `agent` (human/mixed need a person)
+#   3. the issue's executor field is `human` (`mixed` dispatches like `agent`)
 #   4. the branch already exists, as a herdr worktree or a bare local branch
 #
 # Idempotency: a herdr workspace ALREADY open on the target branch prints
@@ -76,7 +76,7 @@
 #   HERDR_EXECUTOR_FIELD      default: customfield_10047
 #   HERDR_EXECUTOR_AGENT_ID   default: 10020  (unattended agent allowed)
 #   HERDR_EXECUTOR_HUMAN_ID   default: 10021  (refuse: needs a person)
-#   HERDR_EXECUTOR_MIXED_ID   default: 10022  (refuse: needs a person)
+#   HERDR_EXECUTOR_MIXED_ID   default: 10022  (dispatches like agent)
 #   The executor field id and its option ids are specific to the Jira
 #   instance this is pointed at; no universal default exists.
 
@@ -237,14 +237,28 @@ else
 fi
 
 case "$EXECUTOR" in
-    agent) ;;
-    human|mixed)
-        die "$TICKET_UPPER's executor is '$EXECUTOR' — refusing to start an unattended Herdr agent on it (only 'agent' tickets qualify)"
+    agent|mixed) ;;
+    human)
+        die "$TICKET_UPPER's executor is 'human' — refusing to start an unattended Herdr agent on it (only 'agent' and 'mixed' tickets qualify)"
         ;;
     *)
         stop2 "$TICKET_UPPER's executor custom field ($EXECUTOR_FIELD) is '${EXECUTOR:-<unset>}', not one of agent/human/mixed — could not evaluate (unrecognized or unset value)"
         ;;
 esac
+
+if [ "$EXECUTOR" = mixed ]; then
+    PROMPT_TEXT="$PROMPT_TEXT
+
+## MIXED TICKET — STOP AT AWAITING DEPLOYMENT
+This ticket's executor is mixed: only the agent portion runs unattended. Work
+it to the verify block, commit, push your branch and open the PR as usual.
+Before you stop, write the \`## Human run list\` section in
+.night-watchman/closing-state.md — it is required for a mixed ticket (this
+one carries human_steps a person must run), and it is what lets
+land-branch.sh move this ticket through Awaiting Deployment to Completed the
+same as any other ticket once it lands. Then STOP and report — do not
+transition the ticket and do not land it yourself."
+fi
 
 # `open_workspace_id` is null when the worktree exists with no workspace open
 # — refusal #4, not idempotency. `is_linked_worktree` excludes the primary.
