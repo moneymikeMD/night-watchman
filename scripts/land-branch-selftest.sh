@@ -1143,6 +1143,56 @@ else
     ok "test30: a hand-off file at $HANDOFF_REL leaves git status --porcelain empty"
 fi
 
+# ---- NWM-149 test 31: a linked worktree holding the landed branch is removed,
+# and the branch with it. RED before the fix: herdr owned the only removal
+# path and it only fires when a workspace is still open, so with HERDR_ENV
+# unset nothing removed the worktree and `git branch -d` then failed on it.
+
+REPO=$(fresh_repo t31 "$TICKET_OK")
+WT31="$WORK/t31-wt"
+git -C "$REPO" worktree add -q "$WT31" work
+set +e
+(cd "$REPO" && ./scripts/land-branch.sh work PROJ-1) >"$WORK/t31.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -ne 0 ]; then
+    bad "test31 (worktree removal): exit $RC:
+$(tail -10 "$WORK/t31.out")"
+elif [ -e "$WT31" ]; then
+    bad "test31: worktree '$WT31' still on disk after the landing"
+elif git -C "$REPO" worktree list --porcelain | grep -qxF "worktree $WT31"; then
+    bad "test31: worktree '$WT31' still registered after the landing:
+$(git -C "$REPO" worktree list)"
+elif git -C "$REPO" rev-parse --verify --quiet refs/heads/work >/dev/null; then
+    bad "test31: branch 'work' survived the landing, so the worktree still held it"
+else
+    ok "test31: a linked worktree on the landed branch is removed, and the branch with it"
+fi
+
+# ---- NWM-149 test 32: a DIRTY worktree is never force-removed. It cannot be
+# reached through a landing — the precondition at the top refuses a dirty
+# branch worktree — so it is asserted on the refusal itself: the tree survives.
+
+REPO=$(fresh_repo t32 "$TICKET_OK")
+WT32="$WORK/t32-wt"
+git -C "$REPO" worktree add -q "$WT32" work
+printf 'uncommitted\n' > "$WT32/dirty.txt"
+git -C "$WT32" add dirty.txt
+set +e
+(cd "$REPO" && ./scripts/land-branch.sh work PROJ-1) >"$WORK/t32.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 0 ]; then
+    bad "test32 (dirty worktree): landing exited 0, expected a refusal"
+elif [ ! -e "$WT32/dirty.txt" ]; then
+    bad "test32: the dirty worktree's uncommitted file was destroyed"
+elif ! grep -q "uncommitted changes" "$WORK/t32.out"; then
+    bad "test32: refusal does not name the uncommitted changes:
+$(tail -5 "$WORK/t32.out")"
+else
+    ok "test32: a dirty worktree on the branch refuses the landing and is left intact"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]
