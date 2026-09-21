@@ -290,12 +290,9 @@ _ss_opaque_pop() {
   unset "_SS_OPAQUE_STACK[$_sop_last]"
 }
 
-# Recursion safety: scan_command_text, scan_segment and
-# scan_dollar_parens_in_word re-enter each other, so each declares its own
-# per-call state `local`. bash's `local` is DYNAMICALLY scoped — a helper
-# called from the declaring function writes the declaring function's copy,
-# and a recursive re-entry gets a fresh one with the outer restored on
-# return. That is the whole re-entrancy mechanism; see docs/decisions.md.
+# Re-entrancy: the three mutually recursive scanners declare their per-call
+# state `local`, which bash scopes DYNAMICALLY — a callee writes the
+# declaring frame's copy, and a re-entry gets its own. See docs/decisions.md.
 
 # tokenize_quoted_cca: tokenize_quoted's logic writing to its OWN _CCA_WORDS —
 # reusing _ss_words would clobber an outer scan_segment loop mid-iteration.
