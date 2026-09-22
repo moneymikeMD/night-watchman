@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented here.
 
+## [1.4.0](https://github.com/moneymikeMD/night-watchman/compare/v1.3.0...v1.4.0) (2026-09-22)
+
+
+### Features
+
+* consume script-analytics.py and script-retire.sh from ai-toolkit instead of carrying them (NWM-130) ([a1e52c5](https://github.com/moneymikeMD/night-watchman/commit/a1e52c5f6e0693ca53648fb5ae64301824a478aa))
+
+
+### Bug Fixes
+
+* count Workflow-tool subagent transcripts, not just Agent-tool ones (NWM-152) ([4de966b](https://github.com/moneymikeMD/night-watchman/commit/4de966b64ce513fc42313492b5a9badba36d83a1))
+* fold '_' when deriving a project slug, so --repo works under home_workspace (NWM-165) ([f84cb00](https://github.com/moneymikeMD/night-watchman/commit/f84cb00665c2bf33bb0c8bc1780dbc188d85c63d))
+* let script-analytics.py run with no claude-cost sibling present (NWM-156) ([5b3969e](https://github.com/moneymikeMD/night-watchman/commit/5b3969eee7d5b02bc5bc9131dc4b41445fccabb7))
+* mark parity-map pairs that will never converge instead of reporting them as drift (NWM-158) ([246b3a5](https://github.com/moneymikeMD/night-watchman/commit/246b3a55e5f213f891c43b00f79e55e34213eae8))
+* pass --root to known-issue.sh so cwd cannot pick the target repo (NWM-159) ([1f8ac33](https://github.com/moneymikeMD/night-watchman/commit/1f8ac33289be9ad3bdbf61a49c13bcb691fc2829))
+
 ## [1.3.0](https://github.com/moneymikeMD/night-watchman/compare/v1.2.1...v1.3.0) (2026-09-21)
 
 
