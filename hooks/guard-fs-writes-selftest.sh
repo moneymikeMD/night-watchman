@@ -39,9 +39,14 @@ GUARD="${GUARD_SH:-$HERE/guard-fs-writes.sh}"
 [ -f "$GUARD" ] || { echo "cannot find guard-fs-writes.sh at $GUARD" >&2; exit 1; }
 
 FAIL=0
+FAILED_NUMS=""
 N=0
 pass() { N=$((N + 1)); echo "PASS $N: $1"; }
-fail() { N=$((N + 1)); echo "FAIL $N: $1" >&2; FAIL=1; }
+fail() {
+  N=$((N + 1)); echo "FAIL $N: $1" >&2
+  FAIL=$((FAIL + 1))
+  FAILED_NUMS="${FAILED_NUMS:+$FAILED_NUMS,}$N"
+}
 
 assert_exit() {
   desc="$1"; want="$2"; got="$3"
@@ -799,8 +804,9 @@ assert_scope "tokenize_quoted and split_unquoted_segments are called only from t
   '^(OUT-OF-EXTENT|NO-CALLER)'
 
 echo
-echo "$N assertion(s), $((N - FAIL)) passed" >&2
+echo "$N assertion(s), $((N - FAIL)) passed, $FAIL failed" >&2
 if [ "$FAIL" -ne 0 ]; then
+  echo "failing assertion(s): $FAILED_NUMS" >&2
   echo "guard-fs-writes-selftest.sh: FAILED" >&2
   exit 1
 fi
