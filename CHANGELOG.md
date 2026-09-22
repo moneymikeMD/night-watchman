@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [1.4.1](https://github.com/moneymikeMD/night-watchman/compare/v1.4.0...v1.4.1) (2026-09-22)
+
+
+### Bug Fixes
+
+* add --root PATH to decisions.sh (NWM-145) ([#64](https://github.com/moneymikeMD/night-watchman/issues/64)) ([bd56e8d](https://github.com/moneymikeMD/night-watchman/commit/bd56e8d0e88775f640b62cf22c641843161a09bf))
+* count selftest failures instead of flagging them (NWM-137) ([#62](https://github.com/moneymikeMD/night-watchman/issues/62)) ([b3ee77e](https://github.com/moneymikeMD/night-watchman/commit/b3ee77eab8763be62d6b3ca156bf0a5b5dfaa4fd))
+* cut a worker's worktree from the tracked base branch (NWM-144) ([#65](https://github.com/moneymikeMD/night-watchman/issues/65)) ([9cfaaac](https://github.com/moneymikeMD/night-watchman/commit/9cfaaacd0fff1123e4bb8a04c6a3631f3fa52e3d))
+* dispatch executor:mixed tickets from the workflow provider (NWM-146) ([#66](https://github.com/moneymikeMD/night-watchman/issues/66)) ([afa6e5a](https://github.com/moneymikeMD/night-watchman/commit/afa6e5aba6faa56296d6d849ed24dcb42921d356))
+* exempt closing-state.md from land-branch.sh's dirty-worktree check (NWM-147) ([#67](https://github.com/moneymikeMD/night-watchman/issues/67)) ([2c12392](https://github.com/moneymikeMD/night-watchman/commit/2c12392ec1d8f6ea0618690984edbe4f8a424a04))
+* register kit.sh's tmpfile cleanup outside the $(tmpfile) subshell (NWM-155) ([#63](https://github.com/moneymikeMD/night-watchman/issues/63)) ([ab8702d](https://github.com/moneymikeMD/night-watchman/commit/ab8702df9d5717d76bc304d5dadf589992f724d0))
+
 ## [1.4.0](https://github.com/moneymikeMD/night-watchman/compare/v1.3.0...v1.4.0) (2026-09-22)
 
 
