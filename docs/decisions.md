@@ -1195,6 +1195,11 @@ paths as a consumer surface alongside `${CLAUDE_PLUGIN_ROOT}` ones, and the
 `$PROJECT_DIR` kind is worse, because it fails for consumers rather than
 installers and a fail-open hook leaves no error behind.
 
+**Provenance.** Decided and landed by an unattended session on 2026-09-22,
+under NWM-156. Verified red-then-green and through the full CI set, but not
+reviewed by the owner. Superseding it needs a later entry, not an edit here
+(NWM-167).
+
 ### 2026-09-22 — parity-map.tsv rows are marked diverged, never deleted (NWM-158)
 
 A pair that is known not to converge — two files sharing a name that an
@@ -1228,6 +1233,11 @@ a gap in the map's format, not a decision). The full 61-row audit found
 nothing else. land-branch.sh is NOT marked: NWM-131 splits it behind a hook
 contract rather than forking it permanently.
 
+**Provenance.** Decided and landed by an unattended session on 2026-09-22,
+under NWM-158. Verified red-then-green and through the full CI set, but not
+reviewed by the owner. Superseding it needs a later entry, not an edit here
+(NWM-167).
+
 ### 2026-09-22 — script-analytics.py and script-retire.sh left for ai-toolkit; the hook resolves them and pins its own price table (NWM-130)
 
 The donate half of NWM-125. Both scripts and both selftests are deleted here
@@ -1256,3 +1266,8 @@ a 10x table in the project: the event priced at the project's rate.
 One consequence to know when running the moved script BY HAND: with
 `$CLAUDE_PROJECT_DIR` unset the search finds nothing and it exits 2. Pass
 `--prices templates/claude-prices.tsv` or export `$CLAUDE_PROJECT_DIR`.
+
+**Provenance.** Decided and landed by an unattended session on 2026-09-22,
+under NWM-130. Verified red-then-green and through the full CI set, but not
+reviewed by the owner. Superseding it needs a later entry, not an edit here
+(NWM-167).
