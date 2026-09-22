@@ -27,6 +27,13 @@
 #                         entries share a seq, and docs/decisions.md is
 #                         exactly what `index` would produce right now.
 #
+# Global option, recognised anywhere in the argument list:
+#   --root PATH           the repo to manage. Without it the repo comes from
+#                         the CALLER'S cwd, kept as the default for the
+#                         plugin case. A caller whose cwd has drifted then
+#                         writes into whichever repo cwd is in, silently;
+#                         NWM-122 did exactly that.
+#
 # Entry frontmatter (docs/decisions.d/<slug>.md):
 #   seq    global order counter. index sorts by this, not by filename, so
 #          same-day entries keep the order they were written in.
@@ -44,9 +51,46 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 need awk git
 
+# --root is lifted out of the argument list before the subcommand is read, so
+# it works in any position and no subcommand parser has to know about it. An
+# argument sitting in a value-taking option's slot is never treated as a flag,
+# so `--body --root` stays a body.
+VALUE_OPTS="--title --body --date --root"
+HAVE_ROOT=0
+ROOT_OVERRIDE=""
+ARGS=()
+PREV=""
+while [ $# -gt 0 ]; do
+    # shellcheck disable=SC2086  # VALUE_OPTS is a deliberate word-split list
+    if [ "$1" = "--root" ] && ! known_command "$PREV" $VALUE_OPTS; then
+        [ $# -ge 2 ] || die "--root needs a PATH"
+        ROOT_OVERRIDE="$2"; HAVE_ROOT=1; PREV=""; shift 2; continue
+    fi
+    case "$1" in
+        --root=*)
+            # shellcheck disable=SC2086  # VALUE_OPTS is a deliberate word-split list
+            if ! known_command "$PREV" $VALUE_OPTS; then
+                ROOT_OVERRIDE="${1#--root=}"; HAVE_ROOT=1; PREV=""; shift; continue
+            fi ;;
+    esac
+    ARGS+=("$1"); PREV="$1"; shift
+done
+set -- ${ARGS[@]+"${ARGS[@]}"}
+
 # ROOT is the repo being managed, NOT this script's own location: a plugin
 # script runs from ${CLAUDE_PLUGIN_ROOT}, outside the target repo entirely.
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git repository"
+# --root overrides that; cwd stays the default so the plugin case is unbroken.
+if [ "$HAVE_ROOT" = 1 ]; then
+    # HAVE_ROOT rather than [ -n "$ROOT_OVERRIDE" ]: a set-but-EMPTY --root is
+    # a caller bug and must fail here, not read as "absent" and fall back to
+    # cwd — the target this flag exists to take away from cwd.
+    [ -n "$ROOT_OVERRIDE" ] || die "--root: PATH is empty"
+    [ -d "$ROOT_OVERRIDE" ] || die "--root: no such directory: $ROOT_OVERRIDE"
+    ROOT="$(git -C "$ROOT_OVERRIDE" rev-parse --show-toplevel 2>/dev/null)" \
+        || die "--root: not a git repository: $ROOT_OVERRIDE"
+else
+    ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || die "not inside a git repository"
+fi
 ENTRIES_DIR="$ROOT/docs/decisions.d"
 INDEX_FILE="$ROOT/docs/decisions.md"
 
