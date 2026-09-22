@@ -5,9 +5,8 @@ first prompt. Placeholders: @KEY@ @BRANCH@ @MODEL@ @TIMEBOX@ @FORBIDDEN@
 the session-start skill points here. Text above the first heading is dropped.
 WORKTREE and CLOSING STATE sections are appended by the script rather than
 templated here, because the worktree path and the base branch it is cut
-from are resolved per run (NWM-144); the herdr provider also appends a
-MIXED TICKET one for an executor:mixed ticket (the workflow provider does
-not yet).
+from are resolved per run (NWM-144); both providers append a MIXED TICKET
+one for an executor:mixed ticket (the workflow provider since NWM-146).
 -->
 # @KEY@ worker brief
 

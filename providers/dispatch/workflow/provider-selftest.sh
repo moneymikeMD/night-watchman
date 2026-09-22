@@ -35,7 +35,8 @@ SUT="$HERE/provider.sh"
 FIXTURES="$HERE/fixtures"
 CONFIG_SH="$HERE/../../lib/config.sh"
 [ -x "$SUT" ] || { echo "cannot find an executable provider.sh next to this selftest" >&2; exit 2; }
-for f in "$FIXTURES/ticket-executor-agent.md" "$FIXTURES/ticket-executor-mixed.md" "$FIXTURES/ticket-no-executor.md"; do
+for f in "$FIXTURES/ticket-executor-agent.md" "$FIXTURES/ticket-executor-mixed.md" \
+         "$FIXTURES/ticket-executor-human.md" "$FIXTURES/ticket-no-executor.md"; do
     [ -r "$f" ] || { echo "cannot read fixture $f" >&2; exit 2; }
 done
 command -v jq >/dev/null 2>&1 || { echo "jq is not on PATH" >&2; exit 2; }
@@ -126,6 +127,7 @@ count_matches() {
 
 AGENT_TICKET="$FIXTURES/ticket-executor-agent.md"
 MIXED_TICKET="$FIXTURES/ticket-executor-mixed.md"
+HUMAN_TICKET="$FIXTURES/ticket-executor-human.md"
 NOEXEC_TICKET="$FIXTURES/ticket-no-executor.md"
 
 # A config.toml above the scratch root would supply the very brief defaults
@@ -179,14 +181,57 @@ scenario_start_refuses_non_agent() {
     local d out rc
     d=$(scratch) || { echo "FAIL: T1 setup" >&2; FAIL=1; return; }
 
-    out=$(run_sut "$d" start WO-025 --ticket-file "$MIXED_TICKET" \
+    out=$(run_sut "$d" start WO-059 --ticket-file "$HUMAN_TICKET" \
         --timebox "3 hours" --forbidden "x") && rc=0 || rc=$?
 
     assert_eq "T1 exit code" "1" "$rc"
-    assert_contains "T1 the refusal names the executor it read" "$out" "executor is 'mixed'"
-    assert_contains "T1 the refusal names the only executor that qualifies" "$out" "only 'agent' tickets"
+    assert_contains "T1 the refusal names the executor it read" "$out" "executor is 'human'"
+    assert_contains "T1 the refusal names the executors that do qualify" "$out" "only 'agent' and 'mixed' tickets"
     assert_eq "T1 nothing was recorded" "no" \
         "$( [ -e "$d/state" ] && echo yes || echo no )"
+    rm -rf "$d"
+}
+
+# T13 — NWM-146: a mixed ticket dispatches, with a section saying only what
+# the worker controls. The workflow provider is the DEFAULT dispatcher since
+# WO-026, so this was the more commonly hit copy of the refusal LAB-211 fixed
+# in the herdr provider.
+scenario_start_accepts_mixed() {
+    local d out rc brief
+    d=$(scratch) || { echo "FAIL: T13 setup" >&2; FAIL=1; return; }
+
+    out=$(run_json "$d" start WO-025 --ticket-file "$MIXED_TICKET" \
+        --timebox "3 hours" --forbidden "x") && rc=0 || rc=$?
+
+    assert_eq "T13 a mixed ticket is dispatched, not refused" "0" "$rc"
+    assert_eq "T13 the request is recorded" "requested" "$(jf "$out" .state)"
+
+    brief="$d/state/wo-025.brief.md"
+    assert_contains "T13 the brief carries a mixed-only section" "$(cat "$brief")" "## MIXED TICKET"
+    assert_contains "T13 it names the Human run list the worker must write" \
+        "$(cat "$brief")" "## Human run list"
+    assert_contains "T13 it tells the worker to stop without transitioning" \
+        "$(cat "$brief")" "Do not transition the ticket and do not land it yourself"
+
+    # LAB-211's original wording said a mixed ticket is left at Awaiting
+    # Deployment for a person to land from there. Its review found that false:
+    # land-branch.sh lands a mixed ticket like any other once the Human run
+    # list is present. The section must not say otherwise.
+    assert_eq "T13 the section does not claim a person lands it from Awaiting Deployment" "0" \
+        "$(count_matches 'Awaiting Deployment' "$brief")"
+    rm -rf "$d"
+}
+
+# T14 — the agent path is unchanged: no mixed section on an agent ticket.
+scenario_start_agent_has_no_mixed_section() {
+    local d out rc brief
+    d=$(scratch) || { echo "FAIL: T14 setup" >&2; FAIL=1; return; }
+
+    out=$(run_json "$d" start WO-026 --ticket-file "$AGENT_TICKET" \
+        --timebox "3 hours" --forbidden "x") && rc=0 || rc=$?
+    assert_eq "T14 exit code" "0" "$rc"
+    assert_eq "T14 an agent ticket's brief carries no mixed section" "0" \
+        "$(count_matches '## MIXED TICKET' "$d/state/wo-026.brief.md")"
     rm -rf "$d"
 }
 
@@ -549,6 +594,8 @@ scenario_start_names_the_base
 scenario_start_unresolvable_base
 scenario_start_base_override
 scenario_start_refuses_non_agent
+scenario_start_accepts_mixed
+scenario_start_agent_has_no_mixed_section
 scenario_start_requires_an_executor_assertion
 scenario_start_unreadable_executor
 scenario_start_bad_model
