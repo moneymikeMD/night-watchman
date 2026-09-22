@@ -59,9 +59,10 @@ assert_contains() {
     esac
 }
 
-# scratch — a fresh scratch dir holding an empty git repo, printed on stdout.
-# The state directory under it is NOT created: several scenarios assert that
-# nothing was written, which a pre-created directory would hide.
+# scratch — a scratch dir holding a git repo with one commit on main.
+# The commit is required: start resolves a base branch (NWM-144) and a repo
+# with no refs has none. The state directory is NOT created, because
+# scenarios that assert nothing was written would not see it.
 scratch() {
     local d
     # `pwd -P` because git reports a resolved path: on macOS mktemp hands back
@@ -69,6 +70,28 @@ scratch() {
     d=$(cd "$(mktemp -d)" && pwd -P) || return 1
     mkdir -p "$d/repo" || return 1
     git -c init.defaultBranch=main init -q "$d/repo" >/dev/null 2>&1 || return 1
+    (
+        cd "$d/repo" || exit 1
+        git config user.email "test@example.invalid"
+        git config user.name "workflow provider selftest"
+        git config commit.gpgsign false
+        git commit -q --allow-empty -m "base"
+    ) >/dev/null 2>&1 || return 1
+    printf '%s' "$d"
+}
+
+# scratch_ahead — as scratch, plus a `feature` branch two commits ahead of
+# main, left CHECKED OUT. This is the state NWM-144 was found in: the shared
+# checkout sitting on somebody else's in-flight branch.
+scratch_ahead() {
+    local d
+    d=$(scratch) || return 1
+    (
+        cd "$d/repo" || exit 1
+        git checkout -q -b feature
+        git commit -q --allow-empty -m "in-flight one"
+        git commit -q --allow-empty -m "in-flight two"
+    ) >/dev/null 2>&1 || return 1
     printf '%s' "$d"
 }
 
@@ -445,7 +468,86 @@ scenario_usage() {
     assert_contains "U0 --help documents the three verbs" "$out" "provider.sh start <ticket-id>"
 }
 
+# T10 — NWM-144: the brief names the base branch, so the worker's branch is
+# cut from the tracked base and not from whatever the shared checkout has
+# checked out. Found live dispatching a 24-ticket wave whose checkout sat on
+# an unmerged feature branch; every worker branch inherited its commits.
+scenario_start_names_the_base() {
+    local d out rc brief wt
+    d=$(scratch_ahead) || { echo "FAIL: T10 setup" >&2; FAIL=1; return; }
+
+    out=$(run_json "$d" start WO-026 --ticket-file "$AGENT_TICKET" \
+        --timebox "3 hours" --forbidden "none") && rc=0 || rc=$?
+
+    assert_eq "T10 exit code" "0" "$rc"
+    assert_eq "T10 the resolved base is reported" "main" "$(jf "$out" .base)"
+    assert_eq "T10 the ref the worktree is cut from is reported" "main" "$(jf "$out" .base_ref)"
+    assert_contains "T10 the checkout being on another branch is warned about, not silently accepted" \
+        "$(jf "$out" .base_warning)" "is on 'feature', not the base 'main'"
+
+    brief="$d/state/wo-026.brief.md"
+    assert_contains "T10 the brief's worktree command names the base explicitly" \
+        "$(cat "$brief")" "worktree add $d/wt-wo-026 -b wo-026 main"
+
+    # The oracle that matters: run the command the brief actually gives the
+    # worker, then ask git where the branch came from.
+    wt="$d/wt-wo-026"
+    ( cd "$d/repo" && git worktree add "$wt" -b wo-026 main ) >/dev/null 2>&1
+    assert_eq "T10 the branch the brief creates has nothing on it that main does not" "" \
+        "$( cd "$d/repo" && git log --oneline main..wo-026 2>/dev/null )"
+    assert_eq "T10 its merge-base with main IS main's own head" \
+        "$( cd "$d/repo" && git rev-parse main )" \
+        "$( cd "$d/repo" && git merge-base main wo-026 2>/dev/null )"
+
+    # And the counterfactual, so the assertions above are not vacuous: the
+    # old form, with no start-point, inherits the checked-out branch.
+    ( cd "$d/repo" && git worktree add "$d/wt-old" -b old-form ) >/dev/null 2>&1
+    assert_eq "T10 the old no-start-point form DOES inherit the in-flight commits" "2" \
+        "$( cd "$d/repo" && git log --oneline main..old-form 2>/dev/null | wc -l | tr -d ' ' )"
+}
+
+# T11 — a base that cannot be resolved stops the run and says which one.
+scenario_start_unresolvable_base() {
+    local d out rc
+    d=$(scratch_ahead) || { echo "FAIL: T11 setup" >&2; FAIL=1; return; }
+    ( cd "$d/repo" && git branch -D main ) >/dev/null 2>&1
+
+    out=$(run_sut "$d" start WO-026 --ticket-file "$AGENT_TICKET" \
+        --timebox "3 hours" --forbidden "none") && rc=0 || rc=$?
+
+    assert_eq "T11 a missing base exits 2, not 0" "2" "$rc"
+    assert_contains "T11 the error names the base it could not find" "$out" "base branch 'main'"
+    assert_eq "T11 nothing was recorded" "no" \
+        "$( [ -f "$d/state/wo-026.json" ] && echo yes || echo no )"
+    assert_eq "T11 no brief was written" "no" \
+        "$( [ -f "$d/state/wo-026.brief.md" ] && echo yes || echo no )"
+}
+
+# T12 — --base overrides the resolved default, and a checkout sitting ON the
+# base draws no warning.
+scenario_start_base_override() {
+    local d out rc
+    d=$(scratch_ahead) || { echo "FAIL: T12 setup" >&2; FAIL=1; return; }
+
+    out=$(run_json "$d" start WO-026 --ticket-file "$AGENT_TICKET" --base feature \
+        --timebox "3 hours" --forbidden "none") && rc=0 || rc=$?
+    assert_eq "T12 exit code with --base" "0" "$rc"
+    assert_eq "T12 --base is what the brief branches from" "feature" "$(jf "$out" .base_ref)"
+    assert_contains "T12 the brief carries the overridden base" \
+        "$(cat "$d/state/wo-026.brief.md")" "-b wo-026 feature"
+    assert_eq "T12 a checkout already on the base draws no warning" "null" \
+        "$(jf "$out" .base_warning)"
+
+    d=$(scratch) || { echo "FAIL: T12 setup 2" >&2; FAIL=1; return; }
+    out=$(run_json "$d" start WO-026 --ticket-file "$AGENT_TICKET" \
+        --timebox "3 hours" --forbidden "none") && rc=0 || rc=$?
+    assert_eq "T12 a checkout on main draws no warning" "null" "$(jf "$out" .base_warning)"
+}
+
 scenario_start_happy
+scenario_start_names_the_base
+scenario_start_unresolvable_base
+scenario_start_base_override
 scenario_start_refuses_non_agent
 scenario_start_requires_an_executor_assertion
 scenario_start_unreadable_executor
