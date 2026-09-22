@@ -25,7 +25,7 @@
 #   provider.sh start <ticket-id> (--ticket-file PATH | --executor agent)
 #                     [--model sonnet|opus|haiku] [--worktree PATH]
 #                     [--agent NAME] [--timebox TEXT] [--forbidden TEXT]...
-#                     [--dry-run]
+#                     [--base BRANCH] [--dry-run]
 #   provider.sh watch <ticket-id>
 #   provider.sh stop  <ticket-id> [--reason TEXT]
 #
@@ -38,6 +38,10 @@
 # `agent` is dispatched; `human`/`mixed` are refused. There is no tracker
 # read and no tracker write in any verb — the lifecycle transition stays with
 # the caller, which is the second declared difference from herdr.
+#
+# The brief names the base branch the worker's worktree is cut from, rather
+# than letting `worktree add -b` default to whatever the shared checkout has
+# checked out (NWM-144). --base overrides the resolved default.
 #
 # State: $NW_DISPATCH_WORKFLOW_STATE, else [dispatch.workflow] state_dir in
 # config, else $XDG_STATE_HOME/night-watchman/dispatch-workflow (falling back
@@ -78,6 +82,27 @@ uppercase() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
 now_utc() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 
 BRIEF_TEMPLATE="${NW_WORKFLOW_BRIEF_TEMPLATE:-$DIR/../../../templates/dispatch-brief.md}"
+
+# base_branch REPO — the repo's tracked default branch. Same resolution as
+# scripts/required-checks.sh's default_branch: origin/HEAD's symref, else main.
+base_branch() {
+    local b
+    b=$(git -C "$1" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null) || b=""
+    [ -n "$b" ] && { printf '%s' "${b#origin/}"; return 0; }
+    printf '%s' "main"
+}
+
+# base_ref REPO BRANCH — the ref a worktree branches FROM: the remote-tracking
+# ref when there is one, else the local branch. Non-zero if neither exists,
+# which start reports rather than falling back to HEAD.
+base_ref() {
+    local repo="$1" b="$2"
+    git -C "$repo" rev-parse --verify --quiet "refs/remotes/origin/$b" >/dev/null 2>&1 \
+        && { printf '%s' "origin/$b"; return 0; }
+    git -C "$repo" rev-parse --verify --quiet "refs/heads/$b" >/dev/null 2>&1 \
+        && { printf '%s' "$b"; return 0; }
+    return 1
+}
 
 # resolve_state_dir — the run journal's directory, from the env var, then
 # config, then the XDG default. Creates nothing.
@@ -137,6 +162,7 @@ case "$verb" in
         EXECUTOR_ARG=""
         WORKTREE=""
         AGENT_NAME=""
+        BASE=""
         TIMEBOX=""
         FORBIDDEN=""
         DRY_RUN=0
@@ -171,6 +197,9 @@ case "$verb" in
                         FORBIDDEN="- $2"
                     fi
                     shift 2 ;;
+                --base)
+                    [ $# -ge 2 ] || die "--base needs a branch name"
+                    BASE="$2"; shift 2 ;;
                 --dry-run) DRY_RUN=1; shift ;;
                 -*) die "unknown option to 'start': $1 (see --help)" ;;
                 *)
@@ -227,6 +256,15 @@ case "$verb" in
         [ -n "$AGENT_NAME" ] || AGENT_NAME="$BRANCH"
         [ -n "$WORKTREE" ] || WORKTREE="$(dirname "$REPO")/wt-$BRANCH"
 
+        [ -n "$BASE" ] || BASE=$(base_branch "$REPO")
+        BASE_REF=$(base_ref "$REPO" "$BASE") \
+            || stop2 "cannot resolve base branch '$BASE' in $REPO: neither refs/remotes/origin/$BASE nor refs/heads/$BASE exists — refusing to compose a brief that would cut the worktree from whatever HEAD happens to be"
+        CURRENT_BRANCH=$(git -C "$REPO" symbolic-ref --quiet --short HEAD 2>/dev/null) || CURRENT_BRANCH=""
+        BASE_WARNING=""
+        if [ -n "$CURRENT_BRANCH" ] && [ "$CURRENT_BRANCH" != "$BASE" ]; then
+            BASE_WARNING="the shared checkout $REPO is on '$CURRENT_BRANCH', not the base '$BASE'; the worktree is cut from $BASE_REF regardless, but something else is mid-flight in that repo"
+        fi
+
         TEMPLATE_BODY=$(awk 'f{print; next} /^# /{f=1; print}' "$BRIEF_TEMPLATE" 2>/dev/null) \
             || stop2 "cannot read brief template $BRIEF_TEMPLATE"
         [ -n "$TEMPLATE_BODY" ] || stop2 "brief template $BRIEF_TEMPLATE is missing or has no heading"
@@ -247,7 +285,9 @@ case "$verb" in
         PROMPT_TEXT="$PROMPT_TEXT
 
 ## WORKTREE
-Create and work only inside your own: \`git -C $REPO worktree add $WORKTREE -b $BRANCH\`.
+Create and work only inside your own: \`git -C $REPO worktree add $WORKTREE -b $BRANCH $BASE_REF\`.
+The base ref is named on purpose: without it the branch is cut from whatever
+$REPO has checked out, which inherits somebody else's in-flight commits.
 Never commit in $REPO itself — sibling agents are running against other paths
 in that same repo, and this dispatcher opens no worktree for you.
 
@@ -288,10 +328,15 @@ session ends."
             --arg journal "$JOURNAL" \
             --arg at "$(now_utc)" \
             --arg note "$LAUNCH_NOTE" \
+            --arg base "$BASE" \
+            --arg base_ref "$BASE_REF" \
+            --arg base_warning "$BASE_WARNING" \
             '{provider:"workflow", ticket:$ticket, branch:$branch, agent:$agent,
-              model:$model, repo:$repo, worktree:$worktree, brief_path:$brief,
+              model:$model, repo:$repo, worktree:$worktree, base:$base,
+              base_ref:$base_ref, brief_path:$brief,
               journal:$journal, state:"requested", requested_at:$at,
-              launch:{tool:"Workflow", performed_by:"the orchestrating turn", note:$note}}') \
+              launch:{tool:"Workflow", performed_by:"the orchestrating turn", note:$note}}
+             + (if $base_warning == "" then {} else {base_warning:$base_warning} end)') \
             || stop2 "could not compose the launch request JSON"
 
         if [ "$DRY_RUN" = 1 ]; then
