@@ -19,8 +19,9 @@ each wf_*/ also holds a journal.jsonl that is not a transcript and is not
 read. Missing it is a SILENT under-count, not an error: the scan still
 completes and the total simply omits every token a workflow's agents
 spent, so the larger the fan-out the worse the number (NWM-152).
-`<slug>` is the session's working directory with every "/" and "."
-replaced by "-" (e.g. /Users/me/code/foo -> -Users-me-code-foo). --repo
+`<slug>` is the session's working directory with every "/", "." and "_"
+replaced by "-" (e.g. /Users/me/code/my_repo -> -Users-me-code-my-repo).
+--repo
 computes this from a path; --project-slug takes it directly for a
 transcript layout this script cannot derive itself.
 
@@ -78,9 +79,16 @@ PRICE_COLUMNS = ("model",) + tuple("%s_per_mtok" % c for c in TOKEN_CLASSES)
 
 def slugify_repo(path):
     """Reproduce the Claude Code CLI's transcript directory naming: the
-    absolute path with every "/" and "." replaced by "-"."""
+    absolute path with every "/", "." and "_" replaced by "-". The "_" case
+    is not cosmetic here — every repo on this machine lives under a
+    home_workspace-shaped parent, so omitting it broke --repo for every path
+    that matters (NWM-165)."""
+    # Observed live 2026-09-22: no slug under ~/.claude/projects contains an
+    # underscore, and home_exp_workspace appears as -home-exp-workspace.
+    # A path segment containing a SPACE stays UNVERIFIED, as in homelab's
+    # equivalent; the plain replace is applied either way.
     abspath = os.path.abspath(os.path.expanduser(path))
-    return "".join("-" if ch in "/." else ch for ch in abspath)
+    return "".join("-" if ch in "/._" else ch for ch in abspath)
 
 
 def default_projects_dir():
