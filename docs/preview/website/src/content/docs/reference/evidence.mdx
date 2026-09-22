@@ -85,7 +85,10 @@ Two scripts, split on purpose — scan is optional, the ledger is not:
 - `scripts/claude-cost-scan.py` — one way to produce that `--cost`/
   `--turns` pair on this machine: scans local Claude Code JSONL
   transcripts under `~/.claude/projects/<slug>/` (main session + any
-  `subagents/agent-*.jsonl`), dedupes the several JSONL lines a single
+  `subagents/agent-*.jsonl` for Agent-tool turns and
+  `subagents/workflows/wf_*/agent-*.jsonl` for Workflow-tool turns — both
+  shapes, since NWM-152; missing the second under-counted a wide fan-out by
+  a factor of several), dedupes the several JSONL lines a single
   streamed message can produce (grouped by `message.id`, last one wins),
   and prices tokens against `--prices` (default
   `templates/claude-prices.tsv`). `--ledger-line` prints exactly `cost:

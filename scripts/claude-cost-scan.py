@@ -8,10 +8,17 @@ This is the scanning half of the cost-ledger pair (see docs/cost.md):
 way to produce those numbers from this machine's own local transcripts,
 so a caller does not have to read /cost output by hand.
 
-Transcript layout (as written by the Claude Code CLI):
+Transcript layout (as written by the Claude Code CLI), THREE shapes:
     ~/.claude/projects/<slug>/<session-uuid>.jsonl            main session
     ~/.claude/projects/<slug>/<session-uuid>/subagents/agent-*.jsonl
-                                                                subagent turns
+                                                                Agent-tool turns
+    ~/.claude/projects/<slug>/<session-uuid>/subagents/workflows/wf_*/agent-*.jsonl
+                                                                Workflow-tool turns
+The third shape is two levels deeper under the same subagents/ root, and
+each wf_*/ also holds a journal.jsonl that is not a transcript and is not
+read. Missing it is a SILENT under-count, not an error: the scan still
+completes and the total simply omits every token a workflow's agents
+spent, so the larger the fan-out the worse the number (NWM-152).
 `<slug>` is the session's working directory with every "/" and "."
 replaced by "-" (e.g. /Users/me/code/foo -> -Users-me-code-foo). --repo
 computes this from a path; --project-slug takes it directly for a
@@ -81,9 +88,11 @@ def default_projects_dir():
 
 
 def find_session_files(projects_dir, slug, session_id):
-    """Return a list of (session_id, [jsonl paths]) for every session
-    under projects_dir/slug (or, if slug is None, every project dir),
-    optionally narrowed to one session_id."""
+    """Return a list of (session_id, [jsonl paths]) for every session under
+    projects_dir/slug (or, if slug is None, every project dir), optionally
+    narrowed to one session_id. Collects both subagent shapes: Agent-tool
+    transcripts directly under subagents/, and Workflow-tool transcripts
+    under subagents/workflows/wf_*/."""
     if slug is not None:
         project_dirs = [os.path.join(projects_dir, slug)]
     else:
@@ -98,8 +107,10 @@ def find_session_files(projects_dir, slug, session_id):
             if session_id is not None and sid != session_id:
                 continue
             files = [main_file]
-            subagent_glob = os.path.join(project_dir, sid, "subagents", "agent-*.jsonl")
-            files.extend(sorted(glob.glob(subagent_glob)))
+            subagents_dir = os.path.join(project_dir, sid, "subagents")
+            files.extend(sorted(glob.glob(os.path.join(subagents_dir, "agent-*.jsonl"))))
+            files.extend(sorted(glob.glob(os.path.join(
+                subagents_dir, "workflows", "wf_*", "agent-*.jsonl"))))
             sessions.append((sid, files))
     return sessions
 
