@@ -3,9 +3,11 @@
 # ai-toolkit-root.sh — print the root of the ai-toolkit checkout this repo
 # consumes operator scripts from, so nothing here needs a second copy of one.
 #
-# Usage: ai-toolkit-root.sh [--known-issue]
-#   Prints the directory holding ai-toolkit's scripts/. With --known-issue,
-#   prints scripts/known-issue.sh inside it instead.
+# Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire]
+#   Prints the directory holding ai-toolkit's scripts/. With a flag, prints
+#   that script's path inside it instead. Each flag names a script this repo
+#   donated and now consumes: known-issue.sh (NWM-128), script-analytics.py
+#   and script-retire.sh (NWM-130).
 #
 #   ai-toolkit is not a Claude Code plugin, so there is no plugin-list entry
 #   to key on the way work-order-root.sh does. Its scripts/ is the UNPINNED
@@ -28,12 +30,14 @@ case "${1:-}" in
     -h|--help) show_help ;;
 esac
 
-WANT_KNOWN_ISSUE=0
-if [ "${1:-}" = "--known-issue" ]; then
-    WANT_KNOWN_ISSUE=1
-    shift
-fi
-[ $# -eq 0 ] || die "usage: ai-toolkit-root.sh [--known-issue] (got $# extra arguments)"
+WANT=""
+case "${1:-}" in
+    --known-issue)      WANT="scripts/known-issue.sh"; shift ;;
+    --script-analytics) WANT="scripts/script-analytics.py"; shift ;;
+    --script-retire)    WANT="scripts/script-retire.sh"; shift ;;
+    --*)                die "unknown flag: $1 (see --help)" ;;
+esac
+[ $# -eq 0 ] || die "usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire] (got $# extra arguments)"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MARKER="scripts/known-issue.sh"
@@ -65,8 +69,10 @@ ai-toolkit's scripts/ is consumed by absolute path out of a working checkout;
 it is not pinned, not released, and not installable as a plugin."
 fi
 
-if [ "$WANT_KNOWN_ISSUE" -eq 1 ]; then
-    printf '%s\n' "$ROOT/$MARKER"
+if [ -n "$WANT" ]; then
+    [ -f "$ROOT/$WANT" ] || die "$ROOT is an ai-toolkit checkout but has no $WANT.
+It may predate the move that put it there; update the checkout."
+    printf '%s\n' "$ROOT/$WANT"
 else
     printf '%s\n' "$ROOT"
 fi

@@ -2,7 +2,7 @@
 #
 # script-events-hook.sh — Claude Code SubagentStop hook. Feeds every finished
 # `script-author`/`script-reviewer` subagent into the lifecycle extractor
-# (scripts/script-analytics.py extract, see docs/cost.md) automatically, so
+# (ai-toolkit's script-analytics.py extract, see docs/cost.md) automatically, so
 # the events log stops depending on someone remembering to run `extract` by
 # hand after the fact.
 #
@@ -24,8 +24,9 @@
 #
 # When it acts, it shells out to the SAME extractor a human runs by hand:
 #
-#   python3 scripts/script-analytics.py extract \
+#   python3 "$EXTRACTOR" extract \
 #     --agent-id "$agent_id" --events "$EVENTS_FILE" --quiet \
+#     [--prices "$PRICES"] \
 #     [--projects-dir "$SCRIPT_EVENTS_PROJECTS_DIR"]   # test seam only
 #
 # --agent-id targets the one subagent that just finished, so this stays fast
@@ -35,9 +36,9 @@
 # Under --quiet the extractor prints nothing when zero new events were found,
 # so "exit 0, stdout empty" is read here as a possible transcript-flush race
 # and retried once after 2s, then given up on silently. That race is an
-# UNVERIFIED hypothesis — confirm or delete the retry on the first live
-# firing. Both attempts plus the sleep are bounded by a wall-clock budget so
-# the retry can never push this past the hook timeout plugin.json declares.
+# UNVERIFIED hypothesis — confirm or delete the retry on the first live firing.
+# Both attempts plus the sleep are bounded by a wall-clock budget, so the retry
+# cannot push this past the hook timeout plugin.json declares.
 #
 # Overridable for testing:
 #
@@ -57,13 +58,21 @@
 #   CLAUDE_PROJECT_DIR           repo root; falls back to two directories
 #                                above this script (hooks/..) when unset
 #
-# The extractor is resolved by a chain, first hit wins (NWM-156):
+# The extractor is resolved by a chain, first hit wins (NWM-156, NWM-130):
 # $SCRIPT_EVENTS_EXTRACTOR, then $CLAUDE_PLUGIN_ROOT/scripts/, then
-# $PROJECT_DIR/scripts/, then this script's own ../scripts/. $PROJECT_DIR
-# alone was wrong: plugin.json registers this hook for EVERY installer, but a
-# consuming project has no reason to carry this repo's extractor, so the hook
-# was silently dark everywhere except a checkout that happens to hold a copy.
+# $PROJECT_DIR/scripts/, then this script's own ../scripts/, then whatever
+# scripts/ai-toolkit-root.sh --script-analytics resolves. $PROJECT_DIR alone
+# was wrong: plugin.json registers this hook for EVERY installer, but a
+# consuming project has no reason to carry an extractor, so the hook was
+# dark everywhere except a checkout that happened to hold a copy. The last
+# step matters now: NWM-130 moved script-analytics.py to ai-toolkit, so the
+# four path candidates ahead of it find nothing here.
 #
+# --prices is passed EXPLICITLY, first of $PROJECT_DIR/templates/,
+# $CLAUDE_PLUGIN_ROOT/templates/, ../templates/. The extractor's own search
+# resolves <extractor>/../templates/ first, so with it in another repo a
+# claude-prices.tsv appearing THERE would shadow this project's own and
+# produce plausible, wrong numbers.
 # Dependencies: bash 3.2, jq, python3 (or $SCRIPT_EVENTS_PYTHON_BIN), and a
 # script-analytics.py the chain above can find. Absence of any of these fails
 # open (exit 0, one-line diagnostic naming every path tried) rather than
@@ -125,6 +134,22 @@ for _cand in "${CANDIDATES[@]}"; do
     break
   fi
 done
+
+# Last resort: ask the resolver where the ai-toolkit checkout is. It reads
+# $AI_TOOLKIT_ROOT then a sibling directory — no network, no plugin list.
+if [ -z "$EXTRACTOR" ]; then
+  for _resolver in "${CLAUDE_PLUGIN_ROOT:-}/scripts/ai-toolkit-root.sh" \
+                   "$SELF_DIR/../scripts/ai-toolkit-root.sh"; do
+    [ -x "$_resolver" ] || continue
+    _resolved="$("$_resolver" --script-analytics 2>/dev/null)" || _resolved=""
+    if [ -n "$_resolved" ] && [ -f "$_resolved" ]; then
+      EXTRACTOR="$_resolved"
+      break
+    fi
+  done
+  CANDIDATES+=("ai-toolkit-root.sh --script-analytics")
+fi
+
 if [ -z "$EXTRACTOR" ]; then
   fail_open "extractor not found; tried: $(printf '%s, ' "${CANDIDATES[@]}" | sed 's/, $//')"
 fi
@@ -141,6 +166,15 @@ EXTRACT_ARGS=(extract --agent-id "$AGENT_ID" --events "$EVENTS_FILE" --quiet)
 if [ -n "${SCRIPT_EVENTS_PROJECTS_DIR:-}" ]; then
   EXTRACT_ARGS+=(--projects-dir "$SCRIPT_EVENTS_PROJECTS_DIR")
 fi
+
+for _prices in "$PROJECT_DIR/templates/claude-prices.tsv" \
+               "${CLAUDE_PLUGIN_ROOT:-}/templates/claude-prices.tsv" \
+               "$SELF_DIR/../templates/claude-prices.tsv"; do
+  if [ -f "$_prices" ]; then
+    EXTRACT_ARGS+=(--prices "$_prices")
+    break
+  fi
+done
 
 STDOUT_FILE="$(mktemp "${TMPDIR:-/tmp}/script-events-hook.XXXXXX" 2>/dev/null)" || fail_open "could not create temp file for extractor output"
 trap 'rm -f "$STDOUT_FILE"' EXIT

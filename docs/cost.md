@@ -25,13 +25,15 @@ Two scripts, split on purpose — scan is optional, the ledger is not:
   `claude-cost-scan.py` reads by default: one row per model, columns
   `model`, `input_per_mtok`, `output_per_mtok`, `cache_write_per_mtok`,
   `cache_read_per_mtok`. A model missing from the table costs $0 with a
-  one-time stderr warning, never a hard failure. `script-analytics.py`
-  reads the same table, but finds it by search rather than by one fixed
-  relative path, so it also works from a repo with no `templates/`
-  directory: `$CLAUDE_PRICES_TSV`, then `../templates/claude-prices.tsv`
-  beside the script, then `claude-prices.tsv` beside the script, then the
-  same two under `$CLAUDE_PROJECT_DIR`. When none exists it exits 2 naming
-  every path it tried (NWM-156).
+  one-time stderr warning, never a hard failure. ai-toolkit's
+  `script-analytics.py` reads the same table and finds it by search:
+  `$CLAUDE_PRICES_TSV`, then `../templates/claude-prices.tsv` beside the
+  script, then `claude-prices.tsv` beside the script, then the same two
+  under `$CLAUDE_PROJECT_DIR`. Since it now lives in another repo, the
+  search's first candidate is *that* repo's `templates/`, so
+  `hooks/script-events-hook.sh` pins `--prices` explicitly rather than
+  trusting the order, and a run by hand should do the same (NWM-130).
+  When none exists it exits 2 naming every path it tried.
 - `templates/cost-ledger.tsv` — a header-only starting point. Copy it into
   the project (a common convention is `docs/cost-ledger.tsv`) and start
   appending; the header line is the schema contract — see below.
@@ -181,7 +183,8 @@ USD, and wall time to acceptance, per script and per agent type.
   any error (never blocks a subagent's stop), and never prints the hook's
   stdin payload or the extractor's own output — see the hook's own header
   for its wall-clock budget and retry behavior.
-- `scripts/script-analytics.py` — reads local Claude Code JSONL
+- `script-analytics.py` (ai-toolkit's, resolved by
+  `scripts/ai-toolkit-root.sh --script-analytics`) — reads local Claude Code JSONL
   transcripts (same `~/.claude/projects/<slug>/` layout as
   `claude-cost-scan.py`) and appends one JSON object per line to an events
   file — one row per script-author/script-reviewer invocation,
@@ -198,18 +201,18 @@ USD, and wall time to acceptance, per script and per agent type.
 
 ```bash
 # after a wave, see what the script lane actually cost
-python3 scripts/script-analytics.py report --events docs/script-events.jsonl --format md
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" report --events docs/script-events.jsonl --format md
 
 # scope to one session or one script
-python3 scripts/script-analytics.py extract --events docs/script-events.jsonl --session <session-id>
-python3 scripts/script-analytics.py report --events docs/script-events.jsonl --script scripts/foo.sh
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" extract --events docs/script-events.jsonl --session <session-id>
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" report --events docs/script-events.jsonl --script scripts/foo.sh
 
 # record that an owner tried a script by hand and accepted it
-python3 scripts/script-analytics.py record --events docs/script-events.jsonl \
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" record --events docs/script-events.jsonl \
   --script scripts/foo.sh --event accepted --outcome pass --ticket PROJ-123
 ```
 
-Run `scripts/script-analytics-selftest.sh` and
+Run ai-toolkit's `scripts/script-analytics-selftest.sh` and
 `hooks/script-events-hook-selftest.sh` to check both halves — both build
 their own scratch fixture transcript trees and never read a real
 `~/.claude/projects` tree.
@@ -234,7 +237,7 @@ Two more event types, on top of the authoring-lane ones above:
 - `owner_wait` — one per owner-attended interval found in any transcript
   scanned. A wait starts at whichever of a configured list of tool_use
   name prefixes is seen first (`OWNER_WAIT_TRIGGER_PREFIXES` in
-  `scripts/script-analytics.py` — `AskUserQuestion` by exact name,
+  `script-analytics.py` — `AskUserQuestion` by exact name,
   `mcp__spokenly__` by prefix, out of the box; extend the list, don't edit
   the detection logic, to add another interactive tool), or — best-effort
   and explicitly marked UNVERIFIED — the transcript's last text-shaped
@@ -275,7 +278,8 @@ precedence, evaluated in order:
    to judge usage at all.
 
 This flags/proposes only — it does not retire anything by itself.
-`scripts/script-retire.sh` is the mechanism that turns a `retire?` row
+ai-toolkit's `script-retire.sh`, resolved by `scripts/ai-toolkit-root.sh
+--script-retire`, is the mechanism that turns a `retire?` row
 into an actual retirement: dry-run by default (prints the plan — script,
 selftest, and `docs/scripts.md` row it would remove, plus the `##
 Retired` line it would add — without touching anything), and `--yes
@@ -297,13 +301,13 @@ again needs this again:
 
 ```bash
 # see what's actually getting used, and hand `retire?` rows to
-# scripts/script-retire.sh per the procedure above
-python3 scripts/script-analytics.py report --events docs/script-events.jsonl --usage --format md
+# script-retire.sh per the procedure above
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" report --events docs/script-events.jsonl --usage --format md
 
 # normalize every already-recorded script/scripts path to its current
 # location (preview first, then apply)
-python3 scripts/script-analytics.py backfill-script-paths --events docs/script-events.jsonl --dry-run
-python3 scripts/script-analytics.py backfill-script-paths --events docs/script-events.jsonl
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" backfill-script-paths --events docs/script-events.jsonl --dry-run
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" backfill-script-paths --events docs/script-events.jsonl
 ```
 
 ### Wave summary line
@@ -337,7 +341,7 @@ tracker's changelog, not from a transcript — the one subcommand in this
 file that talks to the tracker at all:
 
 ```bash
-python3 scripts/script-analytics.py status-durations PROJ-123 PROJ-124 \
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" status-durations PROJ-123 PROJ-124 \
     --events docs/script-events.jsonl
 ```
 

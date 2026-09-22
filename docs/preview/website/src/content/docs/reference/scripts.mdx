@@ -12,9 +12,11 @@ ai-toolkit-root.sh — print the root of the ai-toolkit checkout this repo
 consumes operator scripts from, so nothing here needs a second copy of one.
 
 ```text
-Usage: ai-toolkit-root.sh [--known-issue]
-  Prints the directory holding ai-toolkit's scripts/. With --known-issue,
-  prints scripts/known-issue.sh inside it instead.
+Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire]
+  Prints the directory holding ai-toolkit's scripts/. With a flag, prints
+  that script's path inside it instead. Each flag names a script this repo
+  donated and now consumes: known-issue.sh (NWM-128), script-analytics.py
+  and script-retire.sh (NWM-130).
 ```
 
 ### scripts/bash-family-report.py
@@ -138,22 +140,6 @@ Usage: required-checks.sh [--list] [--source auto|ruleset|ci]
                           [--repo-root DIR] [--ci-file PATH]
                           [--only CONTEXT] [--skip CONTEXT]
                           [--allow-run-steps]
-```
-
-### scripts/script-analytics.py
-
-script-analytics.py — quantitative evidence on the script-author /
-script-reviewer lane, extracted from local Claude Code JSONL transcripts.
-
-### scripts/script-retire.sh
-
-Turn a "retire?" flag from
-`script-analytics.py report --usage` into an actual retirement.
-
-```text
-Usage:
-  script-retire.sh --events FILE [--since ISO] [--until ISO] [--dry-run]
-  script-retire.sh --events FILE --yes --ticket NWM-nnn
 ```
 
 ### scripts/work-order-root.sh

@@ -296,7 +296,8 @@ If this wave also invokes `cost-reviewer` (the optional per-wave review in
 `docs/cost.md`, distinct from the automatic `SessionEnd` ledger row above),
 first record the `accepted` event for every script whose ticket reached
 completion this wave — `librarian`, or the main thread (this project has
-no lab-librarian), runs `script-analytics.py record --event accepted ...`
+no lab-librarian), runs ai-toolkit's `script-analytics.py record --event
+accepted ...`
 per script — and confirm each row landed by re-reading
 `docs/script-events.jsonl`. Only once that is confirmed, invoke
 `cost-reviewer`. A wave where the accepted-event write and cost-reviewer's

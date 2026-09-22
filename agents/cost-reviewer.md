@@ -60,18 +60,18 @@ what you write; say so out loud and treat it as the starting position.
    and say so in the report, if no such backend is configured — it is
    optional, never a blocker.
 
-4. **Retirement candidates.** If `scripts/script-analytics.py` and a
-   script-events file are present, run:
+4. **Retirement candidates.** If `scripts/ai-toolkit-root.sh
+   --script-analytics` resolves and a script-events file is present, run:
 
    ```
-   python3 scripts/script-analytics.py report --events docs/script-events.jsonl --usage --format md
+   python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" report --events docs/script-events.jsonl --usage --format md
    ```
 
    (full lifetime window — omit `--since`/`--until` here, per
    [docs/cost.md](../docs/cost.md#real-world-usage-invokeowner_wait-events-and-report---usage))
    and include it in the report. **List every row whose `flag` is
    `retire?` by name**, under its own heading ("Retirement candidates") —
-   this is a recommendation, not an action (`scripts/script-retire.sh`
+   this is a recommendation, not an action (ai-toolkit's `script-retire.sh`
    owns retiring them, not this agent; you still never delete a script or
    touch `docs/scripts.md`). A `flag` of `flag` (fewer than 3 non-test
    invocations in the first 7 days) is worth a mention too, but only
