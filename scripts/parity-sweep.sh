@@ -137,7 +137,9 @@ if [ -n "$BAD_LINES" ]; then
 fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/parity-sweep.XXXXXX")" || fail_eval "cannot create scratch directory"
-trap 'rm -rf "$WORK"' EXIT
+# shellcheck disable=SC2329  # called indirectly via kit_on_exit
+clean_work() { rm -rf "$WORK"; }
+kit_on_exit clean_work
 
 DRIFT="$WORK/drift"
 DIVERGED="$WORK/diverged"

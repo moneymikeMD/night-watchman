@@ -46,23 +46,66 @@ herdr_notify() {
     herdr pane send-text "$1" "$2" >/dev/null 2>&1 && herdr pane send-keys "$1" enter >/dev/null 2>&1
 }
 
-# tmpfile — create a 0600 tempfile, remove it on exit. Safe to call more
-# than once in one script: each call adds its own path to the cleanup list
-# rather than replacing an earlier trap registration.
-_KIT_TMPFILES=""
+# tmpfile — create a 0600 tempfile, removed when the calling script exits.
+# The registry is a FILE, not a variable: every call site is `f=$(tmpfile)`,
+# a subshell, and a variable append plus its EXIT trap die with it (NWM-155).
+if [ -z "${_KIT_LOADED:-}" ]; then
+_KIT_LOADED=1
+
+# Sourcing stays side-effect-light: a missing registry is reported by
+# tmpfile() at the point of use, not by killing a script that never calls it.
+_KIT_TMPREG=$(mktemp "${TMPDIR:-/tmp}/kit-reg.XXXXXX" 2>/dev/null) || _KIT_TMPREG=""
+[ -n "$_KIT_TMPREG" ] && chmod 600 "$_KIT_TMPREG"
+
+_KIT_EXIT_HOOKS=""
+_KIT_HOOKS_RAN=""
+
 _kit_cleanup() {
-    [ -n "$_KIT_TMPFILES" ] || return 0
-    # shellcheck disable=SC2086  # deliberate word splitting: a newline-joined path list
-    rm -f $_KIT_TMPFILES 2>/dev/null || true
+    local f hook
+    if [ -f "$_KIT_TMPREG" ]; then
+        while IFS= read -r f; do
+            [ -n "$f" ] && rm -f "$f"
+        done < "$_KIT_TMPREG"
+        rm -f "$_KIT_TMPREG"
+    fi
+    # Runs twice on a signal exit. rm -f is idempotent; a hook may not be.
+    if [ -z "$_KIT_HOOKS_RAN" ]; then
+        _KIT_HOOKS_RAN=1
+        for hook in $_KIT_EXIT_HOOKS; do
+            "$hook"
+        done
+    fi
 }
+
+# Re-raise rather than just clean up: a trapped signal is a handled signal,
+# so a cleanup-only trap would let the script survive Ctrl-C and run on.
+_kit_on_signal() {
+    _kit_cleanup
+    trap - "$1"
+    kill -"$1" $$
+}
+
+trap _kit_cleanup EXIT
+for _kit_sig in INT TERM HUP; do
+    # shellcheck disable=SC2064  # $_kit_sig must expand now, into the trap string
+    trap "_kit_on_signal $_kit_sig" "$_kit_sig"
+done
+unset _kit_sig
+
+fi
+
+# kit_on_exit FN — register FN to run when the calling script exits. Use this
+# rather than `trap ... EXIT`, which replaces kit's handler instead of adding
+# to it and silently stops the cleanup above from running at all (LAB-104).
+kit_on_exit() {
+    _KIT_EXIT_HOOKS="$_KIT_EXIT_HOOKS $1"
+}
+
 tmpfile() {
     local f
+    [ -n "$_KIT_TMPREG" ] || die "kit.sh has no tmpfile registry (mktemp unavailable when kit.sh was sourced)"
     f=$(mktemp "${TMPDIR:-/tmp}/kit.XXXXXX") || return 1
     chmod 600 "$f" || { rm -f "$f"; return 1; }
-    if [ -z "$_KIT_TMPFILES" ]; then
-        trap _kit_cleanup EXIT
-    fi
-    _KIT_TMPFILES="$_KIT_TMPFILES
-$f"
+    printf '%s\n' "$f" >> "$_KIT_TMPREG"
     printf '%s\n' "$f"
 }
