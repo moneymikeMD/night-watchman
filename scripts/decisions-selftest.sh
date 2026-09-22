@@ -6,7 +6,8 @@
 # drives.
 #
 # Usage: scripts/decisions-selftest.sh [path-to-decisions.sh]
-# Defaults to the sibling scripts/decisions.sh.
+# Defaults to the sibling scripts/decisions.sh. Tests 8-12 cover --root
+# (NWM-145) and are red against a pre-flag revision.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -234,6 +235,142 @@ elif [ "$AFTER_COUNT" -ne "$BEFORE_COUNT" ]; then
     bad "test7: a dying add call still wrote an entry file ($BEFORE_COUNT -> $AFTER_COUNT)"
 else
     ok "test7: a missing --title or --body dies naming it, and writes nothing"
+fi
+
+# ---- test 8: --root writes into the named repo, and nothing lands in the
+# caller's cwd repo. NWM-145: decisions.sh wrote the NWM-122 entry and the
+# regenerated index into the main checkout because cwd happened to be there.
+
+TARGET=$(fresh_repo t8target)
+CALLER=$(fresh_repo t8caller)
+(cd "$TARGET" && ./scripts/decisions.sh migrate) >/dev/null 2>&1
+(cd "$CALLER" && ./scripts/decisions.sh migrate) >/dev/null 2>&1
+(cd "$CALLER" && git add -A && git commit -q -m migrated) >/dev/null 2>&1
+BEFORE_TARGET=$(count_md "$TARGET/docs/decisions.d")
+set +e
+(cd "$CALLER" && "$TARGET/scripts/decisions.sh" add --root "$TARGET" \
+    --title "Written through root" --body "body" --date 2026-04-01) >"$WORK/t8.out" 2>&1
+RC=$?
+set -e
+AFTER_TARGET=$(count_md "$TARGET/docs/decisions.d")
+CALLER_DIRTY=$(cd "$CALLER" && git status --porcelain)
+if [ "$RC" -ne 0 ]; then
+    bad "test8 (--root): add --root exited $RC:
+$(cat "$WORK/t8.out")"
+elif [ "$AFTER_TARGET" -ne $((BEFORE_TARGET + 1)) ]; then
+    bad "test8: --root did not write the entry into the target repo ($BEFORE_TARGET -> $AFTER_TARGET)"
+elif [ -n "$CALLER_DIRTY" ]; then
+    bad "test8: --root wrote into the CALLER'S repo as well:
+$CALLER_DIRTY"
+else
+    ok "test8: --root writes into the named repo and leaves the caller's cwd repo untouched"
+fi
+
+# ---- test 9: with no --root the repo still comes from cwd, so the plugin
+# case (a script run from \${CLAUDE_PLUGIN_ROOT}) is unbroken.
+
+TARGET=$(fresh_repo t9target)
+OTHER=$(fresh_repo t9other)
+(cd "$TARGET" && ./scripts/decisions.sh migrate) >/dev/null 2>&1
+BEFORE_TARGET=$(count_md "$TARGET/docs/decisions.d")
+set +e
+(cd "$TARGET" && "$OTHER/scripts/decisions.sh" add \
+    --title "Resolved from cwd" --body "body" --date 2026-04-02) >"$WORK/t9.out" 2>&1
+RC=$?
+set -e
+AFTER_TARGET=$(count_md "$TARGET/docs/decisions.d")
+if [ "$RC" -ne 0 ]; then
+    bad "test9 (cwd default): add with no --root exited $RC:
+$(cat "$WORK/t9.out")"
+elif [ "$AFTER_TARGET" -ne $((BEFORE_TARGET + 1)) ]; then
+    bad "test9: with no --root the entry did not land in the cwd repo ($BEFORE_TARGET -> $AFTER_TARGET)"
+else
+    ok "test9: with no --root the repo still comes from cwd, invoked by absolute path"
+fi
+
+# ---- test 10: a --root that names nothing usable dies naming it and
+# writes nothing. The empty case is the discriminating one: cwd here IS a
+# valid repo, so a fallback to cwd would succeed and go unnoticed.
+
+REPO=$(fresh_repo t10)
+NOTAREPO="$WORK/t10-plain"
+mkdir -p "$NOTAREPO"
+(cd "$REPO" && ./scripts/decisions.sh migrate) >/dev/null 2>&1
+(cd "$REPO" && git add -A && git commit -q -m migrated) >/dev/null 2>&1
+BEFORE_COUNT=$(count_md "$REPO/docs/decisions.d")
+set +e
+(cd "$REPO" && ./scripts/decisions.sh add --root "$NOTAREPO" --title "x" --body "y") >"$WORK/t10a.out" 2>&1
+RC_NOTREPO=$?
+(cd "$REPO" && ./scripts/decisions.sh add --root "$WORK/t10-missing" --title "x" --body "y") >"$WORK/t10b.out" 2>&1
+RC_MISSING=$?
+(cd "$REPO" && ./scripts/decisions.sh add --root "" --title "x" --body "y") >"$WORK/t10c.out" 2>&1
+RC_EMPTY=$?
+set -e
+AFTER_COUNT=$(count_md "$REPO/docs/decisions.d")
+REPO_DIRTY=$(cd "$REPO" && git status --porcelain)
+if [ "$RC_NOTREPO" -eq 0 ] || [ "$RC_MISSING" -eq 0 ] || [ "$RC_EMPTY" -eq 0 ]; then
+    bad "test10: an unusable --root exited 0 (notrepo=$RC_NOTREPO missing=$RC_MISSING empty=$RC_EMPTY)"
+elif ! grep -q "not a git repository" "$WORK/t10a.out"; then
+    bad "test10: --root at a non-repo did not say so:
+$(cat "$WORK/t10a.out")"
+elif ! grep -q "no such directory" "$WORK/t10b.out"; then
+    bad "test10: --root at a missing directory did not say so:
+$(cat "$WORK/t10b.out")"
+elif ! grep -q "PATH is empty" "$WORK/t10c.out"; then
+    bad "test10: an empty --root did not die naming it — it may have fallen back to cwd:
+$(cat "$WORK/t10c.out")"
+elif [ "$AFTER_COUNT" -ne "$BEFORE_COUNT" ] || [ -n "$REPO_DIRTY" ]; then
+    bad "test10: a dying --root call still wrote something:
+$REPO_DIRTY"
+else
+    ok "test10: --root at a non-repo, a missing directory, or empty dies naming it and writes nothing"
+fi
+
+# ---- test 11: an argument sitting in a value-taking option's slot is not
+# read as a flag, so `--body --root` stays a body.
+
+REPO=$(fresh_repo t11)
+(cd "$REPO" && ./scripts/decisions.sh migrate) >/dev/null 2>&1
+set +e
+(cd "$REPO" && ./scripts/decisions.sh add --title "Literal flag body" --body "--root" --date 2026-04-03) >"$WORK/t11.out" 2>&1
+RC=$?
+set -e
+ENTRY="$(first_md "$REPO/docs/decisions.d" '*literal-flag-body*.md')"
+if [ "$RC" -ne 0 ]; then
+    bad "test11 (value slot): add with '--body --root' exited $RC:
+$(cat "$WORK/t11.out")"
+elif [ -z "$ENTRY" ]; then
+    bad "test11: no entry file was written for '--body --root'"
+elif ! grep -q -- '--root' "$ENTRY"; then
+    bad "test11: '--root' was consumed as a flag instead of staying the body of $ENTRY"
+else
+    ok "test11: an argument in a value-taking option's slot stays a value, so '--body --root' is a body"
+fi
+
+# ---- test 12: --root is recognised anywhere in the argument list, so no
+# subcommand parser has to know about it.
+
+TARGET=$(fresh_repo t12target)
+CALLER=$(fresh_repo t12caller)
+(cd "$TARGET" && ./scripts/decisions.sh migrate) >/dev/null 2>&1
+BEFORE_TARGET=$(count_md "$TARGET/docs/decisions.d")
+set +e
+(cd "$CALLER" && "$TARGET/scripts/decisions.sh" --root "$TARGET" add \
+    --title "Root first" --body "body" --date 2026-04-04) >"$WORK/t12a.out" 2>&1
+RC_FIRST=$?
+(cd "$CALLER" && "$TARGET/scripts/decisions.sh" add \
+    --title "Root last" --body "body" --date 2026-04-05 --root="$TARGET") >"$WORK/t12b.out" 2>&1
+RC_LAST=$?
+set -e
+AFTER_TARGET=$(count_md "$TARGET/docs/decisions.d")
+if [ "$RC_FIRST" -ne 0 ] || [ "$RC_LAST" -ne 0 ]; then
+    bad "test12 (--root position): first=$RC_FIRST last=$RC_LAST:
+$(cat "$WORK/t12a.out")
+$(cat "$WORK/t12b.out")"
+elif [ "$AFTER_TARGET" -ne $((BEFORE_TARGET + 2)) ]; then
+    bad "test12: --root before the subcommand and --root=PATH at the end did not both write ($BEFORE_TARGET -> $AFTER_TARGET)"
+else
+    ok "test12: --root is recognised before the subcommand and as --root=PATH at the end"
 fi
 
 echo
