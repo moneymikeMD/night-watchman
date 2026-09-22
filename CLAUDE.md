@@ -111,8 +111,7 @@ provisioning, not this repo's).
 dedicated integration worktree `land-branch.sh` owns and resets to
 `origin/main` on every run — never in the invoking tree, which it refuses
 outright if dirty (`--reset-land` overrides the worktree reset, not the
-dirty-invoker check). See "The wave-trail gitignore gap" below for the one
-file that trips this today.
+dirty-invoker check).
 
 ### Merge commits land directly, and the branch ruleset does not stop them
 
@@ -136,16 +135,6 @@ outside contributor's PR needs the owner's review and GitHub's own
 self-approval block means the owner can't satisfy that on their own PR
 either, absent the bypass. It does not bind an owner-run `land-branch.sh`
 landing, which never opens a PR.
-
-## The wave-trail gitignore gap (NWM-150, open)
-
-`.gitignore` matches `.night-watchman/wave-trail.tsv` but not the dated
-`wave-trail-YYYY-MM-DD.tsv` files a wave actually writes. Because
-`land-branch.sh` refuses a dirty invoking tree, one untracked dated trail
-file blocks every landing until it's tracked, `git clean`ed, or the pattern
-is fixed. `.night-watchman/wave-trail-2026-09-14.tsv` is sitting untracked
-in this checkout right now, reproducing the bug — leave it in place; it is
-NWM-150's evidence, not litter to clear.
 
 ## CI (`.github/workflows/ci.yml`)
 
