@@ -36,3 +36,8 @@ and the two rows mapping different homelab selftests onto one
 a gap in the map's format, not a decision). The full 61-row audit found
 nothing else. land-branch.sh is NOT marked: NWM-131 splits it behind a hook
 contract rather than forking it permanently.
+
+**Provenance.** Decided and landed by an unattended session on 2026-09-22,
+under NWM-158. Verified red-then-green and through the full CI set, but not
+reviewed by the owner. Superseding it needs a later entry, not an edit here
+(NWM-167).

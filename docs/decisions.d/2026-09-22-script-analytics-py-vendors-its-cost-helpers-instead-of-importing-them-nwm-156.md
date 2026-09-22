@@ -39,3 +39,8 @@ lesson, third instance in one week: a migration must count `$PROJECT_DIR`
 paths as a consumer surface alongside `${CLAUDE_PLUGIN_ROOT}` ones, and the
 `$PROJECT_DIR` kind is worse, because it fails for consumers rather than
 installers and a fail-open hook leaves no error behind.
+
+**Provenance.** Decided and landed by an unattended session on 2026-09-22,
+under NWM-156. Verified red-then-green and through the full CI set, but not
+reviewed by the owner. Superseding it needs a later entry, not an edit here
+(NWM-167).
