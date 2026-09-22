@@ -17,17 +17,19 @@ Authoritative sources for the tickets themselves: whatever `to-issues` created
 | A fact about the project | matching `docs/` topic file, updated **in place** |
 | A "why" | dated append to `docs/decisions.md` — never rewrite; supersede with a new entry referencing the old. Only when all three gates hold: costly to reverse, surprising without it, real alternatives weighed. Template: `templates/decisions.md` |
 | A guess | `docs/open-questions.md`, marked `UNVERIFIED` — never a topic file |
-| A problem found, not fixed | `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" add` to create an entry under `docs/known-issues/` with severity (HIGH/MEDIUM/LOW/COSMETIC) by blast radius, not effort. **Never hand-edit the generated index** — it must never drift from the entries it indexes. Template: `templates/known-issues.md` |
+| A problem found, not fixed | `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" add` to create an entry under `docs/known-issues/` with severity (HIGH/MEDIUM/LOW/COSMETIC) by blast radius, not effort. **Never hand-edit the generated index** — it must never drift from the entries it indexes. Template: `templates/known-issues.md` |
 | A script doc claim, checked against reality | dated row in `docs/scripts-claims.md`, updated in place on re-check. Template: `templates/scripts-claims.md` |
 
-Resolved known-issues use `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" resolve <slug>`
+Resolved known-issues use `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" resolve <slug>`
 and are rewritten in place with what was verified, never deleted — the
 history is the useful part. A confident-sounding guess in `docs/` is worse
 than no entry; future sessions read these files as ground truth.
-`"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" lint` verifies entries and the
+`"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" lint` verifies entries and the
 index stay in sync.
 
-`known-issue.sh` is ai-toolkit's, not this plugin's. `ai-toolkit-root.sh`
+Always pass `--root`: without it `known-issue.sh` takes its target repo
+from cwd, and an agent running from a worktree writes into the wrong one
+(NWM-145). `known-issue.sh` is ai-toolkit's, not this plugin's. `ai-toolkit-root.sh`
 resolves a checkout of it and exits 1 naming `$AI_TOOLKIT_ROOT` and the
 clone when there is none. It also resolves the target repo from the current
 directory, so run it with cwd in the repo the entry belongs to (NWM-145).
