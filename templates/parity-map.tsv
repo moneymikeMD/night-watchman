@@ -23,11 +23,11 @@ scripts/api/jira-api-selftest.sh	providers/tracker/jira/jira-api-selftest.sh
 scripts/api/jira-agile-api.sh	providers/tracker/jira/jira-agile-api.sh
 scripts/api/jira-agile-api-selftest.sh	providers/tracker/jira/jira-agile-api-selftest.sh
 scripts/api/confluence-api.sh	providers/publish/atlassian/confluence.sh
-scripts/api/confluence-api-selftest.sh	providers/publish/atlassian/selftest.sh
+scripts/api/confluence-api-selftest.sh	providers/publish/atlassian/selftest.sh	diverged:NWM-161
 scripts/api/atlassian-graphql.sh	providers/publish/atlassian/townsquare.sh
-scripts/api/atlassian-graphql-selftest.sh	providers/publish/atlassian/selftest.sh
-scripts/dev/claude-cost.py	scripts/claude-cost.py
-scripts/dev/claude-cost-selftest.sh	scripts/claude-cost-selftest.sh
+scripts/api/atlassian-graphql-selftest.sh	providers/publish/atlassian/selftest.sh	diverged:NWM-161
+scripts/dev/claude-cost.py	scripts/claude-cost.py	diverged:NWM-129
+scripts/dev/claude-cost-selftest.sh	scripts/claude-cost-selftest.sh	diverged:NWM-129
 scripts/dev/script-analytics.py	scripts/script-analytics.py
 scripts/dev/script-analytics-selftest.sh	scripts/script-analytics-selftest.sh
 scripts/dev/script-retire.sh	scripts/script-retire.sh

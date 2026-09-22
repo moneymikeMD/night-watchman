@@ -1,17 +1,38 @@
 #!/bin/bash
 #
 # Recurring drift check between this repo and a source project it was
-# extracted from (see docs/parity/2026-09-13.md). Reads a
-# committed map file (source path TAB local path, or a bare '-' for
-# "deliberately not ported") and reports, read-only:
+# extracted from (see docs/parity/2026-09-13.md). Reads a committed map file
+# and reports, read-only.
 #
-#   drift     mapped pairs (local != '-') whose files differ, with a diff
-#             line count; a mapped local file that is entirely missing
-#             counts as drift too
+# A map row is SOURCE-PATH TAB LOCAL-PATH, optionally followed by a third
+# tab-separated field 'diverged:TICKET-KEY'. LOCAL-PATH may be a bare '-'
+# for "deliberately not ported". The third field says the pair is known not
+# to converge and names the ticket that says why — a copy deliberately
+# reduced from the other, not drift anyone intends to fix.
+#
+#   drift     mapped pairs (local != '-', unmarked) whose files differ, with
+#             a diff line count; a mapped local file that is entirely
+#             missing counts as drift too
+#   diverged  marked pairs, with their ticket and diff line count. Reported
+#             apart from drift and EXCLUDED from the exit code
 #   new       files that exist under a mapped source directory but have no
 #             row in the map at all (candidates for a parity ticket)
 #   vanished  map rows whose source file no longer exists in the source
 #             tree (the map itself has gone stale)
+#
+# Marking a pair is not the same as deleting its row, and deleting is why
+# the marker exists: a row's source is registered as mapped BEFORE any
+# comparison, so a deleted row puts its source straight into 'new', which
+# sets exit 1 exactly as 'drift' does. The marker keeps the row mapped.
+#
+# Three edge cases, decided rather than left to the reader. A marker on a
+# row whose local column is '-' is a malformed map: '-' already claims the
+# file was never ported and the two claims do not compose. A marked pair
+# whose LOCAL FILE IS MISSING stays in drift and keeps setting exit 1 —
+# deliberately different is not deliberately absent, and this is how a
+# marker left behind on a deleted file surfaces. A marked pair whose files
+# turn out to be IDENTICAL is flagged in the diverged section as a possibly
+# stale marker, visibly but without changing the exit code.
 #
 # This script never writes to the source tree, the local repo, or the map
 # file — it only reads and reports. Update the map by hand (or via a
@@ -46,9 +67,9 @@
 #               Optional; the pass is skipped entirely when omitted.
 #
 # Exit codes: 0 clean (drift/new/vanished/unmapped buckets all empty — the
-# dangling bucket never affects this), 1 drift or unmapped references found
-# (any of drift/new/vanished/unmapped non-empty), 2 could not evaluate (bad
-# --source, missing/malformed map, bad --source-root).
+# dangling and diverged buckets never affect this), 1 drift or unmapped
+# references found (any of drift/new/vanished/unmapped non-empty), 2 could
+# not evaluate (bad --source, missing/malformed map, bad --source-root).
 
 set -euo pipefail
 
@@ -101,36 +122,40 @@ fail_eval() {
 [ -d "$ROOT" ] || fail_eval "no such root directory: $ROOT"
 [ -z "$SOURCE_ROOT" ] || [ -d "$SOURCE_ROOT" ] || fail_eval "no such --source-root directory: $SOURCE_ROOT"
 
-# A map row is SOURCE-PATH<TAB>LOCAL-PATH, LOCAL-PATH may be a literal '-'.
-# A wrong field count means the map cannot be trusted at all, so it is a
+# A malformed row means the map cannot be trusted at all, so it is a
 # could-not-evaluate precondition rather than a warning.
 BAD_LINES="$(awk -F'\t' '
     /^[[:space:]]*$/ { next }
     /^#/ { next }
-    NF != 2 { print NR; bad = 1 }
+    NF != 2 && NF != 3 { print NR; bad = 1; next }
+    NF == 3 && $3 !~ /^diverged:[A-Za-z][A-Za-z0-9_]*-[0-9]+$/ { print NR; bad = 1; next }
+    NF == 3 && $2 == "-" { print NR; bad = 1; next }
     END { exit bad ? 0 : 1 }
 ' "$MAP")" || BAD_LINES=""
 if [ -n "$BAD_LINES" ]; then
-    fail_eval "$MAP: malformed row(s) (not SOURCE<TAB>LOCAL) at line(s): $(printf '%s' "$BAD_LINES" | tr '\n' ' ')"
+    fail_eval "$MAP: malformed row(s) (not SOURCE<TAB>LOCAL[<TAB>diverged:TICKET-123], and a marker may not sit on a '-' row) at line(s): $(printf '%s' "$BAD_LINES" | tr '\n' ' ')"
 fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/parity-sweep.XXXXXX")" || fail_eval "cannot create scratch directory"
 trap 'rm -rf "$WORK"' EXIT
 
 DRIFT="$WORK/drift"
+DIVERGED="$WORK/diverged"
 NEWFILES="$WORK/new"
 VANISHED="$WORK/vanished"
 MAPPED_SET="$WORK/mapped-set"
 DIRS="$WORK/dirs"
 : >"$DRIFT"
+: >"$DIVERGED"
 : >"$NEWFILES"
 : >"$VANISHED"
 : >"$MAPPED_SET"
 
-while IFS="$(printf '\t')" read -r src local; do
+while IFS="$(printf '\t')" read -r src local marker; do
     case "$src" in
         ""|"#"*) continue ;;
     esac
+    marker="${marker:-}"
 
     src_dir="$(dirname "$src")"
     src_base="$(basename "$src")"
@@ -150,6 +175,16 @@ while IFS="$(printf '\t')" read -r src local; do
     fi
 
     lines="$(diff -u "$SOURCE/$src" "$ROOT/$local" 2>/dev/null | wc -l | tr -d ' ')" || pipe_ok
+
+    if [ -n "$marker" ]; then
+        if [ "$lines" = "0" ]; then
+            printf '%s\t%s\t%s\tIDENTICAL — marker may be stale\n' "$src" "$local" "${marker#diverged:}" >>"$DIVERGED"
+        else
+            printf '%s\t%s\t%s\t%s lines\n' "$src" "$local" "${marker#diverged:}" "$lines" >>"$DIVERGED"
+        fi
+        continue
+    fi
+
     if [ "$lines" != "0" ]; then
         printf '%s\t%s\t%s lines\n' "$src" "$local" "$lines" >>"$DRIFT"
     fi
@@ -180,6 +215,7 @@ report_section() {
 }
 
 report_section "drift: mapped pairs that differ" "$DRIFT"
+report_section "diverged: known not to converge, tracked, not drift" "$DIVERGED"
 report_section "new: source files with no map row" "$NEWFILES"
 report_section "vanished: map rows whose source no longer exists" "$VANISHED"
 
