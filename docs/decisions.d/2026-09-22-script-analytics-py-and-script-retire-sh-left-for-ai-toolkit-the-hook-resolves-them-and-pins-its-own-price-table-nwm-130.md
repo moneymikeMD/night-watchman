@@ -32,3 +32,8 @@ a 10x table in the project: the event priced at the project's rate.
 One consequence to know when running the moved script BY HAND: with
 `$CLAUDE_PROJECT_DIR` unset the search finds nothing and it exits 2. Pass
 `--prices templates/claude-prices.tsv` or export `$CLAUDE_PROJECT_DIR`.
+
+**Provenance.** Decided and landed by an unattended session on 2026-09-22,
+under NWM-130. Verified red-then-green and through the full CI set, but not
+reviewed by the owner. Superseding it needs a later entry, not an edit here
+(NWM-167).

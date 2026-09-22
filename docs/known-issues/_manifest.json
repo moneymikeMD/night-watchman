@@ -24,6 +24,6 @@
   "release-sh-calls-the-tracker-fetch-verb-with-a-since-tag-but-tracker-fetch-takes-an-issue-key-changelog-always-degrades-to-the-placeholder-line": "63e9d4b2578a81a9c4b9b86505ded4c8dd6bdfc4f7014e0393130abceb1120b9",
   "script-analytics-py-selftest-fixtures-are-hand-typed-not-captured-transcripts": "8a0e084c6fc2b288ea668746b866d6e656a0bbe970e025510e7fed868a03d08c",
   "script-analytics-py-status-durations-exits-0-and-reports-0-new-when-the-tracker-wrapper-itself-fails": "d9baf34ec5a81de1d61e678b02b9573c9eda9606014bd72691cb0dab8a60853b",
-  "script-events-hook-sh-resolves-the-extractor-by-path-only-so-a-foreign-repo-s-scripts-script-analytics-py-would-be-invoked": "ada556dacd1f07c7a54627e03a2e099feb90403adf06b22a0aee43b7ae5eb3c4",
+  "script-events-hook-sh-resolves-the-extractor-by-path-only-so-a-foreign-repo-s-scripts-script-analytics-py-would-be-invoked": "f9f72f30509e7c06fd0b4a3625ff33638a138a806d15c10595a638c1842e1b28",
   "subagentstop-hook-wiring-for-script-events-hook-sh-not-yet-observed-live": "ae812bb9adda361a2d9089738cbd4fa1f5775ac1c014b3eb59f9f1864be2dd3f"
 }
