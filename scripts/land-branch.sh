@@ -301,10 +301,16 @@ BRANCH_WT=$(printf '%s\n' "$WT_PORCELAIN" | awk -v b="refs/heads/$BRANCH" '
     /^branch /   { br=$0; sub(/^branch /,"",br); if (br==b) print path }
 ')
 if [ -n "$BRANCH_WT" ]; then
-    if ! WT_STATUS=$(git -C "$BRANCH_WT" status --porcelain 2>&1); then
+    # NWM-147: the worker brief requires .night-watchman/closing-state.md
+    # uncommitted in this worktree and step 5 reads it, so requiring the file
+    # and then refusing it was a contradiction. -uall makes the exclusion
+    # precise: without it git collapses the dir to '?? .night-watchman/'.
+    if ! WT_STATUS=$(git -C "$BRANCH_WT" status --porcelain -uall \
+            -- . ':!.night-watchman/closing-state.md' 2>&1); then
         stop2 "could not check worktree '$BRANCH_WT' for branch '$BRANCH' (git status failed — removed or corrupt worktree?): $WT_STATUS"
     fi
-    [ -z "$WT_STATUS" ] || stop2 "branch '$BRANCH' worktree at '$BRANCH_WT' has uncommitted changes — commit or stash them first"
+    [ -z "$WT_STATUS" ] || stop2 "branch '$BRANCH' worktree at '$BRANCH_WT' has uncommitted changes — commit or stash them first (.night-watchman/closing-state.md is exempt; nothing else is):
+$WT_STATUS"
 fi
 
 # Resolve the ticket against $TARGET_BRANCH's content via `git show`, not the
