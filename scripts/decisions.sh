@@ -198,7 +198,7 @@ add_lock() {
         [ "$tries" -lt 100 ] || die "could not acquire $ADD_LOCK after 100 tries; a stale lock from a killed run?"
         sleep 0.1
     done
-    trap add_unlock EXIT
+    kit_on_exit add_unlock
 }
 
 cmd_add() {

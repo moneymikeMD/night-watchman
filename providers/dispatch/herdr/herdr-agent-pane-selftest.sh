@@ -32,14 +32,14 @@ KIT_SRC="$HERE/lib/kit.sh"
 FAIL=0
 SCRATCH_DIRS=""
 
-# shellcheck disable=SC2329  # called indirectly via the EXIT trap below
+# shellcheck disable=SC2329  # called indirectly via kit_on_exit below
 cleanup_all() {
     local d
     for d in $SCRATCH_DIRS; do
         rm -rf "$d"
     done
 }
-trap cleanup_all EXIT
+kit_on_exit cleanup_all
 
 assert_eq() {
     local desc="$1" want="$2" got="$3"

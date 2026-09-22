@@ -351,8 +351,8 @@ render_page() {
 generate_all() {
     local outdir="$1" scratch p
     scratch="$(mktemp -d "${TMPDIR:-/tmp}/gen-reference-docs.render.XXXXXX")" || die "cannot create scratch directory"
-    # Not a trap: a second `trap ... EXIT` would silently REPLACE --check's
-    # own outer trap. Each failure path below removes this scratch dir itself.
+    # Not registered for cleanup at all: generate_all can be called more
+    # than once, and each failure path below removes its own scratch dir.
     # shellcheck disable=SC2086  # PAGE_NAMES is a deliberate space-separated list, no special chars
     for p in $PAGE_NAMES; do
         if ! render_page "$p" > "$scratch/$p.mdx"; then
@@ -377,7 +377,9 @@ generate_all() {
 
 if [ "$CHECK" -eq 1 ]; then
     SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/gen-reference-docs.XXXXXX")" || die "cannot create scratch directory"
-    trap 'rm -rf "$SCRATCH"' EXIT
+    # shellcheck disable=SC2329  # called indirectly via kit_on_exit
+    clean_scratch() { rm -rf "$SCRATCH"; }
+    kit_on_exit clean_scratch
 
     # A subshell so ANY failure here becomes "could not evaluate" (exit 2),
     # distinct from a drift finding (exit 1). kit.sh's die() always exits 1;
