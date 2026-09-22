@@ -11,7 +11,8 @@
 # never the real source project, so this selftest stays structurally offline.
 #
 # Usage: scripts/parity-sweep-selftest.sh [path-to-parity-sweep.sh]
-# Defaults to the sibling scripts/parity-sweep.sh.
+# Defaults to the sibling scripts/parity-sweep.sh. Pass an older revision to
+# run the NWM-158 diverged-marker cases red against it.
 
 set -euo pipefail
 
@@ -280,6 +281,117 @@ if grep -A3 '== unmapped' "$WORK/out12" | grep -q 'scripts/x/y.sh'; then
     bad "a dangling reference should never appear under unmapped"
 else
     ok "a dangling reference is not reported under unmapped"
+fi
+
+# ---- NWM-158: the diverged: marker ------------------------------------
+# A pair that is known not to converge is marked rather than deleted. The
+# marker keeps the row mapped, which is the whole point: a deleted row puts
+# its source into 'new', which sets exit 1 exactly as drift does.
+DVSRC="$WORK/dv-source"
+DVREPO="$WORK/dv-repo"
+mkdir -p "$DVSRC/scripts/dev" "$DVREPO/scripts/dev"
+
+printf 'big version\nwith extra lines\n' >"$DVSRC/scripts/dev/forked.sh"
+printf 'small version\n' >"$DVREPO/scripts/dev/forked.sh"
+printf 'same\n' >"$DVSRC/scripts/dev/agreed.sh"
+cp "$DVSRC/scripts/dev/agreed.sh" "$DVREPO/scripts/dev/agreed.sh"
+
+DVMAP="$WORK/dv-map.tsv"
+{
+    printf 'scripts/dev/forked.sh\tscripts/dev/forked.sh\tdiverged:NWM-129\n'
+    printf 'scripts/dev/agreed.sh\tscripts/dev/agreed.sh\n'
+} >"$DVMAP"
+
+run_dv() {
+    set +e
+    "$SWEEP" --source "$DVSRC" --map "$1" --root "$DVREPO" \
+        >"$WORK/dvout" 2>"$WORK/dverr"
+    DVSTATUS=$?
+    set -e
+}
+
+run_dv "$DVMAP"
+if [ "$DVSTATUS" -eq 0 ]; then
+    ok "diverged: a marked differing pair does not set the exit code"
+else
+    bad "diverged: a marked differing pair should exit 0, got $DVSTATUS (see $WORK/dverr, $WORK/dvout)"
+fi
+if grep -A3 '== diverged' "$WORK/dvout" | grep -q 'scripts/dev/forked.sh.*NWM-129.*lines'; then
+    ok "diverged: the section names the pair, its ticket and a diff line count"
+else
+    bad "diverged: section missing the marked pair with its ticket (see $WORK/dvout)"
+fi
+if sed -n '/== drift/,/== diverged/p' "$WORK/dvout" | grep -q 'forked.sh'; then
+    bad "diverged: a marked pair must not also appear under drift"
+else
+    ok "diverged: a marked pair is kept out of the drift section"
+fi
+
+# The property that makes marking work where deleting does not.
+if grep -A3 '== new' "$WORK/dvout" | grep -q 'forked.sh'; then
+    bad "diverged: a marked row's source must stay mapped, never fall into 'new'"
+else
+    ok "diverged: a marked row's source stays mapped and never falls into 'new'"
+fi
+
+# ...and the measurement that rejected deleting the row instead.
+DELMAP="$WORK/dv-map-deleted.tsv"
+printf 'scripts/dev/agreed.sh\tscripts/dev/agreed.sh\n' >"$DELMAP"
+run_dv "$DELMAP"
+if grep -A3 '== new' "$WORK/dvout" | grep -q 'forked.sh' && [ "$DVSTATUS" -eq 1 ]; then
+    ok "diverged: deleting the row instead relocates the noise into 'new' and still exits 1"
+else
+    bad "diverged: expected the deleted row's source under 'new' with exit 1, got $DVSTATUS (see $WORK/dvout)"
+fi
+
+# Deliberately different is not deliberately absent.
+MISSMAP="$WORK/dv-map-missing.tsv"
+{
+    printf 'scripts/dev/forked.sh\tscripts/dev/gone.sh\tdiverged:NWM-129\n'
+    printf 'scripts/dev/agreed.sh\tscripts/dev/agreed.sh\n'
+} >"$MISSMAP"
+run_dv "$MISSMAP"
+if [ "$DVSTATUS" -eq 1 ] && sed -n '/== drift/,/== diverged/p' "$WORK/dvout" | grep -q 'local file missing'; then
+    ok "diverged: a marked pair whose local file is MISSING is still drift, exit 1"
+else
+    bad "diverged: a missing local file under a marker should stay drift with exit 1, got $DVSTATUS (see $WORK/dvout)"
+fi
+
+# A marker on a pair that turns out identical is a marker that has gone stale.
+STALEMAP="$WORK/dv-map-stale.tsv"
+{
+    printf 'scripts/dev/agreed.sh\tscripts/dev/agreed.sh\tdiverged:NWM-129\n'
+    printf 'scripts/dev/forked.sh\tscripts/dev/forked.sh\tdiverged:NWM-129\n'
+} >"$STALEMAP"
+run_dv "$STALEMAP"
+if [ "$DVSTATUS" -eq 0 ]; then
+    ok "diverged: a stale marker does not change the exit code"
+else
+    bad "diverged: a stale marker should leave exit 0, got $DVSTATUS (see $WORK/dvout)"
+fi
+if grep -A3 '== diverged' "$WORK/dvout" | grep -q 'marker may be stale'; then
+    ok "diverged: an identical marked pair is flagged as a possibly stale marker"
+else
+    bad "diverged: an identical marked pair should be flagged stale (see $WORK/dvout)"
+fi
+
+# Malformed markers are a could-not-evaluate, like every other bad map row.
+BADMARKMAP="$WORK/dv-map-badmarker.tsv"
+printf 'scripts/dev/forked.sh\tscripts/dev/forked.sh\tprobably-fine\n' >"$BADMARKMAP"
+run_dv "$BADMARKMAP"
+if [ "$DVSTATUS" -eq 2 ]; then
+    ok "diverged: a third field that is not diverged:TICKET is a malformed map, exit 2"
+else
+    bad "diverged: an unrecognised third field should exit 2, got $DVSTATUS (see $WORK/dverr)"
+fi
+
+NOTPORTEDMAP="$WORK/dv-map-notported.tsv"
+printf 'scripts/dev/forked.sh\t-\tdiverged:NWM-129\n' >"$NOTPORTEDMAP"
+run_dv "$NOTPORTEDMAP"
+if [ "$DVSTATUS" -eq 2 ]; then
+    ok "diverged: a marker on a '-' row is a malformed map, exit 2"
+else
+    bad "diverged: a marker on a '-' row should exit 2, got $DVSTATUS (see $WORK/dverr)"
 fi
 
 echo
