@@ -29,6 +29,8 @@ chmod +x "$SUT_COPY"
 make_ai_toolkit() {
     mkdir -p "$1/scripts"
     : > "$1/scripts/known-issue.sh"
+    : > "$1/scripts/script-analytics.py"
+    : > "$1/scripts/script-retire.sh"
 }
 
 # run_sut [AI_TOOLKIT_ROOT=...] ARGS... — sets RC, OUT and ERR. A leading
@@ -120,7 +122,7 @@ else
 fi
 
 run_sut --help
-if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue]"* ]] && [ -z "$ERR" ]; then
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire]"* ]] && [ -z "$ERR" ]; then
     ok "--help prints the header on stdout, exit 0"
 else
     bad "--help: rc=$RC out='$OUT' err='$ERR'"
@@ -131,6 +133,40 @@ if [ "$RC" -eq 1 ] && [[ "$ERR" == *"got 1 extra arguments"* ]]; then
     ok "an unexpected argument is a usage error"
 else
     bad "extra argument: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+# ---- NWM-130: the two scripts this repo donated resolve the same way ----
+run_sut "AI_TOOLKIT_ROOT=$REAL_AT" --script-analytics
+if [ "$RC" -eq 0 ] && [ "$OUT" = "$REAL_AT/scripts/script-analytics.py" ]; then
+    ok "--script-analytics appends the extractor's path"
+else
+    bad "--script-analytics: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+run_sut "AI_TOOLKIT_ROOT=$REAL_AT" --script-retire
+if [ "$RC" -eq 0 ] && [ "$OUT" = "$REAL_AT/scripts/script-retire.sh" ]; then
+    ok "--script-retire appends the retirement script's path"
+else
+    bad "--script-retire: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+# A checkout that resolves but predates the move must say so, not print a
+# path that does not exist — the caller would otherwise fail much later.
+STALE_AT="$WORK/stale-ai-toolkit"
+mkdir -p "$STALE_AT/scripts"
+: > "$STALE_AT/scripts/known-issue.sh"
+run_sut "AI_TOOLKIT_ROOT=$STALE_AT" --script-analytics
+if [ "$RC" -eq 1 ] && [[ "$ERR" == *"no scripts/script-analytics.py"* ]] && [ -z "$OUT" ]; then
+    ok "a checkout without the donated script is refused, not printed"
+else
+    bad "stale checkout: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+run_sut "AI_TOOLKIT_ROOT=$REAL_AT" --not-a-flag
+if [ "$RC" -eq 1 ] && [[ "$ERR" == *"unknown flag"* ]]; then
+    ok "an unrecognised flag is refused by name"
+else
+    bad "unknown flag: rc=$RC out='$OUT' err='$ERR'"
 fi
 
 echo

@@ -120,16 +120,18 @@ payload_for() {
 }
 
 run_hook_resolve() {
-  # Extractor-resolution cases (NWM-156). $1 = hook script, $2 = agent_id,
-  # $3 = CLAUDE_PROJECT_DIR, $4 = CLAUDE_PLUGIN_ROOT ("" = unset),
-  # $5 = SCRIPT_EVENTS_EXTRACTOR ("" = unset).
-  _hook="$1"; _aid="$2"; _proj="$3"; _plugin="$4"; _extractor="$5"
+  # Extractor-resolution cases (NWM-156, NWM-130). $1 = hook script,
+  # $2 = agent_id, $3 = CLAUDE_PROJECT_DIR, $4 = CLAUDE_PLUGIN_ROOT
+  # ("" = unset), $5 = SCRIPT_EVENTS_EXTRACTOR ("" = unset),
+  # $6 = AI_TOOLKIT_ROOT ("" = unset).
+  _hook="$1"; _aid="$2"; _proj="$3"; _plugin="$4"; _extractor="$5"; _aitk="${6:-}"
 
-  set -- env -u CLAUDE_PLUGIN_ROOT -u SCRIPT_EVENTS_EXTRACTOR \
+  set -- env -u CLAUDE_PLUGIN_ROOT -u SCRIPT_EVENTS_EXTRACTOR -u AI_TOOLKIT_ROOT \
     PATH="$STUBBIN:$MINIMAL_PATH" CLAUDE_PROJECT_DIR="$_proj" \
     SCRIPT_EVENTS_PROJECTS_DIR="$FIXTURE_PROJECTS"
   [ -n "$_plugin" ] && set -- "$@" CLAUDE_PLUGIN_ROOT="$_plugin"
   [ -n "$_extractor" ] && set -- "$@" SCRIPT_EVENTS_EXTRACTOR="$_extractor"
+  [ -n "$_aitk" ] && set -- "$@" AI_TOOLKIT_ROOT="$_aitk"
 
   payload_for "$_aid" "script-author" | "$@" "$_hook" \
     >"$WORKDIR/.last_stdout" 2>"$WORKDIR/.last_stderr"
@@ -379,6 +381,110 @@ case "$_err" in
     ;;
   *)
     fail "no extractor anywhere: diagnostic omits the hook-relative candidate: $_err"
+    ;;
+esac
+
+# ---- NWM-130: the extractor now lives in ai-toolkit --------------------
+
+# A plugin tree that carries ai-toolkit-root.sh but NO scripts/script-analytics.py
+# — exactly what this repo looks like after the donate half landed.
+DONATED_PLUGIN="$WORKDIR/donated-plugin"
+mkdir -p "$DONATED_PLUGIN/scripts" "$DONATED_PLUGIN/hooks" "$DONATED_PLUGIN/templates"
+cp "$SCRIPT" "$DONATED_PLUGIN/hooks/script-events-hook.sh"
+chmod +x "$DONATED_PLUGIN/hooks/script-events-hook.sh"
+printf 'plugin table\n' >"$DONATED_PLUGIN/templates/claude-prices.tsv"
+
+FAKE_AITK="$WORKDIR/fake-ai-toolkit"
+mkdir -p "$FAKE_AITK/scripts"
+AITK_EXTRACTOR="$FAKE_AITK/scripts/script-analytics.py"
+: > "$AITK_EXTRACTOR"
+
+# A stand-in resolver: the real scripts/ai-toolkit-root.sh needs lib/kit.sh
+# and a checkout, neither of which belongs in a hook selftest.
+cat > "$DONATED_PLUGIN/scripts/ai-toolkit-root.sh" << EOF
+#!/bin/bash
+[ "\$1" = "--script-analytics" ] || exit 1
+printf '%s\\n' "\${AI_TOOLKIT_ROOT:-}/scripts/script-analytics.py"
+EOF
+chmod +x "$DONATED_PLUGIN/scripts/ai-toolkit-root.sh"
+
+ARGV="$WORKDIR/argv.15"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$DONATED_PLUGIN/hooks/script-events-hook.sh" "agent-15" \
+  "$CONSUMER_ROOT" "$DONATED_PLUGIN" "" "$FAKE_AITK")"
+assert_rc "ai-toolkit step: hook exits 0" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  pass "ai-toolkit step: extractor was called although no path candidate holds one"
+  _argv="$(cat "$ARGV")"
+  case "$_argv" in
+    *"$AITK_EXTRACTOR"*)
+      pass "ai-toolkit step: argv names the extractor ai-toolkit-root.sh resolved"
+      ;;
+    *)
+      fail "ai-toolkit step: argv did not name $AITK_EXTRACTOR: $_argv"
+      ;;
+  esac
+else
+  fail "ai-toolkit step: extractor was NOT called — the hook went dark after the move"
+fi
+
+# The price table must be pinned explicitly, or the extractor's own search
+# would resolve ai-toolkit's templates/ before this project's.
+PRICED_ROOT="$WORKDIR/priced-project"
+mkdir -p "$PRICED_ROOT/docs" "$PRICED_ROOT/templates"
+printf 'project table\n' >"$PRICED_ROOT/templates/claude-prices.tsv"
+
+ARGV="$WORKDIR/argv.16"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$DONATED_PLUGIN/hooks/script-events-hook.sh" "agent-16" \
+  "$PRICED_ROOT" "$DONATED_PLUGIN" "" "$FAKE_AITK")"
+assert_rc "prices: hook exits 0" "0" "$OUT"
+_argv="$(cat "$ARGV" 2>/dev/null)"
+case "$_argv" in
+  *"--prices"*"$PRICED_ROOT/templates/claude-prices.tsv"*)
+    pass "prices: the project's own table is pinned with --prices"
+    ;;
+  *)
+    fail "prices: --prices did not name the project's table (argv: ${_argv:-<none>})"
+    ;;
+esac
+
+# With no table in the project, the plugin's shipped template is used, so an
+# installer that never copied one still prices its events.
+ARGV="$WORKDIR/argv.17"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$DONATED_PLUGIN/hooks/script-events-hook.sh" "agent-17" \
+  "$CONSUMER_ROOT" "$DONATED_PLUGIN" "" "$FAKE_AITK")"
+assert_rc "prices fallback: hook exits 0" "0" "$OUT"
+_argv="$(cat "$ARGV" 2>/dev/null)"
+case "$_argv" in
+  *"--prices"*"$DONATED_PLUGIN/templates/claude-prices.tsv"*)
+    pass "prices fallback: the plugin's shipped table is used when the project has none"
+    ;;
+  *)
+    fail "prices fallback: --prices did not name the plugin's table (argv: ${_argv:-<none>})"
+    ;;
+esac
+
+# No table anywhere: --prices is omitted rather than pointed at nothing.
+BARE_PLUGIN="$WORKDIR/bare-plugin"
+mkdir -p "$BARE_PLUGIN/scripts" "$BARE_PLUGIN/hooks"
+cp "$SCRIPT" "$BARE_PLUGIN/hooks/script-events-hook.sh"
+chmod +x "$BARE_PLUGIN/hooks/script-events-hook.sh"
+cp "$DONATED_PLUGIN/scripts/ai-toolkit-root.sh" "$BARE_PLUGIN/scripts/ai-toolkit-root.sh"
+
+ARGV="$WORKDIR/argv.18"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$BARE_PLUGIN/hooks/script-events-hook.sh" "agent-18" \
+  "$CONSUMER_ROOT" "$BARE_PLUGIN" "" "$FAKE_AITK")"
+assert_rc "no prices anywhere: hook exits 0" "0" "$OUT"
+_argv="$(cat "$ARGV" 2>/dev/null)"
+case "$_argv" in
+  *"--prices"*)
+    fail "no prices anywhere: --prices should have been omitted (argv: $_argv)"
+    ;;
+  *)
+    pass "no prices anywhere: --prices is omitted rather than pointed at nothing"
     ;;
 esac
 

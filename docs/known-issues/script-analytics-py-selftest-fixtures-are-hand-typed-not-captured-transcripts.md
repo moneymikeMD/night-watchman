@@ -5,7 +5,7 @@ severity: LOW
 status: open
 qualifiers: []
 note: "extract path unverified against real Claude Code transcript shapes"
-tickets: []
+tickets: ["NWM-130"]
 slug: script-analytics-py-selftest-fixtures-are-hand-typed-not-captured-transcripts
 ---
 
@@ -22,3 +22,11 @@ is a known repo-wide pattern, not unique to this port.
 Fix: capture at least one real script-author and one real script-reviewer
 subagent transcript, redact, and save under scripts/fixtures/script-analytics/,
 replayed by the selftest instead of (or alongside) the synthetic tree.
+
+Moved out of this repo 2026-09-22 by NWM-130: script-analytics.py now lives in
+moneymikeMD/ai-toolkit and is consumed here through
+`scripts/ai-toolkit-root.sh --script-analytics`. The finding is unchanged and
+still open, but the fix belongs in ai-toolkit now, not here. This entry is
+kept so the history stays searchable from the repo that found it; whoever acts
+on it should file it on ai-toolkit's side rather than patching a file this
+repo no longer owns.

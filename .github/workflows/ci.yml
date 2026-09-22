@@ -48,10 +48,16 @@ jobs:
           git clone --depth 1 \
             https://github.com/moneymikeMD/ai-toolkit.git "$RUNNER_TEMP/ai-toolkit"
           test -f "$RUNNER_TEMP/ai-toolkit/scripts/known-issue.sh"
+          test -f "$RUNNER_TEMP/ai-toolkit/scripts/script-analytics.py"
+          test -f "$RUNNER_TEMP/ai-toolkit/scripts/script-retire.sh"
           echo "AI_TOOLKIT_ROOT=$RUNNER_TEMP/ai-toolkit" >> "$GITHUB_ENV"
 
       - name: the ai-toolkit dependency resolves
-        run: scripts/ai-toolkit-root.sh --known-issue
+        run: |
+          set -euo pipefail
+          scripts/ai-toolkit-root.sh --known-issue
+          scripts/ai-toolkit-root.sh --script-analytics
+          scripts/ai-toolkit-root.sh --script-retire
 
       - name: shellcheck
         run: |

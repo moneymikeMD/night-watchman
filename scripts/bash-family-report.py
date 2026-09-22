@@ -5,7 +5,8 @@ repeated invocation become a typed tool" is answered by counting instead
 of impression (see docs/cost.md).
 
 Streams every `~/.claude/projects/**/*.jsonl` file (main session and any
-subagent transcript, same corpus `claude-cost-scan.py`/`script-analytics.py`
+subagent transcript, same corpus `claude-cost-scan.py` and ai-toolkit's
+`script-analytics.py`
 read), collecting every Bash `tool_use` block's `command`. Each command is
 normalised to a "family" key:
 

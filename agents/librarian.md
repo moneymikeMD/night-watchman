@@ -1,6 +1,6 @@
 ---
 name: librarian
-description: Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, end-of-session knowledge capture, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via scripts/script-retire.sh + land-branch.sh.
+description: Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, end-of-session knowledge capture, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: haiku
 skills: tickets-protocol
@@ -74,7 +74,7 @@ Bash is for exactly five things:
    your job, the durable record of a session is exactly the knowledge this
    agent exists to keep, and `store`/`recall` reach a local graph rather
    than a live system;
-5. **`scripts/script-retire.sh` and `scripts/land-branch.sh`**, per the
+5. **ai-toolkit's `script-retire.sh` and `scripts/land-branch.sh`**, per the
    "Script retirement" section above — dry-run first, always; `--yes`
    only for a candidate `cost-reviewer` actually listed.
 
@@ -106,20 +106,22 @@ partial state in place, rather than leaving it half-done.
 ## Script retirement
 
 At wave wrap-up, once `cost-reviewer` has reported its "Retirement
-candidates" list (rows flagged `retire?` by `scripts/script-analytics.py
-report --usage`), retire each one:
+candidates" list (rows flagged `retire?` by `script-analytics.py
+report --usage`), retire each one. Both scripts live in ai-toolkit since
+NWM-130 and are resolved at run time, never by a path in this repo:
 
 ```bash
-python3 scripts/script-analytics.py report --events docs/script-events.jsonl --usage --format tsv \
+python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" report --events docs/script-events.jsonl --usage --format tsv \
   | awk -F'\t' 'NR>1 && $NF=="retire?"'   # confirm the candidate list independently before acting
-./scripts/script-retire.sh --events docs/script-events.jsonl --dry-run   # read the plan first, always
-./scripts/script-retire.sh --events docs/script-events.jsonl --yes --ticket <NWM-nnn>
+"$(scripts/ai-toolkit-root.sh --script-retire)" --events docs/script-events.jsonl --dry-run   # read the plan first, always
+"$(scripts/ai-toolkit-root.sh --script-retire)" --events docs/script-events.jsonl --yes --ticket <NWM-nnn>
 ```
 
 `script-retire.sh --yes` creates branch `retire-<name>`, deletes the
 script and its selftest, removes its `docs/scripts.md` row (if the
 project keeps one), appends a line under `docs/scripts.md`'s `## Retired`
-section, commits, and lands via `scripts/land-branch.sh` — one candidate
+section, commits, and lands via the `$LAND_BRANCH_SH` it is given, which
+here is this repo's `scripts/land-branch.sh` — one candidate
 at a time, so a failure on one never blocks the rest. Use the
 `<NWM-nnn>` ticket this wave is wrapping up under (or file a small
 dedicated retirement ticket if none fits); `--yes` refuses without
