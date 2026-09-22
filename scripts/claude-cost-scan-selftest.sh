@@ -112,6 +112,17 @@ else
     ok "journal.jsonl beside the workflow transcripts is not scanned"
 fi
 
+# ---- test 8 (NWM-165): the CLI folds "_" as well as "/" and ".".
+
+# Captured, not run bare: without the fix this exits non-zero, and under
+# `set -e` that aborts the selftest instead of reporting one failure.
+OUT_U=$(run --repo /Users/fixture/repo_with_underscore --format tsv 2>&1) || true
+if printf '%s\n' "$OUT_U" | grep -q "^sess-3	claude-haiku-4-5-20251001	1	200"; then
+    ok "--repo folds '_' to '-' and finds the underscored repo's session"
+else
+    bad "--repo did not resolve a path containing '_' (got: $OUT_U)"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
