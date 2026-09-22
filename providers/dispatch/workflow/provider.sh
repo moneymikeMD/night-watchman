@@ -34,10 +34,12 @@
 #
 # An unattended start requires an executor assertion and there is no default:
 # `--ticket-file` reads `executor:` from the ticket's frontmatter and wins
-# over `--executor`, which is for callers whose tickets are not files. Only
-# `agent` is dispatched; `human`/`mixed` are refused. There is no tracker
-# read and no tracker write in any verb — the lifecycle transition stays with
-# the caller, which is the second declared difference from herdr.
+# over `--executor`, which is for callers whose tickets are not files.
+# `agent` and `mixed` are dispatched, `human` is refused; a mixed ticket gets
+# an extra section in its brief (NWM-146, mirroring LAB-211's fix to the
+# herdr provider). There is no tracker read and no tracker write in any verb
+# — the lifecycle transition stays with the caller, which is the second
+# declared difference from herdr.
 #
 # The brief names the base branch the worker's worktree is cut from, rather
 # than letting `worktree add -b` default to whatever the shared checkout has
@@ -58,8 +60,8 @@
 # Exit codes:
 #   0   the verb completed, or start found an open request and re-composed
 #       nothing, or --dry-run printed its plan.
-#   1   a check failed (bad args, a non-agent executor, no recorded run, a
-#       flag this dispatcher does not offer).
+#   1   a check failed (bad args, an executor:human ticket, no recorded run,
+#       a flag this dispatcher does not offer).
 #   2   a precondition could not be evaluated (no jq or git, an unreadable
 #       brief template or ticket file, an unwritable state directory, a
 #       corrupt journal).
@@ -239,8 +241,8 @@ case "$verb" in
             die "refusing to start $TICKET_UPPER with no executor assertion: pass --ticket-file PATH (its frontmatter decides) or --executor agent"
         fi
         case "$EXECUTOR" in
-            agent) ;;
-            human|mixed) die "$TICKET_UPPER's executor is '$EXECUTOR' — refusing to dispatch it unattended (only 'agent' tickets qualify)" ;;
+            agent|mixed) ;;
+            human) die "$TICKET_UPPER's executor is 'human' — refusing to dispatch it unattended (only 'agent' and 'mixed' tickets qualify)" ;;
             *) stop2 "$TICKET_UPPER's executor is '$EXECUTOR', not one of agent/human/mixed — could not evaluate" ;;
         esac
 
@@ -298,6 +300,23 @@ human or mixed), \`## Left undone\` and \`## Findings\` sections: what you
 deliberately left undone and why, and anything you noticed but did not act on.
 land-branch.sh writes it to the tracker and confirms the write before your
 session ends."
+
+        # A mixed ticket says only what the worker controls. It does not say
+        # the ticket waits at Awaiting Deployment for a person: land-branch.sh
+        # lands it exactly like an agent ticket once the Human run list is
+        # there (LAB-211's review found the original wording false).
+        if [ "$EXECUTOR" = mixed ]; then
+            PROMPT_TEXT="$PROMPT_TEXT
+
+## MIXED TICKET
+This ticket's executor is mixed: only the agent portion runs unattended. Work
+it to the verify block, commit, push your branch and open the PR as usual.
+Before you stop, write the \`## Human run list\` section in
+\`.night-watchman/closing-state.md\` — it is required for a mixed ticket and it
+is what land-branch.sh checks before it will land one. Then STOP and report.
+Do not transition the ticket and do not land it yourself; the human steps are
+run by a person after landing, not before."
+        fi
 
         STATE_DIR=$(resolve_state_dir)
         JOURNAL="$STATE_DIR/$BRANCH.json"

@@ -15,5 +15,6 @@ instead of writing frontmatter inline.
 | File | Recorded from | Notes |
 | --- | --- | --- |
 | `ticket-executor-agent.md` | `WO-026` (this ticket) | the dispatchable case: `executor: agent` |
-| `ticket-executor-mixed.md` | `WO-025` | the refused case. `human` is refused by the same branch and has no separate fixture: every real `executor: human` ticket on hand is a cancelled `WO-C0x`, and that id shape is refused a step earlier by the `PROJ-###` check, so such a fixture would test the wrong refusal |
+| `ticket-executor-mixed.md` | `WO-025` | dispatchable since NWM-146, with an extra MIXED TICKET section in the brief |
+| `ticket-executor-human.md` | `WO-059` | the refused case. Recorded 2026-09-22, when NWM-146 made `mixed` dispatchable and left `human` as the only refusal. The note this row replaces was true when written — every `executor: human` ticket on hand was a cancelled `WO-C0x`, refused a step earlier by the `PROJ-###` check — and is no longer: `WO-059` is a live human ticket with an ordinary id |
 | `ticket-no-executor.md` | `ticket-executor-agent.md` minus its `executor:` line | the only derived file here, and the derivation is the point: a ticket whose executor cannot be read is exit 2, "could not evaluate", never a silent dispatch. No real ticket omits the field, so there was nothing to record |
