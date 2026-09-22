@@ -21,7 +21,7 @@
   "memorygraph-link-rejects-supersedes-and-relates-to-so-a-memory-cannot-be-superseded-by-an-edge": "9646dc9f8729ed9a09790a19adb0e1ad8a41b1540caf5c008d09c8490f84061d",
   "nwm-workflow-previous-status-validator-on-completed-refuses-the-normal-in-progress-to-completed-path-it-counts-only-statuses-before-the-current-one": "ca3c406a982fa46ce926020cdcfd7c64393c09d54b25638bf1ca083b5f8ba556",
   "providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted": "acaa6af0a8d5c3f33513892ede2aad0333f9f453041dc289698aaaae23eea213",
-  "release-sh-calls-the-tracker-fetch-verb-with-a-since-tag-but-tracker-fetch-takes-an-issue-key-changelog-always-degrades-to-the-placeholder-line": "63e9d4b2578a81a9c4b9b86505ded4c8dd6bdfc4f7014e0393130abceb1120b9",
+  "release-sh-calls-the-tracker-fetch-verb-with-a-since-tag-but-tracker-fetch-takes-an-issue-key-changelog-always-degrades-to-the-placeholder-line": "cd7b5abc4276b600cf5c54e2f91f0097d579d150736be4d161b00a85cd11ef4a",
   "script-analytics-py-selftest-fixtures-are-hand-typed-not-captured-transcripts": "8a0e084c6fc2b288ea668746b866d6e656a0bbe970e025510e7fed868a03d08c",
   "script-analytics-py-status-durations-exits-0-and-reports-0-new-when-the-tracker-wrapper-itself-fails": "d9baf34ec5a81de1d61e678b02b9573c9eda9606014bd72691cb0dab8a60853b",
   "script-events-hook-sh-resolves-the-extractor-by-path-only-so-a-foreign-repo-s-scripts-script-analytics-py-would-be-invoked": "f9f72f30509e7c06fd0b4a3625ff33638a138a806d15c10595a638c1842e1b28",
