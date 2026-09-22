@@ -209,6 +209,11 @@ fallback for a field it did not touch.
   adopter's `.gitignore` alongside any other `.night-watchman/` entries;
   don't gitignore the whole `.night-watchman/` directory, since
   `config.toml` there is real project config that should commit.
+  `.night-watchman/closing-state.md` belongs on that list too. It is
+  per-run state a worker writes and does not commit. Not gitignoring it
+  no longer *blocks* a landing — `land-branch.sh` exempts exactly that one
+  path from its dirty-worktree check (NWM-147) — but it still shows up in
+  every `git status` the worker and the reviewer run.
 - **The adopter's first session-start committed `dispatch = "herdr"`,
   had `herdr` on PATH, and `HERDR_ENV=1` set — and still dispatched
   through a plain `git worktree` subagent** because session-start framed provider dispatch as an optional

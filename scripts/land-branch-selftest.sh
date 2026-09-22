@@ -1193,6 +1193,82 @@ else
     ok "test32: a dirty worktree on the branch refuses the landing and is left intact"
 fi
 
+# ---- NWM-147 test 33: the file the worker brief REQUIRES uncommitted in its
+# worktree must not be the file that makes the landing refuse. Reproduces in a
+# repo that does NOT gitignore .night-watchman/, which is every consuming repo
+# except this one.
+
+REPO=$(fresh_repo t33 "$TICKET_OK")
+WT33="$WORK/t33-wt"
+git -C "$REPO" worktree add -q "$WT33" work
+mkdir -p "$WT33/.night-watchman"
+cat > "$WT33/.night-watchman/closing-state.md" <<'CLOSING'
+## Human run list
+- nothing, this is a selftest fixture
+
+## Left undone
+- nothing
+
+## Findings
+- the worktree was not refused for holding this file
+CLOSING
+set +e
+(cd "$REPO" && HERDR_ENV=1 ./scripts/land-branch.sh work PROJ-1) >"$WORK/t33.out" 2>&1
+RC=$?
+set -e
+COMPLETED_T33="$WORK/t33.completed"
+land_fetch "$REPO" main "issues/completed/PROJ-1.md" "$COMPLETED_T33" || : > "$COMPLETED_T33"
+if [ "$RC" -ne 0 ]; then
+    bad "test33 (closing-state does not refuse): landing exited $RC:
+$(tail -8 "$WORK/t33.out")"
+elif ! grep -q "closing state written to the ticket and read back" "$WORK/t33.out"; then
+    bad "test33: the landing succeeded but the closing state was not written and read back:
+$(tail -8 "$WORK/t33.out")"
+elif ! grep -q "the worktree was not refused for holding this file" "$COMPLETED_T33"; then
+    bad "test33: the closing state did not reach the landed ticket:
+$(cat "$COMPLETED_T33")"
+else
+    ok "test33: an uncommitted .night-watchman/closing-state.md lands, and its content reaches the ticket"
+fi
+
+# ---- NWM-147 test 34: the exemption is one path, not the directory and not
+# the check. A real uncommitted edit still refuses, and so does another
+# untracked file under .night-watchman/.
+
+REPO=$(fresh_repo t34 "$TICKET_OK")
+WT34="$WORK/t34-wt"
+git -C "$REPO" worktree add -q "$WT34" work
+mkdir -p "$WT34/.night-watchman"
+printf '## Human run list
+- none
+' > "$WT34/.night-watchman/closing-state.md"
+printf 'real uncommitted work
+' >> "$WT34/foo.txt"
+set +e
+(cd "$REPO" && HERDR_ENV=1 ./scripts/land-branch.sh work PROJ-1) >"$WORK/t34a.out" 2>&1
+RC_TRACKED=$?
+set -e
+git -C "$WT34" checkout -q -- foo.txt
+printf 'something else the plugin did not put there
+' > "$WT34/.night-watchman/scratch.txt"
+set +e
+(cd "$REPO" && HERDR_ENV=1 ./scripts/land-branch.sh work PROJ-1) >"$WORK/t34b.out" 2>&1
+RC_SIBLING=$?
+set -e
+if [ "$RC_TRACKED" -eq 0 ]; then
+    bad "test34: a real uncommitted edit to a tracked file no longer refuses — the exemption is too wide"
+elif ! grep -q "foo.txt" "$WORK/t34a.out"; then
+    bad "test34: the refusal did not name the file that caused it:
+$(tail -5 "$WORK/t34a.out")"
+elif [ "$RC_SIBLING" -eq 0 ]; then
+    bad "test34: another untracked file under .night-watchman/ no longer refuses — the whole directory was exempted"
+elif ! grep -q "scratch.txt" "$WORK/t34b.out"; then
+    bad "test34: the refusal did not name the sibling file that caused it:
+$(tail -5 "$WORK/t34b.out")"
+else
+    ok "test34: the exemption is exactly one path — a tracked edit and a sibling file both still refuse"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]
