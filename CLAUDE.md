@@ -165,7 +165,7 @@ regression. Jobs:
   `providers/tracker/jira/jira-workflow-apply-selftest.sh`, each failing one
   known assertion) — skipped in the gating step, re-run informationally
   with `continue-on-error`.
-- **known-issues index is not drifted** — `known-issue.sh lint`, run out of
+- **known-issues index is not drifted** — `known-issue.sh --root lint`, run out of
   an **ai-toolkit checkout**: the script left this repo under NWM-128 and is
   resolved at run time by `scripts/ai-toolkit-root.sh --known-issue`
   (`$AI_TOOLKIT_ROOT`, then a sibling checkout). The CI job clones ai-toolkit's
@@ -235,7 +235,7 @@ providers/lib/provider.sh doctor                     # what does this repo talk 
 scripts/work-order-root.sh --issues-py                # resolve the work-order dependency
 scripts/ai-toolkit-root.sh --known-issue              # resolve the ai-toolkit dependency
 scripts/land-branch-selftest.sh [old-land-branch.sh] [issues.py]
-"$(scripts/ai-toolkit-root.sh --known-issue)" add|reindex|resolve <slug>
+"$(scripts/ai-toolkit-root.sh --known-issue)" --root . add|reindex|resolve <slug>
 scripts/gen-reference-docs.sh --check                 # CI's drift check
 scripts/gen-reference-docs.sh                         # regenerate after editing a source
 find hooks providers scripts -name '*.sh' -not -path 'scripts/fixtures/*' \
