@@ -41,6 +41,8 @@
 #
 # Overridable for testing:
 #
+#   SCRIPT_EVENTS_EXTRACTOR      absolute path to script-analytics.py, taking
+#                                precedence over the resolution chain below.
 #   SCRIPT_EVENTS_PROJECTS_DIR   passed through as the extractor's
 #                                --projects-dir — the ONLY way this hook is
 #                                pointed at a fixture transcript store
@@ -55,9 +57,17 @@
 #   CLAUDE_PROJECT_DIR           repo root; falls back to two directories
 #                                above this script (hooks/..) when unset
 #
-# Dependencies: bash 3.2, jq, python3 (or $SCRIPT_EVENTS_PYTHON_BIN), and
-# scripts/script-analytics.py under the resolved project dir. Absence of any
-# of these fails open (exit 0, one-line diagnostic) rather than erroring.
+# The extractor is resolved by a chain, first hit wins (NWM-156):
+# $SCRIPT_EVENTS_EXTRACTOR, then $CLAUDE_PLUGIN_ROOT/scripts/, then
+# $PROJECT_DIR/scripts/, then this script's own ../scripts/. $PROJECT_DIR
+# alone was wrong: plugin.json registers this hook for EVERY installer, but a
+# consuming project has no reason to carry this repo's extractor, so the hook
+# was silently dark everywhere except a checkout that happens to hold a copy.
+#
+# Dependencies: bash 3.2, jq, python3 (or $SCRIPT_EVENTS_PYTHON_BIN), and a
+# script-analytics.py the chain above can find. Absence of any of these fails
+# open (exit 0, one-line diagnostic naming every path tried) rather than
+# erroring.
 
 set -euo pipefail
 
@@ -87,10 +97,10 @@ case "$AGENT_TYPE" in
   *) exit 0 ;;
 esac
 
+SELF_DIR="$(cd "$(dirname "$0")" && pwd)" || fail_open "could not resolve own script directory"
 if [ -n "${CLAUDE_PROJECT_DIR:-}" ]; then
   PROJECT_DIR="$CLAUDE_PROJECT_DIR"
 else
-  SELF_DIR="$(cd "$(dirname "$0")" && pwd)" || fail_open "could not resolve own script directory"
   PROJECT_DIR="$(cd "$SELF_DIR/.." && pwd)" || fail_open "could not resolve project dir from script location"
 fi
 
@@ -98,8 +108,26 @@ EVENTS_FILE="$PROJECT_DIR/docs/script-events.jsonl"
 EVENTS_DIR="$(dirname "$EVENTS_FILE")"
 [ -d "$EVENTS_DIR" ] || fail_open "events directory does not exist: $EVENTS_DIR"
 
-EXTRACTOR="$PROJECT_DIR/scripts/script-analytics.py"
-[ -f "$EXTRACTOR" ] || fail_open "extractor not found: $EXTRACTOR"
+CANDIDATES=()
+if [ -n "${SCRIPT_EVENTS_EXTRACTOR:-}" ]; then
+  CANDIDATES+=("$SCRIPT_EVENTS_EXTRACTOR")
+fi
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  CANDIDATES+=("$CLAUDE_PLUGIN_ROOT/scripts/script-analytics.py")
+fi
+CANDIDATES+=("$PROJECT_DIR/scripts/script-analytics.py")
+CANDIDATES+=("$SELF_DIR/../scripts/script-analytics.py")
+
+EXTRACTOR=""
+for _cand in "${CANDIDATES[@]}"; do
+  if [ -f "$_cand" ]; then
+    EXTRACTOR="$_cand"
+    break
+  fi
+done
+if [ -z "$EXTRACTOR" ]; then
+  fail_open "extractor not found; tried: $(printf '%s, ' "${CANDIDATES[@]}" | sed 's/, $//')"
+fi
 
 PYTHON_BIN="${SCRIPT_EVENTS_PYTHON_BIN:-python3}"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail_open "$PYTHON_BIN not found on PATH"

@@ -8,14 +8,24 @@
 # ~/.claude/projects tree.
 #
 # Usage: scripts/script-analytics-selftest.sh [path-to-script-analytics.py]
-# Defaults to the sibling scripts/script-analytics.py.
+# Defaults to the sibling scripts/script-analytics.py. Pass an older revision
+# to run the NWM-156 cases red against it.
+#
+# claude-cost.py and claude-cost-scan.py are OPTIONAL here (NWM-156): the
+# script under test no longer loads them, and only the drift-parity section
+# needs them. When they are absent that section is skipped, not failed.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ANALYTICS="${1:-$HERE/script-analytics.py}"
 [ -r "$ANALYTICS" ] || { echo "cannot read $ANALYTICS" >&2; exit 2; }
-[ -r "$HERE/claude-cost.py" ] || { echo "cannot read $HERE/claude-cost.py" >&2; exit 2; }
-[ -r "$HERE/claude-cost-scan.py" ] || { echo "cannot read $HERE/claude-cost-scan.py" >&2; exit 2; }
+
+CC_PY="$HERE/claude-cost.py"
+CS_PY="$HERE/claude-cost-scan.py"
+PARITY=1
+if [ ! -r "$CC_PY" ] || [ ! -r "$CS_PY" ]; then
+  PARITY=0
+fi
 
 PASS=0
 FAIL=0
@@ -1208,6 +1218,212 @@ if printf '%s\n' "$DRYRUN_ERR" | grep -q "would issue: GET https://selftest.inva
   ok "status-durations: NW_DRY_RUN=1 prints the exact tracker read it WOULD issue"
 else
   bad "status-durations: NW_DRY_RUN=1 did not print the expected request (got: $DRYRUN_ERR)"
+fi
+
+# ---- NWM-156: no claude-cost sibling, and no ../templates/ -------------
+# The whole point of the ticket: script-analytics.py must run from another
+# repo's scripts/ directory with neither claude-cost file beside it and no
+# templates/ directory above it.
+STANDALONE="$WORK/standalone"
+mkdir -p "$STANDALONE"
+cp "$ANALYTICS" "$STANDALONE/script-analytics.py"
+SA_ALONE="$STANDALONE/script-analytics.py"
+ALONE_PRICES="$STANDALONE/claude-prices.tsv"
+
+if [ -e "$STANDALONE/claude-cost.py" ] || [ -e "$STANDALONE/claude-cost-scan.py" ] \
+   || [ -d "$WORK/templates" ]; then
+  bad "standalone: fixture is wrong — a sibling or ../templates/ exists"
+else
+  ok "standalone: neither claude-cost file nor ../templates/ exists beside the copy"
+fi
+
+# CLAUDE_PROJECT_DIR and CLAUDE_PRICES_TSV are stripped on every standalone
+# run: an ambient value from the shell running this selftest would otherwise
+# decide which price table resolves.
+run_alone() { env -u CLAUDE_PROJECT_DIR -u CLAUDE_PRICES_TSV python3 "$SA_ALONE" "$@"; }
+
+ALONE_NOPRICES_ERR=$(run_alone extract --agent-id author1 \
+    --events "$WORK/alone-noprices.jsonl" --projects-dir "$PROJECTS_DIR" 2>&1 >/dev/null) \
+    && ALONE_NOPRICES_RC=0 || ALONE_NOPRICES_RC=$?
+if [ "$ALONE_NOPRICES_RC" -eq 2 ]; then
+  ok "standalone: no price table anywhere is a validation failure, exit 2"
+else
+  bad "standalone: expected exit 2 with no price table (got $ALONE_NOPRICES_RC; output: $ALONE_NOPRICES_ERR)"
+fi
+if printf '%s\n' "$ALONE_NOPRICES_ERR" | grep -q "templates/claude-prices.tsv" \
+   && printf '%s\n' "$ALONE_NOPRICES_ERR" | grep -q "standalone/claude-prices.tsv"; then
+  ok "standalone: the not-found error names every candidate path it tried"
+else
+  bad "standalone: not-found error does not name both candidates (got: $ALONE_NOPRICES_ERR)"
+fi
+
+# A price table somewhere else entirely, reachable only through the env var.
+ELSEWHERE_PRICES="$WORK/elsewhere/claude-prices.tsv"
+mkdir -p "$WORK/elsewhere"
+printf 'model\tinput_per_mtok\toutput_per_mtok\tcache_write_per_mtok\tcache_read_per_mtok\n' > "$ELSEWHERE_PRICES"
+printf 'claude-sonnet-5\t3.00\t15.00\t3.75\t0.30\n' >> "$ELSEWHERE_PRICES"
+
+ENVPRICES_OUT=$(env -u CLAUDE_PROJECT_DIR CLAUDE_PRICES_TSV="$ELSEWHERE_PRICES" \
+    python3 "$SA_ALONE" extract --agent-id author1 \
+    --events "$WORK/alone-envprices.jsonl" --projects-dir "$PROJECTS_DIR" 2>&1) \
+    && ENVPRICES_RC=0 || ENVPRICES_RC=$?
+if [ "$ENVPRICES_RC" -eq 0 ]; then
+  ok "standalone: \$CLAUDE_PRICES_TSV supplies the price table when no layout candidate exists"
+else
+  bad "standalone: \$CLAUDE_PRICES_TSV run failed (rc=$ENVPRICES_RC; output: $ENVPRICES_OUT)"
+fi
+
+BADENV_ERR=$(env -u CLAUDE_PROJECT_DIR CLAUDE_PRICES_TSV="$WORK/nope/claude-prices.tsv" \
+    python3 "$SA_ALONE" extract --agent-id author1 \
+    --events "$WORK/alone-badenv.jsonl" --projects-dir "$PROJECTS_DIR" 2>&1 >/dev/null) \
+    && BADENV_RC=0 || BADENV_RC=$?
+if [ "$BADENV_RC" -eq 2 ] && printf '%s\n' "$BADENV_ERR" | grep -q 'CLAUDE_PRICES_TSV'; then
+  ok "standalone: a \$CLAUDE_PRICES_TSV that names no file is refused, not silently ignored"
+else
+  bad "standalone: bad \$CLAUDE_PRICES_TSV not refused (rc=$BADENV_RC; output: $BADENV_ERR)"
+fi
+
+# Now the layout a receiving repo can actually satisfy: the table beside the
+# script, with no templates/ directory anywhere above it.
+cp "$ELSEWHERE_PRICES" "$ALONE_PRICES"
+
+ALONE_EXTRACT=$(run_alone extract --agent-id author1 \
+    --events "$WORK/alone-events.jsonl" --projects-dir "$PROJECTS_DIR" 2>&1) \
+    && ALONE_RC=0 || ALONE_RC=$?
+if [ "$ALONE_RC" -eq 0 ]; then
+  ok "standalone: extract runs with no claude-cost sibling present"
+else
+  bad "standalone: extract failed with no claude-cost sibling (rc=$ALONE_RC; output: $ALONE_EXTRACT)"
+fi
+
+# Same fixture, same price table, run from this repo: the two events files
+# must match byte for byte, so vendoring the helpers moved no number.
+RESIDENT_EVENTS="$WORK/resident-events.jsonl"
+RESIDENT_OUT=$(env -u CLAUDE_PROJECT_DIR -u CLAUDE_PRICES_TSV python3 "$ANALYTICS" extract \
+    --agent-id author1 --events "$RESIDENT_EVENTS" \
+    --prices "$ALONE_PRICES" --projects-dir "$PROJECTS_DIR" 2>&1) \
+    && RESIDENT_RC=0 || RESIDENT_RC=$?
+if [ "$RESIDENT_RC" -ne 0 ]; then
+  bad "standalone: the repo-resident comparison run failed (rc=$RESIDENT_RC; output: $RESIDENT_OUT)"
+elif diff -q "$RESIDENT_EVENTS" "$WORK/alone-events.jsonl" >/dev/null 2>&1; then
+  ok "standalone: the standalone copy emits byte-identical events to the repo-resident run"
+else
+  bad "standalone: standalone and repo-resident events differ: $(diff "$RESIDENT_EVENTS" "$WORK/alone-events.jsonl" | head -5)"
+fi
+
+for fmt in table tsv md; do
+  FMT_OUT=$(run_alone report --events "$WORK/alone-events.jsonl" --format "$fmt" 2>&1) \
+      && FMT_RC=0 || FMT_RC=$?
+  if [ "$FMT_RC" -eq 0 ] && [ -n "$FMT_OUT" ]; then
+    ok "standalone: report --format $fmt works with the vendored renderer"
+  else
+    bad "standalone: report --format $fmt failed (rc=$FMT_RC; output: $FMT_OUT)"
+  fi
+done
+
+USAGE_OUT=$(run_alone report --events "$WORK/alone-events.jsonl" --usage --format tsv 2>&1) \
+    && USAGE_RC=0 || USAGE_RC=$?
+if [ "$USAGE_RC" -eq 0 ] && [ -n "$USAGE_OUT" ]; then
+  ok "standalone: report --usage works with the vendored renderer"
+else
+  bad "standalone: report --usage failed (rc=$USAGE_RC; output: $USAGE_OUT)"
+fi
+
+if grep -qE 'importlib|_load_module' "$SA_ALONE"; then
+  bad "standalone: the script still carries the import-time sibling loader"
+else
+  ok "standalone: no importlib loader remains in the script"
+fi
+
+# ---- NWM-156 drift guard: vendored copies still match their originals --
+# A guard, not the red-then-green proof: it compares two files that both
+# live in this repo today and it leaves with them. Skipped, not failed, when
+# claude-cost.py / claude-cost-scan.py are absent.
+if [ "$PARITY" -eq 1 ]; then
+  PARITY_PY="$WORK/parity-check.py"
+  cat > "$PARITY_PY" << 'PARITYPY'
+import importlib.util
+import sys
+import tempfile
+
+
+def load(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+SA = load(sys.argv[1], "sa_under_test")
+CC = load(sys.argv[2], "cc_original")
+CS = load(sys.argv[3], "cs_original")
+
+problems = []
+
+MATRICES = [
+    (["a"], []),
+    (["script", "usd"], [["x.sh", "0.1234"]]),
+    (["h", "wider_header"], [["a", "b"], ["much-longer-cell", "c"]]),
+    (["模型", "usd"], [["claude-opus-5", "1.0"]]),
+    (["n"], [[0], [12345]]),
+]
+for fmt in ("table", "tsv", "md"):
+    for headers, rows in MATRICES:
+        got = SA.RENDERERS[fmt](headers, rows)
+        want = CC.RENDERERS[fmt](headers, rows)
+        if got != want:
+            problems.append("renderer %s diverged on %r: %r != %r" % (fmt, headers, got, want))
+
+if SA.TOKEN_CLASSES != CS.TOKEN_CLASSES:
+    problems.append("TOKEN_CLASSES diverged: %r != %r" % (SA.TOKEN_CLASSES, CS.TOKEN_CLASSES))
+if SA.PRICE_COLUMNS != CS.PRICE_COLUMNS:
+    problems.append("PRICE_COLUMNS diverged: %r != %r" % (SA.PRICE_COLUMNS, CS.PRICE_COLUMNS))
+
+for text in (None, "2026-09-13T10:00:00Z", "2026-09-13T10:00:00+02:00", "2026-09-13T10:00:00"):
+    if SA.parse_timestamp(text) != CS.parse_timestamp(text):
+        problems.append("parse_timestamp diverged on %r" % (text,))
+for bad_text in ("not-a-time", ""):
+    sa_err = cs_err = None
+    try:
+        SA.parse_timestamp(bad_text)
+    except Exception as exc:
+        sa_err = str(exc)
+    try:
+        CS.parse_timestamp(bad_text)
+    except Exception as exc:
+        cs_err = str(exc)
+    if sa_err != cs_err or sa_err is None:
+        problems.append("parse_timestamp error diverged on %r: %r != %r" % (bad_text, sa_err, cs_err))
+
+prices_tsv = "\t".join(CS.PRICE_COLUMNS) + "\nclaude-sonnet-5\t3.0\t15.0\t3.75\t0.3\n"
+with tempfile.NamedTemporaryFile("w", suffix=".tsv", delete=False) as fh:
+    fh.write(prices_tsv)
+    prices_path = fh.name
+sa_prices = SA.read_prices(prices_path)
+cs_prices = CS.read_prices(prices_path)
+if sa_prices != cs_prices:
+    problems.append("read_prices diverged: %r != %r" % (sa_prices, cs_prices))
+
+tokens = {"input": 1000, "output": 2000, "cache_write": 300, "cache_read": 40000}
+for model in ("claude-sonnet-5", "model-with-no-price-row"):
+    turn = {"model": model, "tokens": tokens}
+    if SA.turn_cost(turn, sa_prices, set()) != CS.turn_cost(turn, cs_prices, set()):
+        problems.append("turn_cost diverged for %r" % model)
+
+if problems:
+    for line in problems:
+        print(line)
+    sys.exit(1)
+print("parity ok")
+PARITYPY
+  PARITY_OUT=$(python3 "$PARITY_PY" "$ANALYTICS" "$CC_PY" "$CS_PY" 2>&1) && PARITY_RC=0 || PARITY_RC=$?
+  if [ "$PARITY_RC" -eq 0 ]; then
+    ok "drift guard: every vendored helper still behaves like its claude-cost original"
+  else
+    bad "drift guard: a vendored copy has drifted from its original: $PARITY_OUT"
+  fi
+else
+  echo "skip - drift guard: claude-cost.py / claude-cost-scan.py not beside the selftest"
 fi
 
 echo

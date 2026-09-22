@@ -95,7 +95,13 @@ Two scripts, split on purpose — scan is optional, the ledger is not:
   `claude-cost-scan.py` reads by default: one row per model, columns
   `model`, `input_per_mtok`, `output_per_mtok`, `cache_write_per_mtok`,
   `cache_read_per_mtok`. A model missing from the table costs $0 with a
-  one-time stderr warning, never a hard failure.
+  one-time stderr warning, never a hard failure. `script-analytics.py`
+  reads the same table, but finds it by search rather than by one fixed
+  relative path, so it also works from a repo with no `templates/`
+  directory: `$CLAUDE_PRICES_TSV`, then `../templates/claude-prices.tsv`
+  beside the script, then `claude-prices.tsv` beside the script, then the
+  same two under `$CLAUDE_PROJECT_DIR`. When none exists it exits 2 naming
+  every path it tried (NWM-156).
 - `templates/cost-ledger.tsv` — a header-only starting point. Copy it into
   the project (a common convention is `docs/cost-ledger.tsv`) and start
   appending; the header line is the schema contract — see below.
@@ -236,18 +242,20 @@ USD, and wall time to acceptance, per script and per agent type.
 - `hooks/script-events-hook.sh` — a `SubagentStop` hook (registered in
   `.claude-plugin/plugin.json` with matcher `script-author|script-reviewer`)
   that fires whenever one of those two subagents stops, and runs
-  `scripts/script-analytics.py extract --agent-id ...` for just the
-  subagent that finished. Idempotent by its own event `key`, fails open on
+  `script-analytics.py extract --agent-id ...` for just the subagent that
+  finished. It resolves the extractor through a chain — first
+  `$SCRIPT_EVENTS_EXTRACTOR`, then `$CLAUDE_PLUGIN_ROOT/scripts/`, then
+  `$CLAUDE_PROJECT_DIR/scripts/`, then its own `../scripts/` — because the
+  plugin ships the extractor while a consuming project has no reason to
+  carry a copy (NWM-156). Idempotent by its own event `key`, fails open on
   any error (never blocks a subagent's stop), and never prints the hook's
   stdin payload or the extractor's own output — see the hook's own header
   for its wall-clock budget and retry behavior.
 - `scripts/script-analytics.py` — reads local Claude Code JSONL
   transcripts (same `~/.claude/projects/<slug>/` layout as
-  `claude-cost-scan.py`, reusing its timestamp/price helpers and
-  `claude-cost.py`'s table/tsv/md renderers rather than duplicating them)
-  and appends one JSON object per line to an events file — one row per
-  script-author/script-reviewer invocation, lint/selftest call, or
-  SendMessage-resume round. `report` summarises that events file by script
+  `claude-cost-scan.py`) and appends one JSON object per line to an events
+  file — one row per script-author/script-reviewer invocation,
+  lint/selftest call, or SendMessage-resume round. `report` summarises that events file by script
   and by agent type. `record` appends a manual `live-run`/`accepted` event
   for the parts a transcript can't see (an owner trying the script by
   hand). A `record --note` is refused if it looks credential-shaped (a

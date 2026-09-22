@@ -28,13 +28,14 @@ Transcript layout this script expects (Claude Code CLI, verified live
         "input" carries subagent_type, description, prompt (script paths
         and ticket live in the prompt), and model.
 
-Numeric helpers, not reimplemented independently: this script loads
-scripts/claude-cost.py and scripts/claude-cost-scan.py at runtime via
-importlib.util.spec_from_file_location and reuses claude-cost.py's
-table/tsv/md renderers and claude-cost-scan.py's timestamp parsing and
-price-table cost lookup, so those stay defined in exactly one place each
-in this repo (see docs/cost.md). This script's own fold_turns() below is
-a DELIBERATE, NAMED DEVIATION from a pure function-level import:
+Numeric helpers are VENDORED, not imported (NWM-156): the table/tsv/md
+renderers and the timestamp/price/cost helpers below are copies of
+claude-cost.py's and claude-cost-scan.py's, so this file loads no sibling
+at import time and runs from any directory in any repo. While all three
+files live here, scripts/script-analytics-selftest.sh asserts each copy
+still behaves identically to its original (see docs/cost.md). This
+script's own fold_turns() below is a DELIBERATE, NAMED DEVIATION from
+reusing the scanner's own fold:
 claude-cost-scan.py's own scan_file() folds turns straight into
 cost-only aggregates and never exposes a turn's message content, but
 this script needs that content (to find Agent/Bash tool_use blocks and
@@ -190,8 +191,8 @@ stderr), 1 an unexpected error.
 """
 
 import argparse
+import csv
 import glob
-import importlib.util
 import json
 import os
 import re
@@ -201,8 +202,10 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-CLAUDE_COST_PATH = os.path.join(HERE, "claude-cost.py")
-CLAUDE_COST_SCAN_PATH = os.path.join(HERE, "claude-cost-scan.py")
+
+PRICES_BASENAME = "claude-prices.tsv"
+TOKEN_CLASSES = ("input", "output", "cache_write", "cache_read")
+PRICE_COLUMNS = ("model",) + tuple("%s_per_mtok" % c for c in TOKEN_CLASSES)
 
 
 class ValidationError(Exception):
@@ -210,25 +213,125 @@ class ValidationError(Exception):
     reported to stderr with exit 2 — never a traceback."""
 
 
-def _load_module(path, name):
-    """Load a sibling script as a module by path (scripts/ is not a
-    package) so a shared piece — renderers, price/timestamp helpers —
-    lives in exactly one place in the repo. Raises ValidationError if the
-    file is missing or fails to load — this script cannot do its job
-    without it."""
-    if not os.path.isfile(path):
-        raise ValidationError("cannot find %s" % path)
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
+def render_table(headers, rows):
+    """Render rows as a space-padded fixed-width table. Vendored from
+    claude-cost.py; the selftest asserts the two still agree."""
+    if not rows:
+        widths = [len(h) for h in headers]
+    else:
+        widths = [
+            max(len(h), max(len(str(r[i])) for r in rows))
+            for i, h in enumerate(headers)
+        ]
+    lines = ["  ".join(h.ljust(widths[i]) for i, h in enumerate(headers))]
+    lines.append("  ".join("-" * w for w in widths))
+    for r in rows:
+        lines.append("  ".join(str(r[i]).ljust(widths[i]) for i in range(len(headers))))
+    return "\n".join(lines)
+
+
+def render_tsv(headers, rows):
+    """Render rows as tab-separated lines. Vendored from claude-cost.py."""
+    lines = ["\t".join(headers)]
+    lines.extend("\t".join(str(x) for x in r) for r in rows)
+    return "\n".join(lines)
+
+
+def render_md(headers, rows):
+    """Render rows as a GitHub-flavored markdown table. Vendored from
+    claude-cost.py."""
+    lines = ["| " + " | ".join(headers) + " |"]
+    lines.append("| " + " | ".join("---" for _ in headers) + " |")
+    for r in rows:
+        lines.append("| " + " | ".join(str(x) for x in r) + " |")
+    return "\n".join(lines)
+
+
+RENDERERS = {"table": render_table, "tsv": render_tsv, "md": render_md}
+
+
+def parse_timestamp(text):
+    """Parse an ISO-8601 timestamp, defaulting a naive one to UTC. Vendored
+    from claude-cost-scan.py; raises ValidationError on a malformed value."""
+    if text is None:
+        return None
+    # A bare "Z" suffix is rewritten to +00:00: Python's fromisoformat
+    # predates that shorthand.
+    text = text.strip()
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
     try:
-        spec.loader.exec_module(mod)
-    except Exception as exc:  # noqa: BLE001 - surfaced as ValidationError
-        raise ValidationError("failed to load %s: %s" % (path, exc))
-    return mod
+        dt = datetime.fromisoformat(text)
+    except ValueError:
+        raise ValidationError("could not parse timestamp: %r" % text)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
-CC = _load_module(CLAUDE_COST_PATH, "claude_cost_shared")  # RENDERERS (table/tsv/md)
-CS = _load_module(CLAUDE_COST_SCAN_PATH, "claude_cost_scan_shared")  # parse_timestamp, read_prices, turn_cost, TOKEN_CLASSES
+def read_prices(path):
+    """Read a price table TSV into {model: {token_class: rate_per_mtok}}.
+    Vendored from claude-cost-scan.py; the header must match exactly."""
+    prices = {}
+    with open(path) as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        if reader.fieldnames != list(PRICE_COLUMNS):
+            raise ValidationError(
+                "--prices %s: header must be exactly %s (found %s)"
+                % (path, "\t".join(PRICE_COLUMNS), "\t".join(reader.fieldnames or []))
+            )
+        for row in reader:
+            model = row["model"]
+            try:
+                prices[model] = {c: float(row["%s_per_mtok" % c]) for c in TOKEN_CLASSES}
+            except ValueError:
+                raise ValidationError("--prices %s: non-numeric rate for model %r" % (path, model))
+    return prices
+
+
+def turn_cost(turn, prices, warned_models):
+    """Cost one turn against a price table, warning once per unpriced model
+    and costing it as 0. Vendored from claude-cost-scan.py."""
+    rate = prices.get(turn["model"])
+    if rate is None:
+        if turn["model"] not in warned_models:
+            print("script-analytics.py: no price row for model %r; costing as $0" % turn["model"],
+                  file=sys.stderr)
+            warned_models.add(turn["model"])
+        return 0.0
+    tokens = turn["tokens"]
+    return sum(tokens[c] / 1_000_000.0 * rate[c] for c in TOKEN_CLASSES)
+
+
+def prices_path_candidates():
+    """Every layout default_prices_path() will try, in order. Public so the
+    not-found error can name them all."""
+    out = [
+        os.path.join(HERE, "..", "templates", PRICES_BASENAME),
+        os.path.join(HERE, PRICES_BASENAME),
+    ]
+    project = os.environ.get("CLAUDE_PROJECT_DIR")
+    if project:
+        out.append(os.path.join(project, "templates", PRICES_BASENAME))
+        out.append(os.path.join(project, PRICES_BASENAME))
+    return out
+
+
+def default_prices_path():
+    """The price table to use when --prices is not given: $CLAUDE_PRICES_TSV
+    if set, else the first candidate layout that exists (NWM-156)."""
+    env = os.environ.get("CLAUDE_PRICES_TSV")
+    if env:
+        if not os.path.isfile(env):
+            raise ValidationError("$CLAUDE_PRICES_TSV does not name a file: %s" % env)
+        return env
+    candidates = prices_path_candidates()
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    raise ValidationError(
+        "no %s found; tried %s. Pass --prices PATH or set $CLAUDE_PRICES_TSV."
+        % (PRICES_BASENAME, ", ".join(os.path.normpath(p) for p in candidates)))
 
 EVENT_KEYS = (
     "ts", "script", "scripts", "event", "cause", "outcome", "round",
@@ -336,12 +439,10 @@ def note_is_credential_shaped(note):
     return False
 
 
-# Thin adapters over claude-cost-scan.py's helpers, so timestamp/price/cost
-# logic stays in one place in the repo.
 def parse_iso(text, label):
     try:
-        dt = CS.parse_timestamp(text)
-    except CS.ValidationError as exc:
+        dt = parse_timestamp(text)
+    except ValidationError as exc:
         raise ValidationError("%s: %s" % (label, exc))
     if dt is None:
         raise ValidationError("%s: could not parse timestamp: %r" % (label, text))
@@ -360,11 +461,11 @@ def _num(x):
 
 
 def load_prices(path):
-    return CS.read_prices(path or CS.default_prices_path())
+    return read_prices(path or default_prices_path())
 
 
 def usd_cost(model, tok, prices, warned_models):
-    return CS.turn_cost({"model": model, "tokens": tok}, prices, warned_models)
+    return turn_cost({"model": model, "tokens": tok}, prices, warned_models)
 
 
 def read_jsonl_lines(path, warnings=None):
@@ -2306,7 +2407,7 @@ def cmd_report(args):
             "rework_rounds", "lint_wall_clock_s", "author_usd",
             "rework_ratio", "flag",
         ]
-        renderer = CC.RENDERERS[args.format]
+        renderer = RENDERERS[args.format]
         print(renderer(headers, rows))
         print("")
 
@@ -2436,7 +2537,7 @@ def cmd_report(args):
             "%.4f" % g["usd"], "%.2f" % mean_turns,
         ])
 
-    renderer = CC.RENDERERS[args.format]
+    renderer = RENDERERS[args.format]
     print(renderer(headers, rows))
     print("")
     print("# per-agent-type summary")
@@ -2491,7 +2592,7 @@ def parse_args(argv):
     p_report.add_argument("--script", default=None)
     p_report.add_argument("--since", default=None)
     p_report.add_argument("--until", default=None)
-    p_report.add_argument("--format", choices=sorted(CC.RENDERERS.keys()), default="table")
+    p_report.add_argument("--format", choices=sorted(RENDERERS.keys()), default="table")
     p_report.add_argument("--usage", action="store_true",
                            help="print the per-script usage table (invocations, pass/fail, "
                                 "lint/selftest/rework counts, rework_ratio, retirement flag) "

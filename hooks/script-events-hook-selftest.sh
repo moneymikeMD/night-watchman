@@ -15,6 +15,12 @@
 # points at a scratch fixture directory under WORKDIR — never
 # ~/.claude/projects. This is the seam the shell-scripting skill requires:
 # the hook is never invoked against the real transcript store from a test.
+# CLAUDE_PLUGIN_ROOT and SCRIPT_EVENTS_EXTRACTOR are unset on every run
+# unless a case sets them deliberately, so an ambient value from the shell
+# running this selftest can never decide which extractor the hook picks.
+#
+# $SCRIPT_EVENTS_HOOK_SCRIPT overrides the hook under test, so the NWM-156
+# cases can be run red against an older revision of it.
 #
 # Exit 0 if every assertion passes, 1 on the first failure summary printed.
 
@@ -100,8 +106,32 @@ run_hook() {
   [ -n "$_timeout" ] && _timeout_env="SCRIPT_EVENTS_HOOK_TIMEOUT=$_timeout"
 
   # shellcheck disable=SC2086 # deliberate word-split: an empty _timeout_env must vanish, not pass "" as an env(1) arg
-  printf '%s' "$_payload" | env PATH="$_env_path" CLAUDE_PROJECT_DIR="$PROJECT_ROOT" \
+  printf '%s' "$_payload" | env -u CLAUDE_PLUGIN_ROOT -u SCRIPT_EVENTS_EXTRACTOR \
+    PATH="$_env_path" CLAUDE_PROJECT_DIR="$PROJECT_ROOT" \
     SCRIPT_EVENTS_PROJECTS_DIR="$FIXTURE_PROJECTS" $_timeout_env "$SCRIPT" \
+    >"$WORKDIR/.last_stdout" 2>"$WORKDIR/.last_stderr"
+  echo "RC=$?"
+}
+
+payload_for() {
+  # $1 = agent_id, $2 = agent_type. SubagentStop, no extra fields.
+  jq -n --arg aid "$1" --arg atype "$2" \
+    '{hook_event_name: "SubagentStop", agent_id: $aid, agent_type: $atype, session_id: "sess-x", transcript_path: "/tmp/fake-transcript.jsonl", cwd: "/tmp"}'
+}
+
+run_hook_resolve() {
+  # Extractor-resolution cases (NWM-156). $1 = hook script, $2 = agent_id,
+  # $3 = CLAUDE_PROJECT_DIR, $4 = CLAUDE_PLUGIN_ROOT ("" = unset),
+  # $5 = SCRIPT_EVENTS_EXTRACTOR ("" = unset).
+  _hook="$1"; _aid="$2"; _proj="$3"; _plugin="$4"; _extractor="$5"
+
+  set -- env -u CLAUDE_PLUGIN_ROOT -u SCRIPT_EVENTS_EXTRACTOR \
+    PATH="$STUBBIN:$MINIMAL_PATH" CLAUDE_PROJECT_DIR="$_proj" \
+    SCRIPT_EVENTS_PROJECTS_DIR="$FIXTURE_PROJECTS"
+  [ -n "$_plugin" ] && set -- "$@" CLAUDE_PLUGIN_ROOT="$_plugin"
+  [ -n "$_extractor" ] && set -- "$@" SCRIPT_EVENTS_EXTRACTOR="$_extractor"
+
+  payload_for "$_aid" "script-author" | "$@" "$_hook" \
     >"$WORKDIR/.last_stdout" 2>"$WORKDIR/.last_stderr"
   echo "RC=$?"
 }
@@ -236,6 +266,121 @@ fi
 
 OUT="$(run_hook "SubagentStop" "agent-10" "script-author" "" "" "")"
 assert_rc "python3 not on PATH: fails open" "0" "$OUT"
+
+# ---- NWM-156: the extractor resolution chain ---------------------------
+
+# A consumer project with NO scripts/script-analytics.py, plus a scratch
+# plugin root that has one. The old $PROJECT_DIR-only resolution fail_opened
+# here, so the hook went silently dark for every installer.
+CONSUMER_ROOT="$WORKDIR/consumer"
+mkdir -p "$CONSUMER_ROOT/docs"
+CONSUMER_EVENTS="$CONSUMER_ROOT/docs/script-events.jsonl"
+
+PLUGIN_ROOT="$WORKDIR/plugin"
+mkdir -p "$PLUGIN_ROOT/scripts" "$PLUGIN_ROOT/hooks"
+PLUGIN_EXTRACTOR="$PLUGIN_ROOT/scripts/script-analytics.py"
+: > "$PLUGIN_EXTRACTOR"
+cp "$SCRIPT" "$PLUGIN_ROOT/hooks/script-events-hook.sh"
+chmod +x "$PLUGIN_ROOT/hooks/script-events-hook.sh"
+
+# A copy of the hook with no sibling ../scripts/ at all, so the last chain
+# step cannot accidentally satisfy the "nothing resolves" case.
+ORPHAN_ROOT="$WORKDIR/orphan"
+mkdir -p "$ORPHAN_ROOT/hooks"
+cp "$SCRIPT" "$ORPHAN_ROOT/hooks/script-events-hook.sh"
+chmod +x "$ORPHAN_ROOT/hooks/script-events-hook.sh"
+
+ARGV="$WORKDIR/argv.11"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$SCRIPT" "agent-11" "$CONSUMER_ROOT" "$PLUGIN_ROOT" "")"
+assert_rc "consumer project with no extractor: hook exits 0" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  pass "CLAUDE_PLUGIN_ROOT: extractor was called although \$PROJECT_DIR/scripts/ has none"
+  _argv="$(cat "$ARGV")"
+  case "$_argv" in
+    *"$PLUGIN_EXTRACTOR"*)
+      pass "CLAUDE_PLUGIN_ROOT: argv names the plugin-root extractor"
+      ;;
+    *)
+      fail "CLAUDE_PLUGIN_ROOT: argv did not name $PLUGIN_EXTRACTOR: $_argv"
+      ;;
+  esac
+  case "$_argv" in
+    *"--events"*"$CONSUMER_EVENTS"*)
+      pass "CLAUDE_PLUGIN_ROOT: --events still points at the CONSUMING project, not the plugin"
+      ;;
+    *)
+      fail "CLAUDE_PLUGIN_ROOT: --events was not $CONSUMER_EVENTS: $_argv"
+      ;;
+  esac
+else
+  fail "CLAUDE_PLUGIN_ROOT: extractor was NOT called (the hook went dark)"
+fi
+
+# $SCRIPT_EVENTS_EXTRACTOR beats both other candidates.
+OVERRIDE_EXTRACTOR="$WORKDIR/override-script-analytics.py"
+: > "$OVERRIDE_EXTRACTOR"
+ARGV="$WORKDIR/argv.12"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$SCRIPT" "agent-12" "$PROJECT_ROOT" "$PLUGIN_ROOT" "$OVERRIDE_EXTRACTOR")"
+assert_rc "SCRIPT_EVENTS_EXTRACTOR: hook exits 0" "0" "$OUT"
+_argv="$(cat "$ARGV" 2>/dev/null)"
+case "$_argv" in
+  *"$OVERRIDE_EXTRACTOR"*)
+    pass "SCRIPT_EVENTS_EXTRACTOR: wins over both \$CLAUDE_PLUGIN_ROOT and \$PROJECT_DIR"
+    ;;
+  *)
+    fail "SCRIPT_EVENTS_EXTRACTOR: did not win (argv: ${_argv:-<none>})"
+    ;;
+esac
+
+# $PROJECT_DIR still wins when no override and no plugin root is set, so
+# this repo's own loop and homelab are unaffected by the chain.
+ARGV="$WORKDIR/argv.13"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$SCRIPT" "agent-13" "$PROJECT_ROOT" "" "")"
+assert_rc "PROJECT_DIR fallback: hook exits 0" "0" "$OUT"
+_argv="$(cat "$ARGV" 2>/dev/null)"
+case "$_argv" in
+  *"$PROJECT_ROOT/scripts/script-analytics.py"*)
+    pass "PROJECT_DIR fallback: still resolves the project's own extractor when nothing else is set"
+    ;;
+  *)
+    fail "PROJECT_DIR fallback: did not resolve the project extractor (argv: ${_argv:-<none>})"
+    ;;
+esac
+
+# Nothing resolves anywhere: still exit 0, and the diagnostic must name
+# EVERY path tried rather than only one.
+ARGV="$WORKDIR/argv.14"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" run_hook_resolve "$ORPHAN_ROOT/hooks/script-events-hook.sh" \
+  "agent-14" "$CONSUMER_ROOT" "" "")"
+assert_rc "no extractor anywhere: still fails open" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  fail "no extractor anywhere: extractor was called (should not be)"
+else
+  pass "no extractor anywhere: extractor not called"
+fi
+_err="$(last_stderr)"
+case "$_err" in
+  *"$CONSUMER_ROOT/scripts/script-analytics.py"*)
+    pass "no extractor anywhere: diagnostic names the \$PROJECT_DIR candidate"
+    ;;
+  *)
+    fail "no extractor anywhere: diagnostic omits the \$PROJECT_DIR candidate: $_err"
+    ;;
+esac
+# Matched as a suffix, not against $ORPHAN_ROOT: the hook resolves its own
+# directory through cd+pwd, which normalises away a trailing slash TMPDIR may
+# carry, so the two prefixes are not textually equal.
+case "$_err" in
+  *"/orphan/hooks/../scripts/script-analytics.py"*)
+    pass "no extractor anywhere: diagnostic names the hook-relative candidate too"
+    ;;
+  *)
+    fail "no extractor anywhere: diagnostic omits the hook-relative candidate: $_err"
+    ;;
+esac
 
 echo ""
 echo "script-events-hook-selftest.sh: $PASS passed, $FAIL failed"
