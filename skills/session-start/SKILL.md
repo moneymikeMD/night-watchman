@@ -119,7 +119,8 @@ and REPORT) and takes the per-ticket lines as `--timebox` and repeatable
 brief; a follow-up prompt is for review rounds only.
 
 A brief missing any of these is a refuse-to-spawn condition. Two agents must
-not `touches` the same path — `issues.py waves` says so before anyone starts.
+not `touches` the same path — `scripts/waves.py waves` says so before anyone
+starts.
 
 Retry by failure mode, two retries then abandon and replan — table moved
 to `references/failure-policy.md`.

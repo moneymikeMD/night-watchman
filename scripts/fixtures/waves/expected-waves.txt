@@ -1,0 +1,12 @@
+
+Wave 1 — 3 ticket(s), 3 agent-workable in parallel
+    PF-001  rename-the-exporter, and a line in the shared decision log
+    PF-002  widen-the-parser, and a line in the shared decision log
+    PF-003  drop-the-legacy-flag, and a line in the shared decision log
+
+    worktrees:
+      git worktree add ../wt-pf-001 -b pf-001
+      git worktree add ../wt-pf-002 -b pf-002
+      git worktree add ../wt-pf-003 -b pf-003
+
+  * needs a human   ~ agent works it, human finishes it

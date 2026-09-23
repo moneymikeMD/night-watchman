@@ -1,0 +1,12 @@
+
+Wave 1 — 3 ticket(s), 3 agent-workable in parallel
+    PF-101  rename-the-exporter, and a line in the shared decision log  orphan: no epic link in Jira
+    PF-102  widen-the-parser, and a line in the shared decision log  orphan: no epic link in Jira
+    PF-103  drop-the-legacy-flag, and a line in the shared decision log  orphan: no epic link in Jira
+
+    worktrees:
+      git worktree add ../wt-pf-101 -b pf-101
+      git worktree add ../wt-pf-102 -b pf-102
+      git worktree add ../wt-pf-103 -b pf-103
+
+  * needs a human   ~ agent works it, human finishes it

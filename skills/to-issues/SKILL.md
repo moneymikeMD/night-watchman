@@ -188,7 +188,7 @@ Ported from ptetau/pskills quiz-plan, 2026-09-14.
 ```bash
 ISSUES_PY="$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)"
 python3 "$ISSUES_PY" lint issues/
-python3 "$ISSUES_PY" waves issues/
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/waves.py" waves issues/
 ```
 
 `lint` catches the errors that make a ticket unworkable — a missing `verify`, a
