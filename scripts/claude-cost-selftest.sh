@@ -74,6 +74,21 @@ else
     fi
 fi
 
+# ---- test 5b: the actual pre-NWM-119 6-column header (not a generic
+# mismatch) is refused the same way, so an old real ledger is never
+# silently widened instead of migrated.
+OLDREAL="$WORK/old-real-header.tsv"
+printf 'date\twave\tturns\tcost_usd\tmodel_mix\tnotes\n' > "$OLDREAL"
+if run append --ledger "$OLDREAL" --wave x --cost 1 --turns 1 >/dev/null 2>"$WORK/err"; then
+    bad "old real 6-column header should have been refused"
+else
+    if grep -q "unexpected header line" "$WORK/err"; then
+        ok "old real 6-column header is refused, not silently widened"
+    else
+        bad "old real header refusal message missing expected text"
+    fi
+fi
+
 # ---- test 6: a ledger truncated mid-append (no trailing newline) is
 # refused with a repair hint naming the line number, not silently parsed.
 TRUNCATED="$WORK/truncated.tsv"
