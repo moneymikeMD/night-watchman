@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## [1.6.0](https://github.com/moneymikeMD/night-watchman/compare/v1.5.0...v1.6.0) (2026-09-23)
+
+
+### Features
+
+* dev-install.sh runs the working tree as the installed plugin (NWM-172) ([#74](https://github.com/moneymikeMD/night-watchman/issues/74)) ([797fec9](https://github.com/moneymikeMD/night-watchman/commit/797fec9c9eb8b3578d0ef93eaa3141a5e8248ba9))
+* lint kit.sh's cleanup contract instead of remembering it (NWM-173) ([f269a6c](https://github.com/moneymikeMD/night-watchman/commit/f269a6c57eed60ac7a0975afc87ff77f48b5a8b7))
+
+
+### Bug Fixes
+
+* kit_exec cleans up before exec, which no EXIT trap survives (NWM-171) ([#73](https://github.com/moneymikeMD/night-watchman/issues/73)) ([5fa7244](https://github.com/moneymikeMD/night-watchman/commit/5fa7244e7a115233efd297b1dd653958782eecf5))
+* silence two deliberate SC2016 in the NWM-173 selftest ([f8bae06](https://github.com/moneymikeMD/night-watchman/commit/f8bae06e209e05e3057fd1f75aa1c27bc6ac7855))
+
 ## [1.5.0](https://github.com/moneymikeMD/night-watchman/compare/v1.4.1...v1.5.0) (2026-09-23)
 
 
