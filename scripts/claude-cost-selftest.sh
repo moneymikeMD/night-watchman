@@ -74,6 +74,21 @@ else
     fi
 fi
 
+# ---- test 5b: the actual pre-NWM-119 6-column header (not a generic
+# mismatch) is refused the same way, so an old real ledger is never
+# silently widened instead of migrated.
+OLDREAL="$WORK/old-real-header.tsv"
+printf 'date\twave\tturns\tcost_usd\tmodel_mix\tnotes\n' > "$OLDREAL"
+if run append --ledger "$OLDREAL" --wave x --cost 1 --turns 1 >/dev/null 2>"$WORK/err"; then
+    bad "old real 6-column header should have been refused"
+else
+    if grep -q "unexpected header line" "$WORK/err"; then
+        ok "old real 6-column header is refused, not silently widened"
+    else
+        bad "old real header refusal message missing expected text"
+    fi
+fi
+
 # ---- test 6: a ledger truncated mid-append (no trailing newline) is
 # refused with a repair hint naming the line number, not silently parsed.
 TRUNCATED="$WORK/truncated.tsv"
@@ -160,6 +175,54 @@ if [ "$JSONL_CHECK" = "ok" ]; then
     ok "ledger.jsonl rows match ledger.tsv rows, same field names as the header"
 else
     bad "ledger.jsonl/ledger.tsv mismatch: $JSONL_CHECK"
+fi
+
+# ---- test 11 (NWM-119): --orchestrator-effort defaults to UNVERIFIED
+# when the caller does not pass one, never a guessed value.
+run append --ledger "$WORK/unverified.tsv" --wave w --cost 1 --turns 1 \
+    --orchestrator-model claude-opus-5 --orchestrator-turns 1 --orchestrator-cost 0.5 >/dev/null
+ROW=$(tail -1 "$WORK/unverified.tsv")
+if printf '%s\n' "$ROW" | awk -F'\t' '{ print $7 }' | grep -q '^UNVERIFIED$'; then
+    ok "orchestrator_effort defaults to UNVERIFIED, not a guess"
+else
+    bad "expected orchestrator_effort column (7th) to be UNVERIFIED (got: $ROW)"
+fi
+
+# ---- test 12 (NWM-119): the orchestrator/worker split round-trips
+# through append -> the on-disk row, columns 6-11.
+run append --ledger "$WORK/split.tsv" --wave w1 --cost 10 --turns 40 \
+    --orchestrator-model claude-fable-5-1 --orchestrator-effort high \
+    --orchestrator-turns 15 --orchestrator-cost 6.5 \
+    --worker-turns 25 --worker-cost 3.5 >/dev/null
+ROW=$(tail -1 "$WORK/split.tsv")
+EXPECTED=$'claude-fable-5-1\thigh\t15\t6.5000\t25\t3.5000'
+if printf '%s\n' "$ROW" | awk -F'\t' '{ print $6"\t"$7"\t"$8"\t"$9"\t"$10"\t"$11 }' | grep -qF "$EXPECTED"; then
+    ok "orchestrator/worker model, effort, turns and cost round-trip through append"
+else
+    bad "expected columns 6-11 to be $EXPECTED (got: $ROW)"
+fi
+
+# ---- test 13 (NWM-119): model-compare finds the most recent earlier row
+# with a different orchestrator_model and says so plainly when none exists.
+MCLEDGER="$WORK/modelcompare.tsv"
+run append --ledger "$MCLEDGER" --wave m1 --cost 1 --turns 1 \
+    --orchestrator-model claude-fable-5-1 --orchestrator-effort medium \
+    --orchestrator-turns 1 --orchestrator-cost 1 >/dev/null
+OUT=$(run model-compare --ledger "$MCLEDGER" --wave m1 2>&1)
+if printf '%s\n' "$OUT" | grep -q "no EARLIER wave"; then
+    ok "model-compare says plainly when only one orchestrator model has been measured"
+else
+    bad "expected an explicit no-earlier-model message (got: $OUT)"
+fi
+
+run append --ledger "$MCLEDGER" --wave m2 --cost 2 --turns 2 \
+    --orchestrator-model claude-opus-5 --orchestrator-effort xhigh \
+    --orchestrator-turns 2 --orchestrator-cost 2 >/dev/null
+OUT=$(run model-compare --ledger "$MCLEDGER" --wave m2 --format tsv 2>&1)
+if printf '%s\n' "$OUT" | grep -q "^m1	claude-fable-5-1" && printf '%s\n' "$OUT" | grep -q "^m2	claude-opus-5"; then
+    ok "model-compare finds the most recent earlier row on a different orchestrator model"
+else
+    bad "expected m1/fable vs m2/opus rows in model-compare output (got: $OUT)"
 fi
 
 echo

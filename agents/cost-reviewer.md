@@ -22,12 +22,18 @@ what you write; say so out loud and treat it as the starting position.
 
    ```
    python3 scripts/claude-cost.py append --ledger <path> --wave <wave> \
-     --cost <total> --turns <turns> [--model <mix>] [--notes "<adopted note>"]
+     --cost <total> --turns <turns> [--model <mix>] \
+     [--orchestrator-model <model>] [--orchestrator-effort <level>] \
+     [--orchestrator-turns <n>] [--orchestrator-cost <usd>] \
+     [--worker-turns <n>] [--worker-cost <usd>] [--notes "<adopted note>"]
    ```
 
    This script does not scan transcripts or know a model's price — you
    supply `--cost`/`--turns` yourself, from `/cost`, a provider billing
    export, or whatever this project's own accounting already produces.
+   `--orchestrator-effort` defaults to `UNVERIFIED` when omitted — leave it
+   at that default rather than guess a level the transcript did not
+   record.
 
    When local Claude Code transcripts are present, derive `--cost`/
    `--turns` from `scripts/claude-cost-scan.py` instead of asking the
@@ -38,10 +44,21 @@ what you write; say so out loud and treat it as the starting position.
    ```
 
    which prints exactly `cost: $<usd>, <turns> turns` — parse it straight
-   into the `append` command above. Fall back to asking for `--cost`/
-   `--turns` directly only when no transcripts are found (it refuses
-   loudly rather than reporting zero) or the project uses a different
-   accounting source.
+   into the `append` command's `--cost`/`--turns`. Also run:
+
+   ```
+   python3 scripts/claude-cost-scan.py --repo <this repo> --since <wave start> --ledger-fields
+   ```
+
+   which prints `orchestrator_model`/`orchestrator_effort`/
+   `orchestrator_turns`/`orchestrator_usd`/`worker_turns`/`worker_usd` as
+   tab-separated `key<TAB>value` lines — parse those into the matching
+   `--orchestrator-*`/`--worker-*` flags above. Fall back to asking for
+   `--cost`/`--turns` (and, if known, the orchestrator model) directly
+   only when no transcripts are found (it refuses loudly rather than
+   reporting zero) or the project uses a different accounting source; in
+   that case leave `--orchestrator-effort` at its `UNVERIFIED` default
+   unless the caller states one.
 
 2. **Compare.** Run:
 
@@ -60,7 +77,43 @@ what you write; say so out loud and treat it as the starting position.
    and say so in the report, if no such backend is configured — it is
    optional, never a blocker.
 
-4. **Retirement candidates.** If `scripts/ai-toolkit-root.sh
+4. **Model section.** Run:
+
+   ```
+   python3 scripts/claude-cost.py model-compare --ledger <path> --wave <wave> --format md
+   ```
+
+   This finds the most recent EARLIER wave whose `orchestrator_model`
+   differed from this wave's and prints both rows'
+   `orchestrator_model`/`orchestrator_effort`/`orchestrator_turns`/
+   `orchestrator_usd` — cost only. If it says no earlier wave used a
+   different orchestrator model, **write that sentence into the report
+   verbatim** rather than rendering an empty comparison; that is the
+   correct output when only one model has been measured so far, not a
+   failure.
+
+   When a comparison IS available, pair its cost delta with the same
+   quality proxies for both waves, gathered from data the suite already
+   collects (no new instrumentation):
+   - **rework ratio** and **owner-wait** — `script-analytics.py report
+     --events docs/script-events.jsonl --usage --format md` for each
+     wave's window (see step 5 for how this project resolves that
+     script).
+   - **reviewer rounds per ticket before land** — count
+     `spec-reviewer`/`script-reviewer` verdicts per ticket landed in each
+     wave, from the transcript or the tracker's comment history.
+   - **verify failures discovered after landing** — verify clauses marked
+     NOT MET/PARTIAL on a ticket that had already reached Awaiting
+     Deployment or Completed.
+   - **tickets landed per orchestrator hour** — tickets landed in the
+     wave's window divided by that wave's `orchestrator_turns`-implied
+     wall time (or the wave's own recorded duration, if tracked).
+
+   State plainly whether the cheaper (or more expensive) orchestrator
+   model held quality on these proxies, or say the data does not yet
+   support a verdict — never force one from a single wave's numbers.
+
+5. **Retirement candidates.** If `scripts/ai-toolkit-root.sh
    --script-analytics` resolves and a script-events file is present, run:
 
    ```
@@ -78,7 +131,7 @@ what you write; say so out loud and treat it as the starting position.
    `retire?` rows go in the dedicated section main-thread/`librarian` acts
    on. Skip this step, and say so, if no events file exists yet.
 
-5. **Report the wave.** In this order:
+6. **Report the wave.** In this order:
    - The compare table from step 2, pasted as-is.
    - **Did last wave's adopted recommendation move the number it
      targeted?** Name the metric, the previous value, the measured value
@@ -89,7 +142,9 @@ what you write; say so out loud and treat it as the starting position.
      that didn't move its number gets a revert recommendation, not a
      second tweak. If no recommendation was adopted this wave, say so
      plainly. Ported from pstack hillclimb, 2026-09-14.
-   - Step 4's "Retirement candidates" list, if any.
+   - Step 4's Model section — the model-compare table (or its explicit
+     one-model-measured-so-far sentence) plus the quality-proxy verdict.
+   - Step 5's "Retirement candidates" list, if any.
    - **Up to three ranked recommendations** for the next wave. Each names
      the exact ledger metric it targets, the expected direction, and what
      it gives up. Write the top one as a ticket-ready block (Problem /
@@ -111,5 +166,6 @@ what you write; say so out loud and treat it as the starting position.
 - The compare table (step 2's output).
 - Whether a metrics cross-check ran, and its ratio if so.
 - The verdict on last wave's adopted recommendation.
-- Any `retire?` rows from step 4's usage table, by script name.
+- The Model section's verdict (or its one-model-measured-so-far sentence).
+- Any `retire?` rows from step 5's usage table, by script name.
 - The top recommendation (one line + pointer to the ticket-ready block).

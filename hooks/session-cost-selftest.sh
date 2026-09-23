@@ -59,7 +59,7 @@ FIXTURE_STDIN="$(cat "$FIXTURES/stdin.json")"
 LEDGER1="$WORK/ledger1.tsv"
 STATE1="$WORK/repo/.night-watchman/last-session-cost.txt"
 cp "$HERE/../templates/cost-ledger.tsv" "$LEDGER1" 2>/dev/null \
-    || printf 'date\twave\tturns\tcost_usd\tmodel_mix\tnotes\n' > "$LEDGER1"
+    || printf 'date\twave\tturns\tcost_usd\tmodel_mix\torchestrator_model\torchestrator_effort\torchestrator_turns\torchestrator_usd\tworker_turns\tworker_usd\tnotes\n' > "$LEDGER1"
 STDIN1="${FIXTURE_STDIN/\/Users\/fixture\/repoC/$WORK\/repo}"
 
 run_hook "$STDIN1" "$LEDGER1" >/dev/null 2>&1
@@ -75,6 +75,15 @@ if grep -q "^cost: \$0.0042, 2 turns$" "$STATE1" 2>/dev/null; then
     pass "test1: last-session-cost.txt has the exact ledger-comment line"
 else
     fail "test1: expected 'cost: \$0.0042, 2 turns' in $STATE1 (got: $(cat "$STATE1" 2>&1))"
+fi
+
+# NWM-119: the appended row also carries the orchestrator model/effort and
+# the orchestrator/worker split, read from the transcript, not typed by hand.
+ROW1="$(grep "sess-c" "$LEDGER1" 2>/dev/null | tail -1)"
+if printf '%s\n' "$ROW1" | awk -F'\t' '{ print $6"\t"$7 }' | grep -qF "$(printf 'claude-sonnet-5\tmedium')"; then
+    pass "test1: ledger row carries orchestrator_model/orchestrator_effort from the transcript"
+else
+    fail "test1: expected orchestrator_model/effort columns claude-sonnet-5/medium (got: $ROW1)"
 fi
 
 LINES_BEFORE=$(wc -l < "$LEDGER1")

@@ -112,7 +112,41 @@ else
     ok "journal.jsonl beside the workflow transcripts is not scanned"
 fi
 
-# ---- test 8 (NWM-165): the CLI folds "_" as well as "/" and ".".
+# ---- test 8 (NWM-119): --ledger-fields splits orchestrator (main
+# transcript) from worker (everything under subagents/), reads effort from
+# perTurnEffort when present, and falls back to UNVERIFIED, never a guess,
+# when it is absent.
+FIELDS=$(run --repo /Users/fixture/repoA --ledger-fields)
+if printf '%s\n' "$FIELDS" | grep -q "^orchestrator_model	claude-sonnet-5\$"; then
+    ok "--ledger-fields: orchestrator_model is the main transcript's model"
+else
+    bad "unexpected orchestrator_model (got: $FIELDS)"
+fi
+if printf '%s\n' "$FIELDS" | grep -q "^orchestrator_effort	high\$"; then
+    ok "--ledger-fields: orchestrator_effort reads perTurnEffort when present"
+else
+    bad "unexpected orchestrator_effort (got: $FIELDS)"
+fi
+if printf '%s\n' "$FIELDS" | grep -q "^orchestrator_turns	2\$" \
+    && printf '%s\n' "$FIELDS" | grep -q "^worker_turns	2\$"; then
+    ok "--ledger-fields: orchestrator/worker turns split by transcript position"
+else
+    bad "unexpected orchestrator/worker turn split (got: $FIELDS)"
+fi
+
+FIELDS_B=$(run --project-slug=-Users-fixture-repoB --ledger-fields)
+if printf '%s\n' "$FIELDS_B" | grep -q "^orchestrator_effort	UNVERIFIED\$"; then
+    ok "--ledger-fields: no perTurnEffort anywhere reads UNVERIFIED, not a guess"
+else
+    bad "expected UNVERIFIED orchestrator_effort for repoB (got: $FIELDS_B)"
+fi
+if printf '%s\n' "$FIELDS_B" | grep -q "^worker_turns	0\$"; then
+    ok "--ledger-fields: a session with no subagent transcripts reads 0 worker turns"
+else
+    bad "expected 0 worker_turns for repoB (got: $FIELDS_B)"
+fi
+
+# ---- test 9 (NWM-165): the CLI folds "_" as well as "/" and ".".
 
 # Captured, not run bare: without the fix this exits non-zero, and under
 # `set -e` that aborts the selftest instead of reporting one failure.

@@ -26,8 +26,25 @@ Ledger schema (TSV, one row per wave):
     model_mix   free text — e.g. "sonnet-5:80,opus-5:20" or "haiku only";
                 this script does not parse or validate its internal shape,
                 it only forbids a tab or newline from corrupting the row
+    orchestrator_model   free text — the model that ran as orchestrator
+                for this wave (e.g. "claude-fable-5-1", "claude-opus-5")
+    orchestrator_effort  free text — the orchestrator's effort level for
+                this wave; "UNVERIFIED" when the caller's transcript did
+                not record one (see claude-cost-scan.py --ledger-fields),
+                never a guessed value
+    orchestrator_turns   integer — turns spent by the orchestrator alone
+    orchestrator_usd     float — cost attributed to the orchestrator alone
+    worker_turns          integer — turns spent by every worker/subagent
+                combined
+    worker_usd            float — cost attributed to every worker/subagent
+                combined
     notes       free text — what changed this wave, what was adopted from
                 the previous review, anything a later reviewer needs
+
+`turns`/`cost_usd` stay the wave's totals (as before NWM-119); the four
+orchestrator_*/worker_* columns are the same wave split by role, so a
+reviewer can ask what the orchestrator model+effort choice itself costs
+without re-deriving it from the transcript.
 
 Nothing in this script reads a Claude Code transcript, calls any API, or
 knows a model's price. The caller supplies cost and turns directly (from
@@ -45,6 +62,14 @@ Subcommands:
     compare  print a delta table between one row (--wave, default: the
              last row) and the row immediately before it, flagging each
              numeric column up/down/flat at a +/-5% threshold
+    model-compare  print orchestrator_model/orchestrator_effort/turns/usd
+             for one row (--wave, default: the last row) against the most
+             recent EARLIER row whose orchestrator_model differs from it.
+             Read-only, never writes. If no earlier row used a different
+             orchestrator_model, it says so explicitly and exits 0 with no
+             table — the caller (cost-reviewer's Model section) must not
+             render an empty comparison as if two models had been
+             measured.
 
 Exit codes: 0 success, 2 a validation failure (bad input; printed to
 stderr, no traceback), 1 an unexpected error.
@@ -56,11 +81,19 @@ import os
 import sys
 from datetime import datetime, timezone
 
-LEDGER_COLUMNS = ("date", "wave", "turns", "cost_usd", "model_mix", "notes")
+LEDGER_COLUMNS = (
+    "date", "wave", "turns", "cost_usd", "model_mix",
+    "orchestrator_model", "orchestrator_effort", "orchestrator_turns", "orchestrator_usd",
+    "worker_turns", "worker_usd",
+    "notes",
+)
 LEDGER_HEADER_LINE = "\t".join(LEDGER_COLUMNS)
-LEDGER_DECIMALS = {"cost_usd": 4}
-LEDGER_INT_COLUMNS = ("turns",)
-LEDGER_NUMERIC_COLUMNS = ("turns", "cost_usd")
+LEDGER_DECIMALS = {"cost_usd": 4, "orchestrator_usd": 4, "worker_usd": 4}
+LEDGER_INT_COLUMNS = ("turns", "orchestrator_turns", "worker_turns")
+LEDGER_NUMERIC_COLUMNS = (
+    "turns", "cost_usd", "orchestrator_turns", "orchestrator_usd", "worker_turns", "worker_usd",
+)
+DEFAULT_ORCHESTRATOR_EFFORT = "UNVERIFIED"
 
 
 class ValidationError(Exception):
@@ -145,13 +178,21 @@ def format_ledger_value(col, value):
     return str(value)
 
 
-def build_row(date, wave, turns, cost_usd, model_mix, notes):
+def build_row(date, wave, turns, cost_usd, model_mix,
+              orchestrator_model, orchestrator_effort, orchestrator_turns, orchestrator_usd,
+              worker_turns, worker_usd, notes):
     values = {
         "date": date,
         "wave": wave,
         "turns": turns,
         "cost_usd": cost_usd,
         "model_mix": model_mix,
+        "orchestrator_model": orchestrator_model,
+        "orchestrator_effort": orchestrator_effort,
+        "orchestrator_turns": orchestrator_turns,
+        "orchestrator_usd": orchestrator_usd,
+        "worker_turns": worker_turns,
+        "worker_usd": worker_usd,
         "notes": notes,
     }
     return {col: format_ledger_value(col, values[col]) for col in LEDGER_COLUMNS}
@@ -242,10 +283,21 @@ def cmd_append(args):
         validate_field(args.notes, "--notes")
     if args.model is not None:
         validate_field(args.model, "--model")
+    if args.orchestrator_model is not None:
+        validate_field(args.orchestrator_model, "--orchestrator-model")
+    validate_field(args.orchestrator_effort, "--orchestrator-effort")
     if args.turns < 0:
         raise ValidationError("--turns must be >= 0 (got %d)" % args.turns)
     if args.cost < 0:
         raise ValidationError("--cost must be >= 0 (got %s)" % args.cost)
+    if args.orchestrator_turns < 0:
+        raise ValidationError("--orchestrator-turns must be >= 0 (got %d)" % args.orchestrator_turns)
+    if args.orchestrator_cost < 0:
+        raise ValidationError("--orchestrator-cost must be >= 0 (got %s)" % args.orchestrator_cost)
+    if args.worker_turns < 0:
+        raise ValidationError("--worker-turns must be >= 0 (got %d)" % args.worker_turns)
+    if args.worker_cost < 0:
+        raise ValidationError("--worker-cost must be >= 0 (got %s)" % args.worker_cost)
 
     existing = read_ledger(args.ledger)
     if any(r["wave"] == args.wave for r in existing):
@@ -259,6 +311,12 @@ def cmd_append(args):
         turns=args.turns,
         cost_usd=args.cost,
         model_mix=args.model or "-",
+        orchestrator_model=args.orchestrator_model or "-",
+        orchestrator_effort=args.orchestrator_effort,
+        orchestrator_turns=args.orchestrator_turns,
+        orchestrator_usd=args.orchestrator_cost,
+        worker_turns=args.worker_turns,
+        worker_usd=args.worker_cost,
         notes=args.notes or "-",
     )
 
@@ -340,6 +398,69 @@ def cmd_compare(args):
     print(renderer(headers, table_rows))
 
 
+UNRESOLVED_ORCHESTRATOR_MODELS = ("-", "")
+
+
+def cmd_model_compare(args):
+    """Read-only comparison between one ledger row ("current" — --wave,
+    default: the ledger's last row) and the most recent EARLIER row whose
+    orchestrator_model differs from it (skipping rows with no
+    orchestrator_model recorded at all — "-"). Never writes.
+
+    When no such earlier row exists, prints one explicit sentence saying
+    so and returns without a table — the caller must not render an empty
+    comparison as if a second model had been measured (NWM-119)."""
+    rows = read_ledger(args.ledger)
+    if not rows:
+        raise ValidationError("--ledger %s has no rows" % args.ledger)
+    if args.wave:
+        idx = next((i for i, r in enumerate(rows) if r["wave"] == args.wave), None)
+        if idx is None:
+            raise ValidationError("model-compare: wave '%s' not found in %s" % (args.wave, args.ledger))
+    else:
+        idx = len(rows) - 1
+
+    cur = rows[idx]
+    cur_model = cur["orchestrator_model"]
+    if cur_model in UNRESOLVED_ORCHESTRATOR_MODELS:
+        print(
+            "# model-compare: wave '%s' has no orchestrator_model recorded — nothing to compare"
+            % cur["wave"]
+        )
+        return
+
+    prev = None
+    for r in reversed(rows[:idx]):
+        if r["orchestrator_model"] not in UNRESOLVED_ORCHESTRATOR_MODELS and r["orchestrator_model"] != cur_model:
+            prev = r
+            break
+
+    if prev is None:
+        print(
+            "# model-compare: wave '%s' ran orchestrator_model '%s'; no EARLIER wave in %s "
+            "used a different orchestrator_model — only one model has been measured so far, "
+            "nothing to compare it against yet"
+            % (cur["wave"], cur_model, args.ledger)
+        )
+        return
+
+    headers = ["wave", "orchestrator_model", "orchestrator_effort", "orchestrator_turns", "orchestrator_usd"]
+    table_rows = [
+        [prev["wave"], prev["orchestrator_model"], prev["orchestrator_effort"],
+         prev["orchestrator_turns"], prev["orchestrator_usd"]],
+        [cur["wave"], cur["orchestrator_model"], cur["orchestrator_effort"],
+         cur["orchestrator_turns"], cur["orchestrator_usd"]],
+    ]
+    renderer = RENDERERS[args.format]
+    print("# model-compare: %s (%s) -> %s (%s)" % (prev["wave"], prev["orchestrator_model"],
+                                                     cur["wave"], cur_model))
+    print(renderer(headers, table_rows))
+    print(
+        "# cost-side only — pair with the quality proxies from docs/cost.md's Model section "
+        "before drawing a verdict"
+    )
+
+
 def parse_args(argv):
     parser = argparse.ArgumentParser(
         prog="claude-cost.py",
@@ -355,6 +476,20 @@ def parse_args(argv):
     p_append.add_argument("--turns", required=True, type=int, help="total agent turns for the wave")
     p_append.add_argument("--date", default=None, help="ISO-8601 date/timestamp (default: now, UTC)")
     p_append.add_argument("--model", default=None, help="free-text model mix, e.g. 'sonnet-5:80,opus-5:20'")
+    p_append.add_argument("--orchestrator-model", default=None, dest="orchestrator_model",
+                           help="the model that ran as orchestrator this wave")
+    p_append.add_argument("--orchestrator-effort", default=DEFAULT_ORCHESTRATOR_EFFORT,
+                           dest="orchestrator_effort",
+                           help="the orchestrator's effort level this wave (default: %s when "
+                                "the transcript did not record one)" % DEFAULT_ORCHESTRATOR_EFFORT)
+    p_append.add_argument("--orchestrator-turns", type=int, default=0, dest="orchestrator_turns",
+                           help="turns spent by the orchestrator alone (default: 0)")
+    p_append.add_argument("--orchestrator-cost", type=float, default=0.0, dest="orchestrator_cost",
+                           help="cost attributed to the orchestrator alone (default: 0)")
+    p_append.add_argument("--worker-turns", type=int, default=0, dest="worker_turns",
+                           help="turns spent by every worker/subagent combined (default: 0)")
+    p_append.add_argument("--worker-cost", type=float, default=0.0, dest="worker_cost",
+                           help="cost attributed to every worker/subagent combined (default: 0)")
     p_append.add_argument("--notes", default=None, help="free-text note for this row")
     p_append.add_argument("--dry-run", action="store_true", dest="dry_run",
                            help="print the row that would be appended without writing it")
@@ -371,6 +506,16 @@ def parse_args(argv):
     p_compare.add_argument("--wave", default=None, help="'current' row (default: the ledger's last row)")
     p_compare.add_argument("--format", choices=sorted(RENDERERS.keys()), default="table")
     p_compare.set_defaults(func=cmd_compare)
+
+    p_model_compare = sub.add_parser(
+        "model-compare",
+        help="compare one row's orchestrator model+effort against the most recent earlier "
+             "row that used a different orchestrator_model",
+    )
+    p_model_compare.add_argument("--ledger", required=True, help="TSV ledger path")
+    p_model_compare.add_argument("--wave", default=None, help="'current' row (default: the ledger's last row)")
+    p_model_compare.add_argument("--format", choices=sorted(RENDERERS.keys()), default="table")
+    p_model_compare.set_defaults(func=cmd_model_compare)
 
     return parser.parse_args(argv)
 

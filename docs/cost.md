@@ -54,13 +54,67 @@ One TSV row per wave:
 | `turns` | integer | total agent turns spent on the wave |
 | `cost_usd` | float | total cost for the wave, in whatever unit the caller's own accounting uses |
 | `model_mix` | text | free text, e.g. `sonnet-5:80,opus-5:20`; not parsed or validated beyond forbidding a tab/newline |
+| `orchestrator_model` | text | the model that ran as orchestrator this wave, e.g. `claude-fable-5-1`, `claude-opus-5` |
+| `orchestrator_effort` | text | the orchestrator's effort level this wave; `UNVERIFIED` when the source transcript did not record one — never a guess |
+| `orchestrator_turns` | integer | turns spent by the orchestrator alone |
+| `orchestrator_usd` | float | cost attributed to the orchestrator alone |
+| `worker_turns` | integer | turns spent by every worker/subagent combined |
+| `worker_usd` | float | cost attributed to every worker/subagent combined |
 | `notes` | text | what changed this wave, what was adopted from the previous review |
+
+`turns`/`cost_usd` stay the wave's totals; `orchestrator_*`/`worker_*`
+split the same wave by role (NWM-119), so a reviewer can compare what an
+orchestrator model+effort choice itself costs without re-deriving it from
+the transcript. `claude-cost-scan.py --ledger-fields` (below) produces
+these six columns directly from a local transcript, tagging the main
+session file `orchestrator` and everything under `subagents/` `worker` —
+a filesystem-position label, not a claim about who dispatched whom.
 
 `claude-cost.py` refuses to append to a ledger whose header line does not
 exactly match this schema — a stale or hand-edited header is a loud
 refusal, never a silent partial append. It also refuses a ledger whose
 last line has no trailing newline (a crash mid-append), with a repair
 hint naming the line number, and refuses a duplicate `wave` label.
+
+## Comparing orchestrator models: `model-compare`
+
+`claude-cost.py model-compare --ledger <path> [--wave <wave>]` is a
+read-only companion to `compare`: instead of the previous row, it finds
+the most recent EARLIER row whose `orchestrator_model` differs from the
+given (or last) row's, and prints `orchestrator_model`/
+`orchestrator_effort`/`orchestrator_turns`/`orchestrator_usd` for both. If
+no earlier row used a different `orchestrator_model` — including the
+common case where only one model has ever been measured — it prints one
+explicit sentence saying so and exits 0 with no table. `cost-reviewer`'s
+Model section (see `agents/cost-reviewer.md`) uses this to compare cost;
+it pairs the result with the quality proxies from other sources (rework
+ratio and owner-wait from `script-analytics.py`'s `report --usage`,
+reviewer rounds and verify-clause pass rate from the tracker) since the
+ledger itself holds only cost and turns, never quality signals.
+
+## Orchestrator model choice is a ledger-visible decision
+
+Owner, 2026-09-15: hit the weekly cap on `claude-fable-5-1` mid-session and
+learned it is a separate cap from every other model — Opus, Sonnet and
+Haiku draw from a different pool. Fable has been the default orchestrator
+model, so routine dispatch, review triage and landing work all burn the
+scarcest budget by default, whether or not that wave needed Fable's
+quality. That choice was habit, not evidence (NWM-119).
+
+The `orchestrator_model`/`orchestrator_effort` columns above, plus
+`claude-cost.py model-compare` and `cost-reviewer`'s Model section, make
+the choice measurable: once two comparable waves have run — one
+orchestrated on Opus at high (or the highest available) effort, one on
+Fable, workers on Sonnet in both, so only the orchestrator varies — a
+reviewer can ask whether the cheaper model held quality on the ledger's
+quality proxies (rework ratio, owner-wait, reviewer rounds per ticket,
+verify failures discovered after landing) instead of asserting it.
+
+**No such comparison has been run yet** (tracked as NWM-119's still-open
+item 4), so there is no recommendation the data supports and this
+document makes none. Per the owner's 2026-09-23 decision, the default in
+`~/.claude/settings.json` does not change until it does — measure first,
+then decide.
 
 ## What this deliberately does not do
 
@@ -84,10 +138,23 @@ python3 scripts/claude-cost-scan.py --repo . --since 2026-09-12T00:00:00Z --form
 python3 scripts/claude-cost-scan.py --repo . --since 2026-09-12T00:00:00Z --ledger-line
 # -> cost: $42.1000, 380 turns
 
-# add a wave's row
+# the orchestrator/worker split for that same window
+python3 scripts/claude-cost-scan.py --repo . --since 2026-09-12T00:00:00Z --ledger-fields
+# -> orchestrator_model	claude-fable-5-1
+# -> orchestrator_effort	UNVERIFIED
+# -> orchestrator_turns	40
+# -> orchestrator_usd	12.4000
+# -> worker_turns	340
+# -> worker_usd	29.7000
+
+# add a wave's row, orchestrator/worker split included
 python3 scripts/claude-cost.py append --ledger docs/cost-ledger.tsv \
   --wave 2026-09-12-am --cost 42.10 --turns 380 \
-  --model "sonnet-5:90,opus-5:10" --notes "adopted: cut subagent fanout"
+  --model "sonnet-5:90,opus-5:10" \
+  --orchestrator-model claude-fable-5-1 --orchestrator-effort UNVERIFIED \
+  --orchestrator-turns 40 --orchestrator-cost 12.40 \
+  --worker-turns 340 --worker-cost 29.70 \
+  --notes "adopted: cut subagent fanout"
 
 # preview a row without writing it
 python3 scripts/claude-cost.py append --ledger docs/cost-ledger.tsv \
@@ -98,18 +165,25 @@ python3 scripts/claude-cost.py list --ledger docs/cost-ledger.tsv --format md
 
 # delta against the previous wave
 python3 scripts/claude-cost.py compare --ledger docs/cost-ledger.tsv --format md
+
+# compare this wave's orchestrator model against the last wave that used a different one
+python3 scripts/claude-cost.py model-compare --ledger docs/cost-ledger.tsv --format md
 ```
 
 Run `scripts/claude-cost-selftest.sh` to check the ledger's own
 invariants (header creation, duplicate-wave refusal, stale-schema
-refusal, the truncated-file repair-hint path, and `compare`'s delta
-math) against a scratch file — it touches nothing under `docs/`.
+refusal, the truncated-file repair-hint path, `compare`'s delta math, the
+orchestrator/worker column round-trip, the `UNVERIFIED` effort default,
+and `model-compare`'s found/not-found paths) against a scratch file — it
+touches nothing under `docs/`.
 
 Run `scripts/claude-cost-scan-selftest.sh` to check the scanner against
 fixture transcripts under `scripts/fixtures/claude-cost-scan/` —
 structurally offline, never reads the real `~/.claude/projects` tree.
 Covers the `--repo`/`--project-slug` filter, the same-message-id dedupe,
-`--since` filtering, and `--ledger-line`'s exact output shape.
+`--since` filtering, `--ledger-line`'s exact output shape, and
+`--ledger-fields`'s orchestrator/worker split including the `UNVERIFIED`
+effort fallback.
 
 ## The ledger's JSONL twin
 
