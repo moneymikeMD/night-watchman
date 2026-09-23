@@ -514,14 +514,10 @@ scenario_human_executor() {
     assert_eq "C0 total herdr calls" "0" "$(wc -l < "$log" | tr -d ' ')"
 }
 
-# C1 — mixed-executor ticket dispatches like an agent ticket (LAB-211): it
-# proceeds (not refused), and the prompt handed to `herdr agent prompt`
-# carries the mixed-ticket section. NWM-168: the section must not claim a
-# person lands it from Awaiting Deployment — that heading was the stale
-# claim LAB-211's review found false and corrected only in the body below
-# it. Asserting only the new heading would pass while the old string
-# lingered elsewhere in the section, so the absence check covers the whole
-# prompt, not just the heading.
+# C1 — mixed-executor ticket dispatches like an agent ticket (LAB-211).
+# NWM-168: the prompt must not claim a person lands it from Awaiting
+# Deployment; the absence check covers the whole prompt, not just the
+# heading, since the stale string could linger in the body below it.
 scenario_mixed_executor() {
     local repo log rc prompt
     repo=$(make_repo) || { echo "FAIL: C1 setup (make_repo)" >&2; FAIL=1; return; }
@@ -539,6 +535,7 @@ scenario_mixed_executor() {
     prompt="$(grep '^agent prompt' "$log" || true)"
     assert_contains "C1 prompt carries the mixed-only section" "$prompt" "## MIXED TICKET"
     assert_contains "C1 it names the Human run list the worker must write" "$prompt" "Human run list"
+    assert_contains "C1 the LAB-211-corrected sentence is still present verbatim" "$prompt" "move this ticket through to Completed the same as any other"
     assert_not_contains "C1 the section does not claim a person lands it from Awaiting Deployment" "$prompt" "Awaiting Deployment"
 }
 
