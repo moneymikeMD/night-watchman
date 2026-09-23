@@ -57,6 +57,45 @@ Ported from pstack's `eval` skill, 2026-09-14. Five rules, held to by
 - Read every output yourself — see `evals/README.md`'s "Known environment
   flakiness": a hung run reads as failure but isn't one.
 
+## What a selftest structurally cannot catch, and what to do about it
+
+The isolation above is not a limitation to work around — it is what lets
+these selftests run on a public repo with no credential configured. But it
+has a consequence worth naming, because it cost a released defect.
+
+A selftest stubs every seam that reaches outside the process. So it proves
+the code does what the test **enumerates**. It cannot prove anything about a
+seam it replaced with a stub, and it cannot notice a cost that only appears
+when the real thing runs many times.
+
+NWM-171 is the worked example. NWM-155 moved `kit.sh`'s tmpfile registry
+behind an `EXIT` trap. A bash `EXIT` trap does not run when `exec` replaces
+the process image, and `providers/lib/provider.sh` execs on **every** provider
+verb call — so every call leaked a registry file. 48 assertions across three
+copies of `kit.sh` were green and blind: none of them execs, because execing
+into a real provider implementation is exactly what the isolation rule
+removes. It surfaced days later, after release, by looking at `TMPDIR`.
+
+So: **a change to a hook, a provider, or anything reached through
+`${CLAUDE_PLUGIN_ROOT}` is not done when its selftest is green.** Run it.
+
+```bash
+scripts/dev-install.sh          # this checkout becomes the installed plugin, live
+scripts/dev-install.sh --status # confirm it is a symlink, not a stale copy
+scripts/dev-install.sh --uninstall
+```
+
+An edit is live with no reinstall. Then do ordinary work with it and watch
+what the work produces — `ls "$TMPDIR" | wc -l` before and after a session is
+the check that would have caught NWM-171 in minutes. Never reach for `claude
+plugin update` to refresh it: at an unchanged version that command is a no-op
+that prints success and leaves the old copy, which is worse than not trying.
+
+The two disciplines answer different questions. The selftest asks "does this
+do what I said?". The dev install asks "what does this do that nobody
+thought to ask about?". A release should not be the first time the second
+question gets asked.
+
 ## Checking these scripts with shellcheck
 
 Run it from inside `scripts/`, with `-P .` so it can resolve the relative

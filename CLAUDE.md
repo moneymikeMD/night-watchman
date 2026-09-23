@@ -185,6 +185,18 @@ push and PR but aren't ruleset-required (they still gate a PR merged through
 the UI, since GitHub blocks on any check the PR shows as failing, required
 or not — they just don't independently block a bypassed push).
 
+## A selftest green is not a change exercised
+
+`docs/testing-philosophy.md` requires selftests to be offline and
+structurally isolated, so they stub the seams that reach outside the process
+— including the `exec` into a provider implementation, which is where
+NWM-171's leak lived while 48 green assertions looked straight past it. A
+change to `hooks/`, `providers/`, or anything reached through
+`${CLAUDE_PLUGIN_ROOT}` gets run for real before it is called done:
+`scripts/dev-install.sh` makes this checkout the installed plugin, live, and
+`--uninstall` puts it back. `claude plugin update` will not refresh it — at
+an unchanged version it is a no-op that reports success.
+
 ## Selftests are the house standard
 
 Every operator script under `scripts/` and `providers/*/*/` is paired with
@@ -220,6 +232,8 @@ opposite.
 ## Commands
 
 ```bash
+scripts/dev-install.sh                               # run THIS tree as the installed plugin, live
+scripts/dev-install.sh --status | --uninstall
 providers/lib/provider.sh doctor                     # what does this repo talk to, and why
 scripts/work-order-root.sh --issues-py                # resolve the work-order dependency
 scripts/ai-toolkit-root.sh --known-issue              # resolve the ai-toolkit dependency
