@@ -51,6 +51,19 @@ Flags:
     --format tsv|md|json   output format (default: tsv)
     --ledger-line          print exactly `cost: $<usd>, <turns> turns` and
                             nothing else — for a ticket outcome comment
+    --ledger-fields        print orchestrator_model/orchestrator_effort/
+                            orchestrator_turns/orchestrator_usd/worker_turns/
+                            worker_usd as tab-separated key-value lines, for
+                            claude-cost.py append's --orchestrator-*/
+                            --worker-* flags. The main transcript file is
+                            "orchestrator", every subagents/ transcript is
+                            "worker" — a filesystem-position label, not a
+                            claim about who dispatched whom. Effort comes
+                            from each turn's own `perTurnEffort` field when
+                            present; a role with no such value anywhere
+                            reads `UNVERIFIED`, never a guess, and a role
+                            that used more than one model or effort value
+                            reads `mixed:a,b`.
 
 This script never prints message content — only ids, timestamps, model
 names, and token/cost numbers.
@@ -95,12 +108,18 @@ def default_projects_dir():
     return os.path.expanduser("~/.claude/projects")
 
 
+ROLE_ORCHESTRATOR = "orchestrator"
+ROLE_WORKER = "worker"
+
+
 def find_session_files(projects_dir, slug, session_id):
-    """Return a list of (session_id, [jsonl paths]) for every session under
-    projects_dir/slug (or, if slug is None, every project dir), optionally
-    narrowed to one session_id. Collects both subagent shapes: Agent-tool
-    transcripts directly under subagents/, and Workflow-tool transcripts
-    under subagents/workflows/wf_*/."""
+    """Return a list of (session_id, [(path, role) ...]) for every session
+    under projects_dir/slug (or, if slug is None, every project dir),
+    optionally narrowed to one session_id. Collects both subagent shapes:
+    Agent-tool transcripts directly under subagents/, and Workflow-tool
+    transcripts under subagents/workflows/wf_*/ — both tagged role="worker",
+    the main transcript role="orchestrator". This is a filesystem-position
+    label, not a claim about who dispatched whom."""
     if slug is not None:
         project_dirs = [os.path.join(projects_dir, slug)]
     else:
@@ -114,11 +133,17 @@ def find_session_files(projects_dir, slug, session_id):
             sid = os.path.splitext(os.path.basename(main_file))[0]
             if session_id is not None and sid != session_id:
                 continue
-            files = [main_file]
+            files = [(main_file, ROLE_ORCHESTRATOR)]
             subagents_dir = os.path.join(project_dir, sid, "subagents")
-            files.extend(sorted(glob.glob(os.path.join(subagents_dir, "agent-*.jsonl"))))
-            files.extend(sorted(glob.glob(os.path.join(
-                subagents_dir, "workflows", "wf_*", "agent-*.jsonl"))))
+            files.extend(
+                (p, ROLE_WORKER)
+                for p in sorted(glob.glob(os.path.join(subagents_dir, "agent-*.jsonl")))
+            )
+            files.extend(
+                (p, ROLE_WORKER)
+                for p in sorted(glob.glob(os.path.join(
+                    subagents_dir, "workflows", "wf_*", "agent-*.jsonl")))
+            )
             sessions.append((sid, files))
     return sessions
 
@@ -149,11 +174,14 @@ def usage_tokens(usage):
     }
 
 
-def scan_file(path, turns_by_id):
+def scan_file(path, role, turns_by_id):
     """Read one JSONL transcript file, updating turns_by_id in place:
-    message id -> turn dict (session_id, timestamp, model, tokens). Later
-    lines for an id already seen overwrite the earlier one, which is how
-    the several-lines-per-message-id dedupe happens."""
+    message id -> turn dict (session_id, timestamp, model, tokens, role,
+    effort). Later lines for an id already seen overwrite the earlier one,
+    which is how the several-lines-per-message-id dedupe happens. `effort`
+    is the entry's own top-level `perTurnEffort` field when the CLI wrote
+    one, else None — the caller decides what a missing value means, this
+    function never guesses."""
     with open(path) as f:
         for line in f:
             line = line.strip()
@@ -175,6 +203,8 @@ def scan_file(path, turns_by_id):
                 "timestamp": entry.get("timestamp"),
                 "model": message.get("model") or "unknown",
                 "tokens": usage_tokens(usage),
+                "role": role,
+                "effort": entry.get("perTurnEffort") or None,
             }
 
 
@@ -182,13 +212,13 @@ def scan_sessions(sessions, since, until):
     """Return a flat list of turn dicts (adding a resolved 'session'
     label — the transcript session id, not message.sessionId, since a
     subagent's own message.sessionId differs from its parent) across all
-    given (session_id, [paths]) pairs, filtered by [since, until] on each
-    turn's own timestamp."""
+    given (session_id, [(path, role)]) pairs, filtered by [since, until] on
+    each turn's own timestamp."""
     turns = []
     for session_id, paths in sessions:
         turns_by_id = {}
-        for path in paths:
-            scan_file(path, turns_by_id)
+        for path, role in paths:
+            scan_file(path, role, turns_by_id)
         for turn in turns_by_id.values():
             ts = parse_timestamp(turn["timestamp"])
             if since is not None and (ts is None or ts < since):
@@ -240,6 +270,52 @@ def group_turns(turns, prices, warned_models):
         g["tokens"] += sum(turn["tokens"].values())
         g["cost"] += turn_cost(turn, prices, warned_models)
     return groups
+
+
+def group_by_role(turns, prices, warned_models):
+    """Return {(role, model): {"turns": n, "tokens": n, "cost": f,
+    "efforts": {values}}} — the per-role counterpart to group_turns, used
+    only by --ledger-fields. `efforts` collects every non-null
+    perTurnEffort seen for that (role, model), so the caller can tell a
+    single consistent value from a mix or from none at all."""
+    groups = {}
+    for turn in turns:
+        key = (turn["role"], turn["model"])
+        g = groups.setdefault(key, {"turns": 0, "tokens": 0, "cost": 0.0, "efforts": set()})
+        g["turns"] += 1
+        g["tokens"] += sum(turn["tokens"].values())
+        g["cost"] += turn_cost(turn, prices, warned_models)
+        if turn["effort"]:
+            g["efforts"].add(turn["effort"])
+    return groups
+
+
+def summarize_role(groups, role):
+    """Reduce group_by_role's per-(role, model) buckets to one row for a
+    single role: total turns/cost across every model that role used, the
+    model with the most turns (or "mixed:<a>,<b>,..." when more than one
+    model appears), and the effort the same way — "UNVERIFIED" when no
+    turn for this role ever carried a perTurnEffort value, never a guess."""
+    rows = {model: g for (r, model), g in groups.items() if r == role}
+    if not rows:
+        return {"model": "-", "effort": "UNVERIFIED", "turns": 0, "cost": 0.0}
+    total_turns = sum(g["turns"] for g in rows.values())
+    total_cost = sum(g["cost"] for g in rows.values())
+    models_by_turns = sorted(rows.items(), key=lambda kv: (-kv[1]["turns"], kv[0]))
+    if len(models_by_turns) == 1:
+        model = models_by_turns[0][0]
+    else:
+        model = "mixed:" + ",".join(m for m, _ in models_by_turns)
+    efforts = set()
+    for g in rows.values():
+        efforts |= g["efforts"]
+    if not efforts:
+        effort = "UNVERIFIED"
+    elif len(efforts) == 1:
+        effort = next(iter(efforts))
+    else:
+        effort = "mixed:" + ",".join(sorted(efforts))
+    return {"model": model, "effort": effort, "turns": total_turns, "cost": total_cost}
 
 
 def render_table_rows(groups):
@@ -306,6 +382,22 @@ def cmd_scan(args):
         print("cost: $%.4f, %d turns" % (total_cost, total_turns))
         return
 
+    if args.ledger_fields:
+        role_groups = group_by_role(turns, prices, warned_models)
+        orch = summarize_role(role_groups, ROLE_ORCHESTRATOR)
+        work = summarize_role(role_groups, ROLE_WORKER)
+        fields = [
+            ("orchestrator_model", orch["model"]),
+            ("orchestrator_effort", orch["effort"]),
+            ("orchestrator_turns", "%d" % orch["turns"]),
+            ("orchestrator_usd", "%.4f" % orch["cost"]),
+            ("worker_turns", "%d" % work["turns"]),
+            ("worker_usd", "%.4f" % work["cost"]),
+        ]
+        for key, value in fields:
+            print("%s\t%s" % (key, value))
+        return
+
     rows = render_table_rows(groups)
     renderer = RENDERERS[args.format]
     print(renderer(HEADERS, rows))
@@ -333,6 +425,11 @@ def parse_args(argv):
     parser.add_argument("--format", choices=sorted(RENDERERS.keys()), default="tsv")
     parser.add_argument("--ledger-line", action="store_true",
                          help="print exactly 'cost: $<usd>, <turns> turns' and nothing else")
+    parser.add_argument("--ledger-fields", action="store_true", dest="ledger_fields",
+                         help="print orchestrator_model/orchestrator_effort/orchestrator_turns/"
+                              "orchestrator_usd/worker_turns/worker_usd as tab-separated "
+                              "key-value lines, for claude-cost.py append's --orchestrator-*/"
+                              "--worker-* flags")
     args = parser.parse_args(argv)
     if args.prices is None:
         args.prices = default_prices_path()

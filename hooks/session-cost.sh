@@ -107,12 +107,39 @@ COST="$(echo "$SUMMARY" | cut -f1)"
 TURNS="$(echo "$SUMMARY" | cut -f2)"
 MODEL_MIX="$(echo "$SUMMARY" | cut -f3)"
 
+if [ -n "${NW_COST_PROJECT_SLUG:-}" ]; then
+    FIELDS_ARGS=(--project-slug="$NW_COST_PROJECT_SLUG" --session "$SESSION_ID" --ledger-fields)
+else
+    FIELDS_ARGS=(--repo "$CWD" --session "$SESSION_ID" --ledger-fields)
+fi
+[ -n "${NW_COST_PROJECTS_DIR:-}" ] && FIELDS_ARGS+=(--projects-dir "$NW_COST_PROJECTS_DIR")
+LEDGER_FIELDS="$(python3 "$SCANNER" "${FIELDS_ARGS[@]}" 2>/dev/null)"
+ORCH_MODEL="-"; ORCH_EFFORT="UNVERIFIED"; ORCH_TURNS=0; ORCH_USD=0
+WORK_TURNS=0; WORK_USD=0
+if [ -n "$LEDGER_FIELDS" ]; then
+    ORCH_MODEL="$(echo "$LEDGER_FIELDS" | awk -F'\t' '$1=="orchestrator_model"{print $2}')"
+    ORCH_EFFORT="$(echo "$LEDGER_FIELDS" | awk -F'\t' '$1=="orchestrator_effort"{print $2}')"
+    ORCH_TURNS="$(echo "$LEDGER_FIELDS" | awk -F'\t' '$1=="orchestrator_turns"{print $2}')"
+    ORCH_USD="$(echo "$LEDGER_FIELDS" | awk -F'\t' '$1=="orchestrator_usd"{print $2}')"
+    WORK_TURNS="$(echo "$LEDGER_FIELDS" | awk -F'\t' '$1=="worker_turns"{print $2}')"
+    WORK_USD="$(echo "$LEDGER_FIELDS" | awk -F'\t' '$1=="worker_usd"{print $2}')"
+fi
+[ -n "$ORCH_MODEL" ] || ORCH_MODEL="-"
+[ -n "$ORCH_EFFORT" ] || ORCH_EFFORT="UNVERIFIED"
+[ -n "$ORCH_TURNS" ] || ORCH_TURNS=0
+[ -n "$ORCH_USD" ] || ORCH_USD=0
+[ -n "$WORK_TURNS" ] || WORK_TURNS=0
+[ -n "$WORK_USD" ] || WORK_USD=0
+
 LEDGER="${NW_COST_LEDGER:-$CWD/docs/cost-ledger.tsv}"
 LEDGER_SCRIPT="$PLUGIN_ROOT/scripts/claude-cost.py"
 if [ -f "$LEDGER" ] && [ -f "$LEDGER_SCRIPT" ]; then
     WAVE="$(date -u +%Y-%m-%d)-${SESSION_ID:0:8}"
     APPEND_ERR="$(python3 "$LEDGER_SCRIPT" append --ledger "$LEDGER" --wave "$WAVE" \
-        --cost "$COST" --turns "$TURNS" --model "$MODEL_MIX" 2>&1 >/dev/null)"
+        --cost "$COST" --turns "$TURNS" --model "$MODEL_MIX" \
+        --orchestrator-model "$ORCH_MODEL" --orchestrator-effort "$ORCH_EFFORT" \
+        --orchestrator-turns "$ORCH_TURNS" --orchestrator-cost "$ORCH_USD" \
+        --worker-turns "$WORK_TURNS" --worker-cost "$WORK_USD" 2>&1 >/dev/null)"
     APPEND_STATUS=$?
     if [ "$APPEND_STATUS" -ne 0 ]; then
         case "$APPEND_ERR" in

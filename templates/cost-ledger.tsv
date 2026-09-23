@@ -1,1 +1,1 @@
-date	wave	turns	cost_usd	model_mix	notes
+date	wave	turns	cost_usd	model_mix	orchestrator_model	orchestrator_effort	orchestrator_turns	orchestrator_usd	worker_turns	worker_usd	notes
