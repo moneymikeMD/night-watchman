@@ -50,6 +50,7 @@ mkroot() {
     mkdir -p "$d/scripts/lib" "$d/providers" "$d/hooks"
     cp "$REPO/scripts/lib/kit.sh" "$d/scripts/lib/kit.sh"
     { echo '#!/bin/bash'
+      # shellcheck disable=SC2016  # written verbatim into the fixture, not expanded here
       echo '. "$(dirname "$0")/lib/kit.sh"'
       cat
     } > "$d/scripts/consumer.sh"
@@ -145,6 +146,7 @@ REV="$WORK/reverted"
 mkdir -p "$REV"
 cp -R "$REPO/scripts" "$REPO/providers" "$REPO/hooks" "$REV/" 2>/dev/null
 if [ -f "$REV/providers/lib/provider.sh" ]; then
+    # shellcheck disable=SC2016  # a sed script, expanded by nothing
     sed 's/kit_exec "\$entry" "\$verb" "\$@"/exec "$entry" "$verb" "$@"/' \
         "$REPO/providers/lib/provider.sh" > "$REV/providers/lib/provider.sh"
 fi
