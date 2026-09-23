@@ -67,6 +67,9 @@ jobs:
             -not -path 'scripts/fixtures/*' -print0 \
           | xargs -0 shellcheck -x -e SC1091 -P SCRIPTDIR
 
+      - name: kit.sh cleanup contract
+        run: ./scripts/kit-consumer-lint.sh
+
       - name: selftests
         run: |
           set -uo pipefail
