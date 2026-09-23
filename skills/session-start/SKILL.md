@@ -157,13 +157,19 @@ When the reports come back:
   pushes, and moves the ticket to Completed (file-mode directory moves, or
   tracker transitions if one is configured) — or stops at the first failure
   and reverts the merge. See the script's own header for the full contract.
+- **A branch merged in the GitHub UI still needs the lifecycle run.** A PR
+  squash-merged for a code-owner review skips `land-branch.sh` entirely, so
+  the ticket stays In Progress and the worker's closing state never reaches
+  the tracker. `land-branch.sh <branch> <ticket> --already-merged` runs that
+  half alone: it proves the work is on the target first, then transitions,
+  writes the closing state and cleans up, merging and pushing nothing.
 - **The ticket lifecycle is the rule, and the scripts drive it** (see
   `tickets-protocol`): In Progress at dispatch
   (`${CLAUDE_PLUGIN_ROOT}/providers/dispatch/herdr/herdr-ticket-start.sh`,
   via `dispatch start`), Awaiting Deployment before landing and Completed
-  after (`land-branch.sh`). The orchestrator never moves a ticket by hand
-  except to repair a step a script missed, and says so in a dated note on
-  the ticket.
+  after (`land-branch.sh`, with or without `--already-merged`). The
+  orchestrator never moves a ticket by hand except to repair a step a script
+  missed, and says so in a dated note on the ticket.
 - Ticket verify fully MET → `librarian` completes it.
 - PARTIAL → post a dated note saying exactly which human steps remain;
   touch the ticket body only if the acceptance criteria moved; it stays put.
