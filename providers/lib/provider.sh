@@ -203,7 +203,7 @@ nw_run() {
         warn "Error: $kind provider '$impl' has no executable entry point (expected: $entry)"
         return 1
     }
-    exec "$entry" "$verb" "$@"
+    kit_exec "$entry" "$verb" "$@"
 }
 
 nw_doctor() {

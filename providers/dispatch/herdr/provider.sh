@@ -52,7 +52,7 @@ esac
 
 case "$verb" in
     start)
-        exec "$DIR/herdr-ticket-start.sh" "$@"
+        kit_exec "$DIR/herdr-ticket-start.sh" "$@"
         ;;
     watch)
         TICKET_ID="${1:-}"

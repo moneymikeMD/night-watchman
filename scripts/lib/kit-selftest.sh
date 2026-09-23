@@ -180,6 +180,61 @@ STUB
   assert_eq "$LABEL: but tmpfile itself then refuses rather than returning a path" \
     "tmpfile refused" "$(sed -n '2p' "$WORK/result" 2>/dev/null)"
 
+  # --- exec: the path no EXIT trap survives --------------------------------
+  # NWM-171. exec replaces the process image, so nothing registered on EXIT
+  # runs. providers/lib/provider.sh execs on every verb call, which leaked a
+  # registry file each time until kit_exec.
+  write_stub <<'STUB'
+#!/bin/bash
+set -uo pipefail
+. "$KIT"
+f=$(tmpfile)
+echo "body" > "$f"
+exec /bin/echo bare-exec
+STUB
+  run_stub "$KIT"
+  bare="$(td_count)"
+  if [ "$bare" -gt 0 ]; then
+    pass "$LABEL: a bare exec after sourcing leaks, which is why kit_exec exists ($bare file(s) left)"
+  else
+    fail "$LABEL: a bare exec after sourcing leaks, which is why kit_exec exists ($bare file(s) left)"
+  fi
+
+  write_stub <<'STUB'
+#!/bin/bash
+set -uo pipefail
+. "$KIT"
+f=$(tmpfile)
+echo "body" > "$f"
+kit_exec /bin/echo one two three > "$RESULT"
+STUB
+  run_stub "$KIT"
+  assert_eq "$LABEL: kit_exec leaves nothing behind — no tempfile, no registry" "0" "$(td_count)"
+  assert_eq "$LABEL: and the exec'd program still runs, with its arguments intact" \
+    "one two three" "$(cat "$WORK/result" 2>/dev/null)"
+
+  # A cleanup-by-not-exec'ing would pass the two above, so pin the status too.
+  write_stub <<'STUB'
+#!/bin/bash
+set -uo pipefail
+. "$KIT"
+kit_exec /bin/sh -c 'exit 7'
+STUB
+  run_stub "$KIT"
+  assert_eq "$LABEL: the exec'd program's exit status is preserved" "7" "$RC"
+
+  write_stub <<'STUB'
+#!/bin/bash
+set -uo pipefail
+. "$KIT"
+mine() { echo ran > "$MARK"; }
+kit_on_exit mine
+kit_exec /bin/echo done
+STUB
+  run_stub "$KIT"
+  assert_eq "$LABEL: a kit_on_exit cleanup runs before the exec, not never" \
+    "ran" "$(cat "$WORK/mark" 2>/dev/null)"
+
   # --- and the hazard kit_on_exit exists for -------------------------------
   # A raw `trap ... EXIT` after sourcing replaces kit's handler. This is
   # behaviour, not a caveat in a comment, so it is asserted.
