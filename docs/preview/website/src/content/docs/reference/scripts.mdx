@@ -91,6 +91,8 @@ Usage: land-ack.sh <ack-file>
 
 Land a finished ticket branch onto the target branch (default: main),
 complete its ticket, and clean up.
+TRACKER. Two backends, via --tracker / LAND_BRANCH_TRACKER (default: file,
+so this plugin ships needing zero external accounts):
 
 ```text
 Usage:
@@ -101,6 +103,7 @@ Usage:
                  [--lint-cmd CMD] [--reset-land]
                  [--outcome "text" | --outcome-file PATH]
   land-branch.sh <branch> <ticket-id> --no-complete [--dry-run] [--note "text"] [--tracker file|jira] ...
+  land-branch.sh <branch> <ticket-id> --already-merged [--merged-as SHA] ...
   land-branch.sh --help
 ```
 

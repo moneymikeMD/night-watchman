@@ -20,7 +20,8 @@
 # assert "before the merge" and "after the push".
 #
 # Usage: scripts/land-branch-jira-selftest.sh [path-to-land-branch.sh]
-# Defaults to the sibling scripts/land-branch.sh.
+# Defaults to the sibling scripts/land-branch.sh. The testJM* cases cover
+# --already-merged (NWM-169) and are red against a pre-flag revision.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -760,6 +761,214 @@ elif grep -q "^pane send-text" "$WORK/jg1a.herdr.log"; then
 $(cat "$WORK/jg1a.herdr.log")"
 else
     ok "testJG1: HERDR_ENV=1 without a hand-off leaves the jira tracker and origin byte-identical to HERDR_ENV unset"
+fi
+
+# ---- NWM-169 --already-merged. A branch merged through the GitHub UI is not
+# an ancestor of the target, so none of land-branch.sh's lifecycle ran for it.
+# These land_* helpers put a branch's work on origin/main the three ways the
+# UI can, WITHOUT land-branch.sh, which is the state this mode exists for.
+
+# land_squash NAME — Squash and merge: one new commit, branch not an ancestor.
+land_squash() {
+    ( cd "$WORK/$1" && git checkout -q main && git merge -q --squash work \
+        && git commit -q -m "PROJ-1: do the work (#42)" && git push -q origin main ) >/dev/null 2>&1
+}
+# land_rebase NAME — Rebase and merge: replayed commit, new sha.
+land_rebase() {
+    ( cd "$WORK/$1" && git checkout -q main \
+        && git cherry-pick -n work >/dev/null 2>&1 \
+        && git commit -q -m "PROJ-1: do the work (#42) rebased" && git push -q origin main ) >/dev/null 2>&1
+}
+# land_merge NAME — Create a merge commit: the branch IS an ancestor here, so
+# this case proves the content check is not accidentally squash-only.
+land_merge() {
+    ( cd "$WORK/$1" && git checkout -q main && git merge -q --no-ff work -m "PROJ-1: merge (#42)" \
+        && git push -q origin main ) >/dev/null 2>&1
+}
+run_already() {
+    local name="$1"; shift
+    set +e
+    # shellcheck disable=SC2086  # STATUS_FLAGS is a fixed flag list
+    (cd "$WORK/$name" && JIRA_MOCK_STATE="$WORK/$name.jira-state.json" JIRA_MOCK_BARE="$WORK/$name.git" \
+        ./scripts/land-branch.sh work PROJ-1 --tracker jira --jira-api "$JIRA_MOCK" $STATUS_FLAGS \
+        --already-merged "$@") >"$WORK/$name.out" 2>&1
+    RC=$?
+    set -e
+}
+
+# ---- testJM1: the whole point. A squash-landed branch gets the lifecycle it
+# was denied, and NOTHING is merged, linted or pushed doing it.
+
+fresh_jira_repo jm1 3 10009 >/dev/null
+STATE="$WORK/jm1.jira-state.json"
+land_squash jm1
+BEFORE=$(git -C "$WORK/jm1.git" rev-parse main)
+LINT_MARK="$WORK/jm1.lint-ran"
+run_already jm1 --jira-done-status 10014 --lint-cmd "touch $LINT_MARK"
+AFTER=$(git -C "$WORK/jm1.git" rev-parse main)
+if [ "$RC" -ne 0 ]; then
+    bad "testJM1 (--already-merged): exited $RC:
+$(cat "$WORK/jm1.out")"
+elif [ "$(posted_transitions "$STATE")" != "61 81" ]; then
+    bad "testJM1: transitions were '$(posted_transitions "$STATE")', expected '61 81' — Awaiting Deployment must not be skipped"
+elif [ "$(state_field "$STATE" status_id)" != "10014" ]; then
+    bad "testJM1: final status_id is '$(state_field "$STATE" status_id)', expected 10014"
+elif [ "$(comment_count "$STATE")" != "1" ]; then
+    bad "testJM1: expected exactly 1 outcome comment, got $(comment_count "$STATE")"
+elif [ "$AFTER" != "$BEFORE" ]; then
+    bad "testJM1: origin/main moved ($BEFORE -> $AFTER) — this mode must push nothing"
+elif [ -e "$WORK/jm1-land" ]; then
+    bad "testJM1: an integration worktree was created at '$WORK/jm1-land'"
+elif [ -e "$LINT_MARK" ]; then
+    bad "testJM1: the lint command ran — there is no merged tree here to lint"
+elif ( cd "$WORK/jm1" && git rev-parse --verify --quiet refs/heads/work >/dev/null ); then
+    bad "testJM1: local branch 'work' survived; a squash-merged branch needs -D, which the content check licenses"
+else
+    ok "testJM1: a squash-landed branch is transitioned through Awaiting Deployment to Completed, with nothing merged, linted or pushed"
+fi
+
+# ---- testJM2: the check is not a rubber stamp. Three ways of NOT having
+# landed, each refused with nothing transitioned.
+
+fresh_jira_repo jm2 3 10009 >/dev/null
+STATE="$WORK/jm2.jira-state.json"
+PRE_LANDING=$(git -C "$WORK/jm2" rev-parse main)
+land_squash jm2
+run_already jm2 --jira-done-status 10014 --merged-as "$PRE_LANDING"
+RC_STALE=$RC
+T_STALE=$(posted_transitions "$STATE")
+
+fresh_jira_repo jm2b 3 10009 >/dev/null
+run_already jm2b --jira-done-status 10014
+RC_NEVER=$RC
+T_NEVER=$(posted_transitions "$WORK/jm2b.jira-state.json")
+
+# A decoy: a commit that NAMES the ticket but carries different content, so
+# the subject-matching candidate search would accept it and the content check
+# must not.
+fresh_jira_repo jm2c 3 10009 >/dev/null
+( cd "$WORK/jm2c" && git checkout -q main && echo decoy > decoy.txt && git add decoy.txt \
+    && git commit -q -m "PROJ-1: do the work (#42)" && git push -q origin main ) >/dev/null 2>&1
+run_already jm2c --jira-done-status 10014
+RC_DECOY=$RC
+T_DECOY=$(posted_transitions "$WORK/jm2c.jira-state.json")
+
+# The ancestor proof is a separate code path, so its stale --merged-as needs
+# its own case: here the branch HAS landed, but the named commit predates it.
+fresh_jira_repo jm2d 3 10009 >/dev/null
+PRE_MERGE=$(git -C "$WORK/jm2d" rev-parse main)
+land_merge jm2d
+run_already jm2d --jira-done-status 10014 --merged-as "$PRE_MERGE"
+RC_ANCESTOR=$RC
+T_ANCESTOR=$(posted_transitions "$WORK/jm2d.jira-state.json")
+
+if [ "$RC_STALE" -eq 0 ] || [ "$RC_NEVER" -eq 0 ] || [ "$RC_DECOY" -eq 0 ] || [ "$RC_ANCESTOR" -eq 0 ]; then
+    bad "testJM2: an unlanded branch was accepted (stale=$RC_STALE never=$RC_NEVER decoy=$RC_DECOY ancestor=$RC_ANCESTOR)"
+elif [ -n "$T_STALE" ] || [ -n "$T_NEVER" ] || [ -n "$T_DECOY" ] || [ -n "$T_ANCESTOR" ]; then
+    bad "testJM2: a refused run still transitioned something (stale='$T_STALE' never='$T_NEVER' decoy='$T_DECOY' ancestor='$T_ANCESTOR')"
+elif ! grep -q "predates" "$WORK/jm2d.out"; then
+    bad "testJM2: a --merged-as predating a merge-commit landing was not refused for that reason:
+$(tail -3 "$WORK/jm2d.out")"
+elif ! grep -q "does not carry" "$WORK/jm2.out"; then
+    bad "testJM2: --merged-as at a pre-landing commit did not say the work is not there:
+$(tail -3 "$WORK/jm2.out")"
+elif ! grep -q -- "--merged-as" "$WORK/jm2b.out"; then
+    bad "testJM2: a never-merged branch did not name --merged-as as the way forward:
+$(tail -3 "$WORK/jm2b.out")"
+else
+    ok "testJM2: a stale --merged-as on either proof path, a never-merged branch, and a decoy commit naming the ticket are each refused with nothing transitioned"
+fi
+
+# ---- testJM3: all three UI merge shapes are accepted, so the check is about
+# content and not about one merge strategy.
+
+JM3_FAIL=""
+for shape in squash rebase merge; do
+    fresh_jira_repo "jm3$shape" 3 10009 >/dev/null
+    "land_$shape" "jm3$shape"
+    run_already "jm3$shape" --jira-done-status 10014
+    [ "$RC" -eq 0 ] || JM3_FAIL="$JM3_FAIL $shape(rc=$RC)"
+    [ "$(state_field "$WORK/jm3$shape.jira-state.json" status_id)" = "10014" ] \
+        || JM3_FAIL="$JM3_FAIL $shape(status)"
+done
+if [ -n "$JM3_FAIL" ]; then
+    bad "testJM3: these landing shapes were not accepted:$JM3_FAIL"
+else
+    ok "testJM3: squash, rebase-merge and --no-ff merge landings are all accepted"
+fi
+
+# ---- testJM4: the mode's refusals, each before anything is mutated.
+
+fresh_jira_repo jm4 3 10009 >/dev/null
+land_squash jm4
+set +e
+(cd "$WORK/jm4" && ./scripts/land-branch.sh work PROJ-1 --already-merged --tracker file) >"$WORK/jm4a.out" 2>&1
+RC_FILE=$?
+(cd "$WORK/jm4" && JIRA_MOCK_STATE="$WORK/jm4.jira-state.json" JIRA_MOCK_BARE="$WORK/jm4.git" \
+    ./scripts/land-branch.sh work PROJ-1 --tracker jira --jira-api "$JIRA_MOCK" --jira-progress-status 3 \
+    --jira-awaiting-status 10012 --jira-done-status 10014 --already-merged --reset-land) >"$WORK/jm4b.out" 2>&1
+RC_RESET=$?
+(cd "$WORK/jm4" && JIRA_MOCK_STATE="$WORK/jm4.jira-state.json" JIRA_MOCK_BARE="$WORK/jm4.git" \
+    ./scripts/land-branch.sh work PROJ-1 --tracker jira --jira-api "$JIRA_MOCK" --jira-progress-status 3 \
+    --jira-awaiting-status 10012 --jira-done-status 10014 --merged-as HEAD) >"$WORK/jm4c.out" 2>&1
+RC_ORPHAN=$?
+set -e
+if [ "$RC_FILE" -eq 0 ] || [ "$RC_RESET" -eq 0 ] || [ "$RC_ORPHAN" -eq 0 ]; then
+    bad "testJM4: a refused combination exited 0 (file=$RC_FILE reset=$RC_RESET orphan=$RC_ORPHAN)"
+elif ! grep -q "tracker file" "$WORK/jm4a.out"; then
+    bad "testJM4: --tracker file refusal does not name the tracker:
+$(tail -3 "$WORK/jm4a.out")"
+elif ! grep -q -- "--reset-land" "$WORK/jm4b.out"; then
+    bad "testJM4: --reset-land refusal does not name the flag:
+$(tail -3 "$WORK/jm4b.out")"
+elif ! grep -q -- "--merged-as requires" "$WORK/jm4c.out"; then
+    bad "testJM4: --merged-as without --already-merged was not refused for that reason:
+$(tail -3 "$WORK/jm4c.out")"
+elif [ -n "$(posted_transitions "$WORK/jm4.jira-state.json")" ]; then
+    bad "testJM4: a refused combination still transitioned something"
+else
+    ok "testJM4: --tracker file, --reset-land, and a bare --merged-as are each refused with nothing mutated"
+fi
+
+# ---- testJM5: the closing state is written and read back, and its mark names
+# the LANDING commit rather than an empty sha — the half the by-hand
+# workaround skipped entirely.
+
+fresh_jira_repo jm5 3 10009 >/dev/null
+STATE="$WORK/jm5.jira-state.json"
+closing_stub jm5
+land_squash jm5
+LANDED=$(git -C "$WORK/jm5.git" rev-parse main)
+set +e
+# shellcheck disable=SC2086  # STATUS_FLAGS is a fixed flag list
+(cd "$WORK/jm5" && HERDR_ENV=1 PATH="$WORK/jm5.bin:$PATH" STUB_HERDR_LOG="$WORK/jm5.herdr.log" \
+    LAND_BRANCH_HANDOFF_FILE="$WORK/handoff/closing-state.md" LAND_BRANCH_ACK_WAIT_S=1 \
+    JIRA_MOCK_STATE="$STATE" JIRA_MOCK_BARE="$WORK/jm5.git" \
+    ./scripts/land-branch.sh work PROJ-1 --tracker jira --jira-api "$JIRA_MOCK" $STATUS_FLAGS \
+    --jira-done-status 10014 --already-merged) >"$WORK/jm5.out" 2>&1
+RC=$?
+set -e
+JM5_MARK=$(python3 -c '
+import json, sys
+cs = [c for c in json.load(open(sys.argv[1]))["comments"] if "closing-state:PROJ-1:" in c]
+print(cs[0].split("closing-state:PROJ-1:")[1].split(")")[0] if cs else "")
+' "$STATE")
+python3 -c '
+import json, sys
+open(sys.argv[2], "w").write("\n".join(json.load(open(sys.argv[1]))["comments"]))
+' "$STATE" "$WORK/jm5.comments.txt"
+if [ "$RC" -ne 0 ]; then
+    bad "testJM5 (closing state): exited $RC:
+$(tail -8 "$WORK/jm5.out")"
+elif [ "$JM5_MARK" != "$LANDED" ]; then
+    bad "testJM5: the closing-state mark names '$JM5_MARK', expected the landing commit '$LANDED'"
+elif ! grep -q "closing state written and read back" "$WORK/jm5.out"; then
+    bad "testJM5: the closing state was not read back:
+$(tail -8 "$WORK/jm5.out")"
+elif ! grep -q "found a thing" "$WORK/jm5.comments.txt"; then
+    bad "testJM5: the worker's Findings section did not reach the tracker"
+else
+    ok "testJM5: --already-merged writes the worker's closing state, reads it back, and marks it with the landing commit"
 fi
 
 echo

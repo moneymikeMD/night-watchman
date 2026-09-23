@@ -2,25 +2,22 @@
 #
 # Land a finished ticket branch onto the target branch (default: main),
 # complete its ticket, and clean up.
-#
-# TRACKER. Two backends, selected by --tracker / LAND_BRANCH_TRACKER
-# (default: file — this plugin ships with zero external accounts required):
+# TRACKER. Two backends, via --tracker / LAND_BRANCH_TRACKER (default: file,
+# so this plugin ships needing zero external accounts):
 #
 #   file    a ticket is a markdown file that moves between <issues-dir>/
-#           {open,in-progress,awaiting-deployment,completed,cancelled}/.
-#           One commit per move; a completing ticket is edited BEFORE it is
-#           moved, so the move stages current content.
+#           {open,in-progress,awaiting-deployment,completed,cancelled}/, one
+#           commit per move, edited before the move so it stages current content.
 #
 #   jira    a caller-supplied API wrapper (--jira-api PATH / ISSUES_JIRA_API)
 #           called as `<wrapper> raw GET <path>`, `<wrapper> --yes write POST
-#           <path> <json>`, and `<wrapper> --yes comment <key> -` (text on
-#           stdin). A default ships at providers/tracker/jira/jira-api.sh.
-#           Every transition is resolved BY TARGET STATUS and READ BACK
-#           afterwards; zero or more than one match is refused, never guessed.
+#           <path> <json>` and `<wrapper> --yes comment <key> -` (text on
+#           stdin); default providers/tracker/jira/jira-api.sh. Every
+#           transition is resolved BY TARGET STATUS and READ BACK afterwards.
 #
-# LIFECYCLE. In Progress from dispatch; this script moves the ticket to
-# Awaiting Deployment before landing and Completed after (--no-complete: only
-# the first). A ticket in open/ or cancelled/, or any other jira status, is refused.
+# LIFECYCLE. In Progress from dispatch; moved to Awaiting Deployment before
+# landing and Completed after (--no-complete: only the first). Any other
+# starting stage or jira status is refused.
 #
 # Usage:
 #   land-branch.sh <branch> <ticket-id> [--dry-run]
@@ -30,14 +27,20 @@
 #                  [--lint-cmd CMD] [--reset-land]
 #                  [--outcome "text" | --outcome-file PATH]
 #   land-branch.sh <branch> <ticket-id> --no-complete [--dry-run] [--note "text"] [--tracker file|jira] ...
+#   land-branch.sh <branch> <ticket-id> --already-merged [--merged-as SHA] ...
 #   land-branch.sh --help
+#
+# --already-merged (jira only) runs the LIFECYCLE half for a branch merged
+# elsewhere, typically the GitHub UI's Squash and merge, merging and pushing
+# nothing. It proves the landing by CONTENT, not ancestry, so a squash counts:
+# every path the branch changed since it forked must be identical at the
+# landing commit, named by --merged-as or found by ticket id and then judged.
 #
 # INTEGRATION WORKTREE. Merge, lint, completion and push run in
 # `<parent-of-the-main-worktree>/<repo-basename>-land`, never in the invoking
 # tree. Every run resets it to origin/<target-branch>; a dirty one is refused
 # unless --reset-land is passed, and a concurrent run is refused by the lock
-# at `<worktree>.lock`. The main worktree is NOT fast-forwarded after the push;
-# the summary prints the `git pull --ff-only` to run by hand.
+# at `<worktree>.lock`. The main worktree is NOT fast-forwarded after the push.
 #
 # Exit codes:
 #   0   landed cleanly
@@ -68,10 +71,8 @@
 #   LAND_BRANCH_HANDOFF_FILE          closing-state path; unreadable = no closing state.
 #   LAND_BRANCH_ORCHESTRATOR_PANE     override the orchestrator pane id.
 #   LAND_BRANCH_EXECUTOR_FIELD        jira executor field (customfield_10047).
-#   LAND_BRANCH_CLOSING_READBACK_ATTEMPTS jira mode: read-back attempts before
-#                                         giving up (default 4).
-#   LAND_BRANCH_CLOSING_READBACK_DELAY_S  linear-backoff whole seconds between
-#                                         those attempts (default 1).
+#   LAND_BRANCH_CLOSING_READBACK_ATTEMPTS jira read-back attempts (default 4).
+#   LAND_BRANCH_CLOSING_READBACK_DELAY_S  seconds between them (default 1).
 #   --reset-land                      (flag only) discard uncommitted changes in
 #                                     the integration worktree before syncing.
 #
@@ -178,6 +179,10 @@ NO_COMPLETE=0
 NOTE_TEXT=""
 NOTE_GIVEN=0
 RESET_LAND=0
+ALREADY_MERGED=0
+MERGED_AS=""
+LANDED_SHA=""
+LANDED_HOW="merge commit"
 POSITIONAL=""
 
 while [ $# -gt 0 ]; do
@@ -186,6 +191,10 @@ while [ $# -gt 0 ]; do
         --dry-run) DRY_RUN=1; shift ;;
         --no-complete) NO_COMPLETE=1; shift ;;
         --reset-land) RESET_LAND=1; shift ;;
+        --already-merged) ALREADY_MERGED=1; shift ;;
+        --merged-as)
+            [ $# -ge 2 ] || stop2 "--merged-as needs a commit-ish"
+            MERGED_AS="$2"; shift 2 ;;
         --tracker)
             [ $# -ge 2 ] || stop2 "--tracker needs an argument: file or jira"
             TRACKER="$2"; shift 2 ;;
@@ -242,6 +251,15 @@ case "$TRACKER" in
     file|jira) ;;
     *) stop2 "--tracker must be 'file' or 'jira' (got '$TRACKER')" ;;
 esac
+
+if [ "$ALREADY_MERGED" = 1 ]; then
+    # The file tracker completes a ticket by COMMITTING its move between
+    # directories, and a commit is the one thing this mode declines to make.
+    [ "$TRACKER" != file ] || stop2 "--already-merged does not support --tracker file: the file tracker completes a ticket by committing its move between $ISSUES_DIR subdirectories, and this mode makes no commit and no push. Land it normally, or move the file and complete the ticket by hand"
+    [ "$RESET_LAND" != 1 ] || stop2 "--already-merged and --reset-land are mutually exclusive: --reset-land names the integration worktree, which this mode never builds"
+elif [ -n "$MERGED_AS" ]; then
+    stop2 "--merged-as requires --already-merged — it names the commit an existing landing is already on, which the merging path resolves for itself"
+fi
 if [ "$TRACKER" = jira ] && [ "$NO_COMPLETE" != 1 ]; then
     [ -n "$JIRA_DONE_STATUS" ] || stop2 "jira mode needs --jira-done-status (or \$LAND_BRANCH_JIRA_DONE_STATUS) — no default exists across trackers"
     case "$JIRA_DONE_STATUS" in
@@ -311,6 +329,68 @@ if [ -n "$BRANCH_WT" ]; then
     fi
     [ -z "$WT_STATUS" ] || stop2 "branch '$BRANCH' worktree at '$BRANCH_WT' has uncommitted changes — commit or stash them first (.night-watchman/closing-state.md is exempt; nothing else is):
 $WT_STATUS"
+fi
+
+# --already-merged: prove the branch's work is ON the target before anything
+# transitions. Two proofs, because a squash-merged branch is not an ancestor
+# of the target while a --no-ff merged one is, and each shape admits only one
+# of them: ancestry where it holds, content everywhere else.
+if [ "$ALREADY_MERGED" = 1 ]; then
+    git rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null 2>&1 \
+        || stop2 "--already-merged: no local branch '$BRANCH' — its content is what this mode checks against the target, so the branch must still exist"
+    echo "Fetching origin to check '$BRANCH' against '$TARGET_BRANCH'..."
+    FETCH_OUT=$(git fetch origin 2>&1) || stop2 "--already-merged: git fetch origin failed: $FETCH_OUT"
+    git rev-parse --verify --quiet "refs/remotes/origin/$TARGET_BRANCH" >/dev/null 2>&1 \
+        || stop2 "--already-merged: origin/$TARGET_BRANCH does not exist — nothing to check the branch against"
+
+    if git merge-base --is-ancestor "$BRANCH" "origin/$TARGET_BRANCH" 2>/dev/null; then
+        # A merge that kept the branch's commits. Ancestry is a stronger proof
+        # than content, and content cannot run here anyway: the fork point IS
+        # the branch tip, so it would compare nothing and pass vacuously.
+        LANDED_SHA=$(git rev-parse --verify --quiet "${MERGED_AS:-origin/$TARGET_BRANCH}^{commit}") \
+            || stop2 "--merged-as: '$MERGED_AS' does not resolve to a commit in this repository"
+        git merge-base --is-ancestor "$BRANCH" "$LANDED_SHA" 2>/dev/null \
+            || stop2 "--merged-as $MERGED_AS predates '$BRANCH''s landing — '$BRANCH' is not an ancestor of it. Nothing was transitioned"
+        echo "'$BRANCH' is an ancestor of origin/$TARGET_BRANCH — landed at $(git rev-parse --short "$LANDED_SHA")."
+    else
+        # Squashed or rebase-merged: the commits are gone, so the proof is
+        # CONTENT. Every path the branch changed since it forked must be
+        # identical at the landing commit; anything else there is other work.
+        FORK_POINT=$(git merge-base "origin/$TARGET_BRANCH" "$BRANCH" 2>/dev/null) \
+            || stop2 "--already-merged: '$BRANCH' and origin/$TARGET_BRANCH have no common ancestor"
+        BRANCH_PATHS=$(git diff --name-only "$FORK_POINT" "$BRANCH" 2>/dev/null) \
+            || stop2 "--already-merged: could not list the paths '$BRANCH' changed since $FORK_POINT"
+        [ -n "$BRANCH_PATHS" ] || stop2 "--already-merged: '$BRANCH' changes no path relative to origin/$TARGET_BRANCH and is not an ancestor of it — there is nothing whose landing could be proved"
+
+        # git diff takes no --pathspec-from-file, and splitting the list into
+        # argv would break on a path with a space, so intersect the name lists.
+        PATHS_FILE=$(tmpfile) || stop2 "--already-merged: could not create a temp file for the path list"
+        printf '%s\n' "$BRANCH_PATHS" > "$PATHS_FILE"
+        landing_holds() {
+            local sha="$1" changed
+            git merge-base --is-ancestor "$sha" "origin/$TARGET_BRANCH" 2>/dev/null || return 1
+            changed=$(git diff --name-only "$sha" "$BRANCH" 2>/dev/null) || return 1
+            [ -n "$changed" ] || return 0
+            printf '%s\n' "$changed" | grep -qxF -f "$PATHS_FILE" && return 1
+            return 0
+        }
+
+        if [ -n "$MERGED_AS" ]; then
+            LANDED_SHA=$(git rev-parse --verify --quiet "$MERGED_AS^{commit}") \
+                || stop2 "--merged-as: '$MERGED_AS' does not resolve to a commit in this repository"
+            landing_holds "$LANDED_SHA" \
+                || stop2 "--merged-as $MERGED_AS does not carry '$BRANCH''s work: either it is not on origin/$TARGET_BRANCH, or the paths '$BRANCH' changed differ there. Nothing was transitioned. Compare with: git diff $LANDED_SHA $BRANCH"
+        else
+            # A subject naming the ticket is a CANDIDATE, never the answer:
+            # landing_holds is the oracle, so a wrong guess is refused.
+            for cand in $(git log --format='%H' -n 50 "origin/$TARGET_BRANCH" 2>/dev/null); do
+                git log --format='%s' -n 1 "$cand" 2>/dev/null | grep -qiF "$TICKET_ID" || continue
+                if landing_holds "$cand"; then LANDED_SHA="$cand"; break; fi
+            done
+            [ -n "$LANDED_SHA" ] || stop2 "--already-merged: no commit in the last 50 on origin/$TARGET_BRANCH both names $TICKET_ID and carries '$BRANCH''s content. Pass --merged-as <sha> — find it with: git log origin/$TARGET_BRANCH --oneline | grep -i $TICKET_ID"
+        fi
+        echo "'$BRANCH''s work is on origin/$TARGET_BRANCH at $(git rev-parse --short "$LANDED_SHA") — $(printf '%s\n' "$BRANCH_PATHS" | wc -l | tr -d ' ') path(s) verified identical."
+    fi
 fi
 
 # Resolve the ticket against $TARGET_BRANCH's content via `git show`, not the
@@ -558,7 +638,11 @@ else
 fi
 
 echo "Plan:"
-echo "  0. integration worktree: '$LAND_WORKTREE' ($LAND_STATE_DESC)"
+if [ "$ALREADY_MERGED" = 1 ]; then
+    echo "  0. --already-merged: no integration worktree, no merge, no lint, no push. '$BRANCH''s work is already on origin/$TARGET_BRANCH at $(git rev-parse --short "$LANDED_SHA")."
+else
+    echo "  0. integration worktree: '$LAND_WORKTREE' ($LAND_STATE_DESC)"
+fi
 if [ "$TRACKER" = file ]; then
     if [ "$TICKET_STAGE" = in-progress ]; then
         echo "  1a. git mv $ISSUES_DIR/in-progress/$TICKET_ID.md -> $ISSUES_DIR/awaiting-deployment/ (updated bumped), commit — unless '$BRANCH' already moved it"
@@ -570,11 +654,16 @@ elif [ -n "$JIRA_AWAIT_TID" ]; then
 else
     echo "  1a. issue $TICKET_ID is '$JIRA_STATUS_NOW' — no Awaiting Deployment move"
 fi
-echo "  1. merge '$BRANCH' into '$TARGET_BRANCH' (--no-ff), inside the integration worktree"
-if [ -n "$LINT_CMD" ] || [ -x ./scripts/lint.sh ]; then
-    echo "  2. ${LINT_CMD:-./scripts/lint.sh} on the merged tree"
+if [ "$ALREADY_MERGED" = 1 ]; then
+    echo "  1. (--already-merged) nothing merged — $(git rev-parse --short "$LANDED_SHA") already carries it"
+    echo "  2. (--already-merged) no lint — this tree was not merged here"
 else
-    echo "  2. (no lint command configured or found — skipped)"
+    echo "  1. merge '$BRANCH' into '$TARGET_BRANCH' (--no-ff), inside the integration worktree"
+    if [ -n "$LINT_CMD" ] || [ -x ./scripts/lint.sh ]; then
+        echo "  2. ${LINT_CMD:-./scripts/lint.sh} on the merged tree"
+    else
+        echo "  2. (no lint command configured or found — skipped)"
+    fi
 fi
 if [ "$TRACKER" = file ]; then
     if [ "$NO_COMPLETE" = 1 ]; then
@@ -598,7 +687,13 @@ else
         echo "  3. (after the push) POST the transition into status id $JIRA_DONE_STATUS on $TICKET_ID (resolved from its live transitions once Awaiting Deployment, before the merge), read back to confirm, POST outcome as a comment"
     fi
 fi
-echo "  4. git push origin HEAD:$TARGET_BRANCH (from the integration worktree; '$MAIN_WORKTREE' is not fast-forwarded automatically)"
+if [ "$ALREADY_MERGED" = 1 ]; then
+    echo "  4. (--already-merged) nothing pushed"
+else
+    echo "  4. git push origin HEAD:$TARGET_BRANCH (from the integration worktree; '$MAIN_WORKTREE' is not fast-forwarded automatically)"
+fi
+PLAN_BRANCH_DEL=-d
+[ "$ALREADY_MERGED" != 1 ] || PLAN_BRANCH_DEL=-D
 WT_PLAN=" git worktree remove $BRANCH_WT, then"
 [ -n "$BRANCH_WT" ] && [ "$BRANCH_WT" != "$MAIN_WORKTREE" ] || WT_PLAN=""
 if [ "${HERDR_ENV:-}" = "1" ]; then
@@ -607,9 +702,9 @@ if [ "${HERDR_ENV:-}" = "1" ]; then
     else
         echo "  5. (HERDR_ENV=1) no hand-off file found for '$BRANCH' — no closing state is written and nobody is notified"
     fi
-    echo "  6. remove the herdr worktree workspace for branch '$BRANCH' (HERDR_ENV=1), then$WT_PLAN git branch -d '$BRANCH'"
+    echo "  6. remove the herdr worktree workspace for branch '$BRANCH' (HERDR_ENV=1), then$WT_PLAN git branch $PLAN_BRANCH_DEL '$BRANCH'"
 else
-    echo "  5.$WT_PLAN git branch -d '$BRANCH' (HERDR_ENV not set — no herdr workspace is touched)"
+    echo "  5.$WT_PLAN git branch $PLAN_BRANCH_DEL '$BRANCH' (HERDR_ENV not set — no herdr workspace is touched)"
 fi
 
 if [ "$DRY_RUN" = 1 ]; then
@@ -620,6 +715,15 @@ fi
 
 # Everything from here through the push runs inside $LAND_WORKTREE, never in
 # $INVOKING_REPO — see the header's INTEGRATION WORKTREE section.
+
+if [ "$ALREADY_MERGED" = 1 ]; then
+    # No merge, no push, so no integration worktree and no lock: the rest of
+    # this run only reads the worker's worktree and talks to the tracker.
+    echo
+    echo "--already-merged: skipping the integration worktree, the merge, the lint and the push."
+    REPO="$MAIN_WORKTREE"
+    cd "$REPO"
+else
 
 echo
 echo "Acquiring the integration worktree lock..."
@@ -676,6 +780,8 @@ git -C "$LAND_WORKTREE" clean -fd >/dev/null 2>&1 \
 
 REPO="$LAND_WORKTREE"
 cd "$REPO"
+
+fi
 
 # Before the merge — see the header's LIFECYCLE section. Nothing is merged
 # yet, so no stop here needs a reset.
@@ -738,6 +844,8 @@ $AWAIT_LEFTOVER"
 fi
 
 
+if [ "$ALREADY_MERGED" != 1 ]; then
+
 echo
 echo "Merging '$BRANCH' into '$TARGET_BRANCH'..."
 MERGE_OUTPUT=""
@@ -762,12 +870,20 @@ fi
 $STILL_UNMERGED"
 echo "merged clean."
 
+fi
+
 if [ "$CLOSING" = 1 ]; then
-    MERGE_SHA=$(git rev-parse HEAD)
+    if [ "$ALREADY_MERGED" = 1 ]; then
+        MERGE_SHA="$LANDED_SHA"
+        LANDED_HOW="already on $TARGET_BRANCH at"
+    else
+        MERGE_SHA=$(git rev-parse HEAD)
+        LANDED_HOW="merge commit"
+    fi
     CLOSING_MARK="closing-state:$TICKET_ID:${MERGE_SHA}"
     closing_field() { local v; v=$(handoff_section "$1"); printf '%s' "${v:-none reported by the worker}"; }
     CLOSING_TEXT="Closing state ($CLOSING_MARK)
-Landed: yes, merge commit $MERGE_SHA onto $TARGET_BRANCH
+Landed: yes, $LANDED_HOW $MERGE_SHA onto $TARGET_BRANCH
 Branch condition: $BRANCH_CONDITION
 Executor: ${EXECUTOR:-unknown}
 Human run list:
@@ -821,8 +937,12 @@ fi
 
 
 EFFECTIVE_LINT="$LINT_CMD"
-[ -n "$EFFECTIVE_LINT" ] || { [ -x ./scripts/lint.sh ] && EFFECTIVE_LINT=./scripts/lint.sh; }
-if [ -n "$EFFECTIVE_LINT" ]; then
+[ "$ALREADY_MERGED" != 1 ] || EFFECTIVE_LINT=""
+[ -n "$EFFECTIVE_LINT" ] || [ "$ALREADY_MERGED" = 1 ] \
+    || { [ -x ./scripts/lint.sh ] && EFFECTIVE_LINT=./scripts/lint.sh; }
+if [ "$ALREADY_MERGED" = 1 ]; then
+    echo "--already-merged: not linting — this tree was not merged here, and whatever landed already passed the PR's checks."
+elif [ -n "$EFFECTIVE_LINT" ]; then
     echo "Running $EFFECTIVE_LINT on the merged tree..."
     if ! $EFFECTIVE_LINT; then
         echo "lint failed on the merged tree — reverting the merge." >&2
@@ -966,7 +1086,9 @@ fi
 
 
 REMOTES=$(git remote 2>/dev/null) || REMOTES=""
-if [ -n "$REMOTES" ]; then
+if [ "$ALREADY_MERGED" = 1 ]; then
+    echo "--already-merged: nothing to push — $TARGET_BRANCH already carries this work at $(git rev-parse --short "$LANDED_SHA")."
+elif [ -n "$REMOTES" ]; then
     echo "Pushing (integration worktree HEAD is detached — explicit refspec)..."
     # The integration worktree is always detached (see header), so a bare
     # `git push` has no branch to infer and fails outright.
@@ -1136,7 +1258,12 @@ if [ -n "$BRANCH_WT" ] && [ "$BRANCH_WT" != "$MAIN_WORKTREE" ] && [ -e "$BRANCH_
     esac
 fi
 
-if git branch -d "$BRANCH" >/dev/null 2>&1; then
+# -D under --already-merged: git will not see a squash-merged branch as
+# merged, and the content check above already proved it landed, which is
+# exactly the evidence -d wants and cannot compute for itself.
+BRANCH_DEL=-d
+[ "$ALREADY_MERGED" != 1 ] || BRANCH_DEL=-D
+if git branch "$BRANCH_DEL" "$BRANCH" >/dev/null 2>&1; then
     echo "deleted local branch '$BRANCH'."
 else
     warn "could not delete local branch '$BRANCH' — left in place"
