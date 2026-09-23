@@ -971,6 +971,44 @@ else
     ok "testJM5: --already-merged writes the worker's closing state, reads it back, and marks it with the landing commit"
 fi
 
+# ---- testJM6: the narration must not describe steps this mode skips. Asserted
+# as ABSENCES: greping only for the replacement would pass while the old phrase
+# survived on the other transition's code path.
+
+fresh_jira_repo jm6 3 10009 >/dev/null
+land_squash jm6
+run_already jm6 --no-complete --note "awaiting only"
+RC_NOCOMPLETE=$RC
+fresh_jira_repo jm6b 3 10009 >/dev/null
+land_squash jm6b
+run_already jm6b --jira-done-status 10014
+RC_COMPLETE=$RC
+# The merging path is the counterweight: there the phrases are true, and they
+# are what tells a reader what is committed if the run stops.
+fresh_jira_repo jm6c 3 10009 >/dev/null
+run_land jm6c --jira-done-status 10014
+
+if [ "$RC_NOCOMPLETE" -ne 0 ] || [ "$RC_COMPLETE" -ne 0 ] || [ "$RC" -ne 0 ]; then
+    bad "testJM6 setup: a run exited non-zero (nocomplete=$RC_NOCOMPLETE complete=$RC_COMPLETE merging=$RC)"
+elif grep -q "before the merge" "$WORK/jm6.out"; then
+    bad "testJM6: --already-merged still says 'before the merge':
+$(grep -n 'before the merge' "$WORK/jm6.out")"
+elif grep -q "after the push" "$WORK/jm6b.out"; then
+    bad "testJM6: --already-merged still says 'after the push':
+$(grep -n 'after the push' "$WORK/jm6b.out")"
+elif ! grep -q "against the landing already on main" "$WORK/jm6.out"; then
+    bad "testJM6: the Awaiting Deployment line does not say the landing is already on main:
+$(tail -6 "$WORK/jm6.out")"
+elif ! grep -q "against the landing already on main" "$WORK/jm6b.out"; then
+    bad "testJM6: the Completed line does not say the landing is already on main:
+$(tail -6 "$WORK/jm6b.out")"
+elif ! grep -q "before the merge" "$WORK/jm6c.out" || ! grep -q "after the push" "$WORK/jm6c.out"; then
+    bad "testJM6: a NORMAL landing lost the phrases, which are true there and say what is committed:
+$(tail -6 "$WORK/jm6c.out")"
+else
+    ok "testJM6: --already-merged narrates neither 'before the merge' nor 'after the push', and a normal landing still says both"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]

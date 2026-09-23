@@ -183,6 +183,10 @@ ALREADY_MERGED=0
 MERGED_AS=""
 LANDED_SHA=""
 LANDED_HOW="merge commit"
+# What the transition narration says about where the landing stands. The
+# phrase tells a reader what is committed if the run stops here.
+WHEN_BEFORE="before the merge"
+WHEN_AFTER="after the push"
 POSITIONAL=""
 
 while [ $# -gt 0 ]; do
@@ -336,6 +340,8 @@ fi
 # of the target while a --no-ff merged one is, and each shape admits only one
 # of them: ancestry where it holds, content everywhere else.
 if [ "$ALREADY_MERGED" = 1 ]; then
+    WHEN_BEFORE="against the landing already on $TARGET_BRANCH"
+    WHEN_AFTER="against the landing already on $TARGET_BRANCH"
     git rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null 2>&1 \
         || stop2 "--already-merged: no local branch '$BRANCH' — its content is what this mode checks against the target, so the branch must still exist"
     echo "Fetching origin to check '$BRANCH' against '$TARGET_BRANCH'..."
@@ -682,9 +688,9 @@ else
         [ "$NOTE_GIVEN" = 1 ] && echo "  3. (--no-complete) POST the note as a comment on $TICKET_ID — issue stays '$JIRA_STATUS_NOW'" \
             || echo "  3. (--no-complete) issue $TICKET_ID left in status '$JIRA_STATUS_NOW' — NOT completed"
     elif [ "$ALREADY_DONE" = 1 ]; then
-        echo "  3. (after the push) issue $TICKET_ID is already '$JIRA_STATUS_NOW' — no transition needed; POST the outcome as a comment"
+        echo "  3. ($WHEN_AFTER) issue $TICKET_ID is already '$JIRA_STATUS_NOW' — no transition needed; POST the outcome as a comment"
     else
-        echo "  3. (after the push) POST the transition into status id $JIRA_DONE_STATUS on $TICKET_ID (resolved from its live transitions once Awaiting Deployment, before the merge), read back to confirm, POST outcome as a comment"
+        echo "  3. ($WHEN_AFTER) POST the transition into status id $JIRA_DONE_STATUS on $TICKET_ID (resolved from its live transitions once Awaiting Deployment, $WHEN_BEFORE), read back to confirm, POST outcome as a comment"
     fi
 fi
 if [ "$ALREADY_MERGED" = 1 ]; then
@@ -789,7 +795,7 @@ fi
 if [ "$TRACKER" = jira ]; then
     if [ -n "$JIRA_AWAIT_TID" ]; then
         echo
-        echo "Transitioning $TICKET_ID ('$JIRA_STATUS_NOW' -> '$JIRA_AWAIT_TO') before the merge..."
+        echo "Transitioning $TICKET_ID ('$JIRA_STATUS_NOW' -> '$JIRA_AWAIT_TO') $WHEN_BEFORE..."
         if ! jira_move "$JIRA_AWAIT_TID" "$JIRA_AWAITING_STATUS"; then
             release_land_lock
             die "$MOVE_MSG — nothing merged, nothing pushed"
@@ -1115,7 +1121,7 @@ if [ "$TRACKER" = jira ] && [ "$NO_COMPLETE" != 1 ]; then
     if [ "$ALREADY_DONE" = 1 ]; then
         echo "issue $TICKET_ID is already '$JIRA_STATUS_NOW' — nothing to transition."
     else
-        echo "Transitioning $TICKET_ID ('$JIRA_STATUS_NOW' -> '$JIRA_DONE_TO') after the push..."
+        echo "Transitioning $TICKET_ID ('$JIRA_STATUS_NOW' -> '$JIRA_DONE_TO') $WHEN_AFTER..."
         if jira_move "$JIRA_DONE_TID" "$JIRA_DONE_STATUS"; then
             AFTER_NAME="$MOVE_AFTER_NAME"
             echo "transitioned; read-back confirms '$AFTER_NAME'."
