@@ -1,0 +1,6 @@
+preflight — 3 startable ticket(s), landing=parallel
+  COLLISION  docs/decisions.md  via appends — PF-101, PF-102, PF-103
+
+  waves: 1 under serial landing, 3 under parallel
+
+1 shared file(s), 1 collision(s) under parallel landing

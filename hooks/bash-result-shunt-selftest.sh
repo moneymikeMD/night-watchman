@@ -138,6 +138,15 @@ assert_rc "'issues.py board issues/' (this plugin's real invocation) is never ga
 OUT="$(run_hook Bash "python3 /plugins/work-order/1.3.0/reference/issues.py waves issues/" "sess-issues-waves")"
 assert_rc "'issues.py waves issues/' is never gated" "0" "$OUT"
 
+# NWM-174: waves/preflight moved to this plugin's own scripts/waves.py, same
+# unfiltered-output shape as issues.py waves/board — confirms no detector
+# keys on the literal filename "issues.py" in a way this rename would break.
+OUT="$(run_hook Bash "python3 scripts/waves.py waves issues/" "sess-waves-py-waves")"
+assert_rc "'waves.py waves issues/' is never gated" "0" "$OUT"
+
+OUT="$(run_hook Bash "python3 scripts/waves.py preflight issues/ --landing parallel" "sess-waves-py-preflight")"
+assert_rc "'waves.py preflight issues/' is never gated" "0" "$OUT"
+
 # Group 4 is what the discriminating mutant (see the header) flips to rc=2.
 
 OUT="$(run_hook Bash "git log --oneline -20" "sess-gitlog-capped-1")"

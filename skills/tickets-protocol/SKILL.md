@@ -163,12 +163,14 @@ the ticket body.
 ## Tooling
 
 ```bash
-# issues.py ships in the work-order plugin this one depends on:
+# issues.py ships in the work-order plugin this one depends on; waves/preflight
+# are this plugin's own (owner decision 2026-09-23, NWM-174) — see
+# scripts/waves.py, called through ${CLAUDE_PLUGIN_ROOT}, not through ISSUES_PY.
 ISSUES_PY="$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)"
 
 python3 "$ISSUES_PY" lint  issues/   # file mode
 python3 "$ISSUES_PY" board issues/
-python3 "$ISSUES_PY" waves issues/
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/waves.py" waves issues/
 python3 "$ISSUES_PY" next  issues/
 
 # tracker mode, once adopted:

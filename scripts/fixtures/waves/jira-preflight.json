@@ -1,0 +1,65 @@
+{
+  "issues": [
+    {
+      "key": "PF-101",
+      "fields": {
+        "summary": "rename-the-exporter, and a line in the shared decision log",
+        "status": {"name": "Open"},
+        "labels": [],
+        "issuelinks": [],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {"name": "Task"},
+        "description": "",
+        "customfield_10043": "reference/a.py",
+        "customfield_10044": "test -f reference/a.py",
+        "customfield_10045": "",
+        "customfield_10046": "docs/decisions.md",
+        "customfield_10047": "agent",
+        "customfield_10048": null
+      }
+    },
+    {
+      "key": "PF-102",
+      "fields": {
+        "summary": "widen-the-parser, and a line in the shared decision log",
+        "status": {"name": "Open"},
+        "labels": [],
+        "issuelinks": [],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {"name": "Task"},
+        "description": "",
+        "customfield_10043": "reference/b.py",
+        "customfield_10044": "test -f reference/b.py",
+        "customfield_10045": "",
+        "customfield_10046": "docs/decisions.md",
+        "customfield_10047": "agent",
+        "customfield_10048": null
+      }
+    },
+    {
+      "key": "PF-103",
+      "fields": {
+        "summary": "drop-the-legacy-flag, and a line in the shared decision log",
+        "status": {"name": "Open"},
+        "labels": [],
+        "issuelinks": [],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {"name": "Task"},
+        "description": "",
+        "customfield_10043": "reference/c.py",
+        "customfield_10044": "test -f reference/c.py",
+        "customfield_10045": "",
+        "customfield_10046": "docs/decisions.md",
+        "customfield_10047": "agent",
+        "customfield_10048": null
+      }
+    }
+  ],
+  "isLast": true
+}

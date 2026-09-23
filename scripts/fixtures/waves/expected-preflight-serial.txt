@@ -1,0 +1,6 @@
+preflight — 3 startable ticket(s), landing=serial
+  warn       docs/decisions.md  via appends — PF-001, PF-002, PF-003
+
+  waves: 1 under serial landing, 3 under parallel
+
+1 shared file(s), 0 collision(s) under serial landing
