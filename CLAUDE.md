@@ -197,6 +197,17 @@ change to `hooks/`, `providers/`, or anything reached through
 `--uninstall` puts it back. `claude plugin update` will not refresh it — at
 an unchanged version it is a no-op that reports success.
 
+## kit.sh's cleanup contract is linted, not remembered
+
+`kit.sh` removes a script's tempfiles from an `EXIT` trap, and a consumer
+disables that in exactly two ways: a bare `exec`, which replaces the process
+image so no trap runs (NWM-171), and a raw `trap ... EXIT` after sourcing it,
+which replaces kit's handler rather than adding to it (LAB-104). Twelve hand
+edits across NWM-155 and NWM-171 fixed both; `scripts/kit-consumer-lint.sh`
+in CI is what stops a thirteenth being needed. Use `kit_exec` and
+`kit_on_exit`, or exempt one line with `# kit-lint: allow-exec <reason>` —
+the reason is required.
+
 ## Selftests are the house standard
 
 Every operator script under `scripts/` and `providers/*/*/` is paired with
@@ -239,6 +250,7 @@ scripts/work-order-root.sh --issues-py                # resolve the work-order d
 scripts/ai-toolkit-root.sh --known-issue              # resolve the ai-toolkit dependency
 scripts/land-branch-selftest.sh [old-land-branch.sh] [issues.py]
 "$(scripts/ai-toolkit-root.sh --known-issue)" --root . add|reindex|resolve <slug>
+scripts/kit-consumer-lint.sh                          # kit.sh's cleanup contract
 scripts/gen-reference-docs.sh --check                 # CI's drift check
 scripts/gen-reference-docs.sh                         # regenerate after editing a source
 find hooks providers scripts -name '*.sh' -not -path 'scripts/fixtures/*' \
