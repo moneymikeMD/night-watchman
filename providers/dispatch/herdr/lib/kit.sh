@@ -104,3 +104,11 @@ tmpfile() {
     printf '%s\n' "$f" >> "$_KIT_TMPREG"
     printf '%s\n' "$f"
 }
+
+# kit_exec CMD... — clean up, then exec CMD. Use this rather than a bare exec:
+# exec replaces the process image, so no EXIT trap runs and every tempfile and
+# the registry itself would be left behind (NWM-171).
+kit_exec() {
+    _kit_cleanup
+    exec "$@"
+}
