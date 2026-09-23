@@ -50,6 +50,7 @@ jobs:
           test -f "$RUNNER_TEMP/ai-toolkit/scripts/known-issue.sh"
           test -f "$RUNNER_TEMP/ai-toolkit/scripts/script-analytics.py"
           test -f "$RUNNER_TEMP/ai-toolkit/scripts/script-retire.sh"
+          test -f "$RUNNER_TEMP/ai-toolkit/scripts/land-core.sh"
           echo "AI_TOOLKIT_ROOT=$RUNNER_TEMP/ai-toolkit" >> "$GITHUB_ENV"
 
       - name: the ai-toolkit dependency resolves
@@ -58,6 +59,7 @@ jobs:
           scripts/ai-toolkit-root.sh --known-issue
           scripts/ai-toolkit-root.sh --script-analytics
           scripts/ai-toolkit-root.sh --script-retire
+          scripts/ai-toolkit-root.sh --land-core
 
       - name: shellcheck
         run: |

@@ -3,11 +3,12 @@
 # ai-toolkit-root.sh — print the root of the ai-toolkit checkout this repo
 # consumes operator scripts from, so nothing here needs a second copy of one.
 #
-# Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire]
+# Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core]
 #   Prints the directory holding ai-toolkit's scripts/. With a flag, prints
 #   that script's path inside it instead. Each flag names a script this repo
 #   donated and now consumes: known-issue.sh (NWM-128), script-analytics.py
-#   and script-retire.sh (NWM-130).
+#   and script-retire.sh (NWM-130), and land-core.sh, the merge-and-push
+#   core land-branch.sh wraps (NWM-131).
 #
 #   ai-toolkit is not a Claude Code plugin, so there is no plugin-list entry
 #   to key on the way work-order-root.sh does. Its scripts/ is the UNPINNED
@@ -35,9 +36,10 @@ case "${1:-}" in
     --known-issue)      WANT="scripts/known-issue.sh"; shift ;;
     --script-analytics) WANT="scripts/script-analytics.py"; shift ;;
     --script-retire)    WANT="scripts/script-retire.sh"; shift ;;
+    --land-core)        WANT="scripts/land-core.sh"; shift ;;
     --*)                die "unknown flag: $1 (see --help)" ;;
 esac
-[ $# -eq 0 ] || die "usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire] (got $# extra arguments)"
+[ $# -eq 0 ] || die "usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core] (got $# extra arguments)"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MARKER="scripts/known-issue.sh"

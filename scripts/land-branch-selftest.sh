@@ -28,6 +28,12 @@ KIT="$HERE/lib/kit.sh"
 [ -r "$LAND_BRANCH" ] || { echo "cannot read $LAND_BRANCH" >&2; exit 2; }
 [ -r "$ISSUES_PY" ] || { echo "cannot read $ISSUES_PY" >&2; exit 2; }
 [ -r "$KIT" ] || { echo "cannot read $KIT" >&2; exit 2; }
+# land-branch.sh drives ai-toolkit's land-core.sh; each fixture gets this
+# repo's resolver, pointed at the checkout it resolves here.
+AI_TOOLKIT_ROOT="$("$HERE/ai-toolkit-root.sh")" || { echo "cannot resolve ai-toolkit (set AI_TOOLKIT_ROOT)" >&2; exit 2; }
+export AI_TOOLKIT_ROOT
+"$HERE/ai-toolkit-root.sh" --land-core >/dev/null || { echo "ai-toolkit at $AI_TOOLKIT_ROOT has no scripts/land-core.sh" >&2; exit 2; }
+unset LAND_CORE_LINT_CMD LAND_CORE_HOOK LAND_CORE_TARGET_BRANCH
 
 unset HERDR_ENV HERDR_PANE_ID LAND_BRANCH_ORCHESTRATOR_PANE LAND_BRANCH_HANDOFF_FILE
 
@@ -78,6 +84,7 @@ fresh_repo() {
         git remote add origin "$d.git"
         cp "$LAND_BRANCH" scripts/land-branch.sh
         cp "$KIT" scripts/lib/kit.sh
+        cp "$HERE/ai-toolkit-root.sh" scripts/ai-toolkit-root.sh
         cp "$HERE/land-ack.sh" scripts/land-ack.sh
         cp "$ISSUES_PY" vendor/work-order/reference/issues.py
         chmod +x scripts/land-branch.sh
@@ -133,8 +140,6 @@ verify: |
 selftest fixture with no outcome:/updated: fields.
 '
 
-export LAND_BRANCH_COAUTHOR="Test <test@example.invalid>"
-export LAND_BRANCH_SESSION="https://example.invalid/session"
 
 valid_yaml_frontmatter() {
     # $1: ticket file. Exits 0 if the frontmatter block parses as YAML.
@@ -430,6 +435,7 @@ worker_moved_repo() {
         git remote add origin "$d.git"
         cp "$LAND_BRANCH" scripts/land-branch.sh
         cp "$KIT" scripts/lib/kit.sh
+        cp "$HERE/ai-toolkit-root.sh" scripts/ai-toolkit-root.sh
         cp "$ISSUES_PY" vendor/work-order/reference/issues.py
         chmod +x scripts/land-branch.sh
         printf '%s' "$2" > issues/in-progress/PROJ-1.md
@@ -718,75 +724,34 @@ else
     ok "test16: a ticket larger than the pipe buffer lands and completes (no SIGPIPE false assertion)"
 fi
 
-# ---- test 17: LAND_BRANCH_COAUTHOR / LAND_BRANCH_SESSION are optional.
-# Unset means no trailer for that var, not a refusal, and landing succeeds.
+# ---- test 17 (NWM-131, decision 4): the trailer env vars are gone. With
+# both exported, no commit the landing pushes carries either trailer, and
+# neither name survives anywhere in land-branch.sh. RED against a pre-NWM-131
+# revision, which honoured both.
 
 REPO=$(fresh_repo t17 "$TICKET_OK")
 set +e
-(cd "$REPO" && env -u LAND_BRANCH_COAUTHOR -u LAND_BRANCH_SESSION ./scripts/land-branch.sh work PROJ-1) >"$WORK/t17.out" 2>&1
+(cd "$REPO" && LAND_BRANCH_COAUTHOR="Test <test@example.invalid>" \
+    LAND_BRANCH_SESSION="https://example.invalid/session" \
+    ./scripts/land-branch.sh work PROJ-1) >"$WORK/t17.out" 2>&1
 RC=$?
 set -e
 BARE=$(land_bare_of "$REPO")
-COMMIT_MSG=$(git -C "$BARE" log -1 --format=%B main 2>/dev/null) || COMMIT_MSG=""
+PUSHED_MSGS=$(git -C "$BARE" log --format=%B main 2>/dev/null) || PUSHED_MSGS=""
 if [ "$RC" -ne 0 ]; then
-    bad "test17 (both trailer vars unset): land-branch.sh exited $RC — should have landed with no trailers:
+    bad "test17 (trailer vars set): land-branch.sh exited $RC:
 $(tail -5 "$WORK/t17.out")"
-elif [ -z "$COMMIT_MSG" ]; then
-    # An absence check against an empty string passes vacuously; a failed
-    # log lookup must not read as "no trailer" (script-reviewer finding).
-    bad "test17: could not read the completion commit message from $BARE (main) — absence check would be vacuous"
-elif printf '%s' "$COMMIT_MSG" | grep -q "Co-Authored-By:\|Claude-Session:"; then
-    bad "test17: completion commit carries a trailer even though both vars were unset:
-$COMMIT_MSG"
+elif ! printf '%s' "$PUSHED_MSGS" | grep -q "PROJ-1: complete"; then
+    # An absence check against a history without the landing is vacuous.
+    bad "test17: the pushed history has no completion commit — absence check would be vacuous"
+elif printf '%s' "$PUSHED_MSGS" | grep -q "Co-Authored-By:\|Claude-Session:"; then
+    bad "test17: a pushed commit carries a trailer from the removed env vars:
+$PUSHED_MSGS"
+elif grep -q "LAND_BRANCH_COAUTHOR\|LAND_BRANCH_SESSION\|Co-Authored-By\|Claude-Session" "$LAND_BRANCH"; then
+    bad "test17: land-branch.sh still names a trailer variable:
+$(grep -n "LAND_BRANCH_COAUTHOR\|LAND_BRANCH_SESSION\|Co-Authored-By\|Claude-Session" "$LAND_BRANCH")"
 else
-    ok "test17: both trailer vars unset — landing succeeds, completion commit carries no trailer"
-fi
-
-# ---- test 18: both vars set (the selftest's default exports)
-# still produce BOTH trailers, byte-for-byte the pre-change shape. Spec
-# review found no assertion had ever checked trailer PRESENCE.
-
-REPO=$(fresh_repo t18 "$TICKET_OK")
-set +e
-(cd "$REPO" && ./scripts/land-branch.sh work PROJ-1) >"$WORK/t18.out" 2>&1
-RC=$?
-set -e
-BARE=$(land_bare_of "$REPO")
-COMMIT_MSG=$(git -C "$BARE" log -1 --format=%B main 2>/dev/null) || COMMIT_MSG=""
-if [ "$RC" -ne 0 ]; then
-    bad "test18 (both trailer vars set): land-branch.sh exited $RC:
-$(tail -5 "$WORK/t18.out")"
-elif ! printf '%s' "$COMMIT_MSG" | grep -q "^Co-Authored-By: $LAND_BRANCH_COAUTHOR\$"; then
-    bad "test18: completion commit is missing the Co-Authored-By trailer although LAND_BRANCH_COAUTHOR is set:
-$COMMIT_MSG"
-elif ! printf '%s' "$COMMIT_MSG" | grep -q "^Claude-Session: $LAND_BRANCH_SESSION\$"; then
-    bad "test18: completion commit is missing the Claude-Session trailer although LAND_BRANCH_SESSION is set:
-$COMMIT_MSG"
-else
-    ok "test18: both trailer vars set — completion commit carries both trailers as before"
-fi
-
-# ---- test 19: only ONE var set -> only that trailer, no refusal.
-# Guards against a regression to the old all-or-nothing check.
-
-REPO=$(fresh_repo t19 "$TICKET_OK")
-set +e
-(cd "$REPO" && env -u LAND_BRANCH_SESSION ./scripts/land-branch.sh work PROJ-1) >"$WORK/t19.out" 2>&1
-RC=$?
-set -e
-BARE=$(land_bare_of "$REPO")
-COMMIT_MSG=$(git -C "$BARE" log -1 --format=%B main 2>/dev/null) || COMMIT_MSG=""
-if [ "$RC" -ne 0 ]; then
-    bad "test19 (only LAND_BRANCH_COAUTHOR set): land-branch.sh exited $RC — should have landed with one trailer:
-$(tail -5 "$WORK/t19.out")"
-elif ! printf '%s' "$COMMIT_MSG" | grep -q "^Co-Authored-By: $LAND_BRANCH_COAUTHOR\$"; then
-    bad "test19: completion commit is missing the Co-Authored-By trailer although LAND_BRANCH_COAUTHOR is set:
-$COMMIT_MSG"
-elif printf '%s' "$COMMIT_MSG" | grep -q "Claude-Session:"; then
-    bad "test19: completion commit carries a Claude-Session trailer although LAND_BRANCH_SESSION was unset:
-$COMMIT_MSG"
-else
-    ok "test19: only LAND_BRANCH_COAUTHOR set — landing succeeds, exactly that one trailer appears"
+    ok "test17: the trailer env vars are ignored and gone from land-branch.sh — no pushed commit carries a trailer"
 fi
 
 # ---- HERDR_ENV cleanup: exit the worker's Claude session before removing its
@@ -1267,6 +1232,66 @@ elif ! grep -q "scratch.txt" "$WORK/t34b.out"; then
 $(tail -5 "$WORK/t34b.out")"
 else
     ok "test34: the exemption is exactly one path — a tracked edit and a sibling file both still refuse"
+fi
+
+# ---- NWM-131 test 35: a push that fails AFTER the merge leaves the merge and
+# the ticket's completion commit in the integration worktree and exits 1 —
+# never reverted. The push URL names a missing path: fetch works, push cannot.
+
+REPO=$(fresh_repo t35 "$TICKET_OK")
+BARE=$(land_bare_of "$REPO")
+BEFORE=$(git -C "$BARE" rev-parse main)
+git -C "$REPO" config remote.origin.pushurl "$WORK/t35-nowhere.git"
+set +e
+(cd "$REPO" && ./scripts/land-branch.sh work PROJ-1) >"$WORK/t35.out" 2>&1
+RC=$?
+set -e
+LAND_SUBJECTS=$(git -C "$REPO-land" log --first-parent --reverse --format=%s 2>/dev/null | tr '\n' '|') || LAND_SUBJECTS=""
+WANT="init|PROJ-1: awaiting deployment|PROJ-1: merge branch 'work' into main|PROJ-1: complete|"
+if [ "$RC" -ne 1 ]; then
+    bad "test35 (push fails): exit $RC, expected 1:
+$(tail -8 "$WORK/t35.out")"
+elif [ "$(git -C "$BARE" rev-parse main)" != "$BEFORE" ]; then
+    bad "test35: origin/main moved although the push failed"
+elif [ "$LAND_SUBJECTS" != "$WANT" ]; then
+    bad "test35: the integration worktree reads '$LAND_SUBJECTS', expected '$WANT' — the landing was reverted:
+$(tail -8 "$WORK/t35.out")"
+elif ! git -C "$REPO" rev-parse --verify --quiet refs/heads/work >/dev/null; then
+    bad "test35: branch 'work' was deleted although nothing was pushed"
+elif ! grep -q "push failed" "$WORK/t35.out"; then
+    bad "test35: the stop message does not name the failed push:
+$(tail -5 "$WORK/t35.out")"
+else
+    ok "test35: a failed push keeps the merge and the completion commit locally, exits 1, and keeps the branch"
+fi
+
+# ---- NWM-131 test 36: the wrapper does not merge or push by itself — both
+# are land-core.sh's — and with no ai-toolkit to resolve it stops with exit 2
+# before anything is mutated: no integration worktree, origin untouched.
+
+REPO=$(fresh_repo t36 "$TICKET_OK")
+BARE=$(land_bare_of "$REPO")
+BEFORE=$(git -C "$BARE" rev-parse main)
+mkdir -p "$WORK/t36-not-ai-toolkit"
+set +e
+(cd "$REPO" && AI_TOOLKIT_ROOT="$WORK/t36-not-ai-toolkit" ./scripts/land-branch.sh work PROJ-1) >"$WORK/t36.out" 2>&1
+RC=$?
+set -e
+if grep -nE 'git (-C [^ ]+ )?(merge --no-ff|push origin)' "$LAND_BRANCH" | grep -v 'echo "' >"$WORK/t36.grep"; then
+    bad "test36: land-branch.sh still merges or pushes by itself:
+$(cat "$WORK/t36.grep")"
+elif ! grep -q 'ai-toolkit-root.sh" --land-core' "$LAND_BRANCH"; then
+    bad "test36: land-branch.sh does not resolve its core through ai-toolkit-root.sh --land-core"
+elif [ "$RC" -ne 2 ]; then
+    bad "test36 (no ai-toolkit): exit $RC, expected 2:
+$(tail -5 "$WORK/t36.out")"
+elif [ -e "$REPO-land" ] || [ "$(git -C "$BARE" rev-parse main)" != "$BEFORE" ]; then
+    bad "test36: something was mutated before the missing core was reported"
+elif ! grep -q "AI_TOOLKIT_ROOT" "$WORK/t36.out"; then
+    bad "test36: the refusal does not say how to point at an ai-toolkit checkout:
+$(tail -5 "$WORK/t36.out")"
+else
+    ok "test36: merge and push are delegated to land-core.sh; without it the landing stops at exit 2, nothing mutated"
 fi
 
 echo
