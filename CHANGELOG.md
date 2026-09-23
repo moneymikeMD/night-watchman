@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [1.5.0](https://github.com/moneymikeMD/night-watchman/compare/v1.4.1...v1.5.0) (2026-09-23)
+
+
+### Features
+
+* --already-merged runs the lifecycle half for a branch merged elsewhere (NWM-169) ([#70](https://github.com/moneymikeMD/night-watchman/issues/70)) ([c385e83](https://github.com/moneymikeMD/night-watchman/commit/c385e83f9e41710314e6b5358de67c89c2cc02a1))
+
+
+### Bug Fixes
+
+* --already-merged no longer narrates a merge and a push it did not do (NWM-170) ([#72](https://github.com/moneymikeMD/night-watchman/issues/72)) ([2ecd1cc](https://github.com/moneymikeMD/night-watchman/commit/2ecd1cc15f40e19516c6ccba86cdb44027cd2ee3))
+
 ## [1.4.1](https://github.com/moneymikeMD/night-watchman/compare/v1.4.0...v1.4.1) (2026-09-22)
 
 
