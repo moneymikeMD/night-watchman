@@ -5,8 +5,7 @@
 # refusal (bad model, human ticket, branch/worktree trap, --dry-run) creates
 # nothing — zero `herdr worktree create` / `herdr agent start` / `herdr agent
 # prompt` calls. A mixed ticket is not a refusal: it dispatches like an
-# agent ticket, but its prompt carries the extra Awaiting-Deployment stop
-# instruction.
+# agent ticket, but its prompt carries the extra MIXED TICKET section.
 #
 # Isolation: a stub `herdr` and a stub `jira-api.sh`-shaped wrapper on PATH,
 # installed fresh per scratch repo. Every jira-api and herdr call in this
@@ -96,6 +95,23 @@ assert_contains() {
             printf '%s\n' "$haystack" | sed 's/^/    /' >&2
             FAIL=1
             ;;
+    esac
+}
+
+# assert_not_contains <desc> <haystack> <needle> — the absence check NWM-168
+# added: asserting only the new heading survives would pass while the old
+# "Awaiting Deployment" claim lingered elsewhere in the same section.
+assert_not_contains() {
+    local desc="$1" haystack="$2" needle="$3"
+    case "$haystack" in
+        *"$needle"*)
+            echo "FAIL: $desc" >&2
+            echo "  did not want to find: $needle" >&2
+            echo "  in:" >&2
+            printf '%s\n' "$haystack" | sed 's/^/    /' >&2
+            FAIL=1
+            ;;
+        *) echo "ok: $desc" ;;
     esac
 }
 
@@ -498,11 +514,12 @@ scenario_human_executor() {
     assert_eq "C0 total herdr calls" "0" "$(wc -l < "$log" | tr -d ' ')"
 }
 
-# C1 — mixed-executor ticket dispatches like an agent ticket (LAB-211): it
-# proceeds (not refused), and the prompt handed to `herdr agent prompt`
-# carries the Awaiting-Deployment stop instruction.
+# C1 — mixed-executor ticket dispatches like an agent ticket (LAB-211).
+# NWM-168: the prompt must not claim a person lands it from Awaiting
+# Deployment; the absence check covers the whole prompt, not just the
+# heading, since the stale string could linger in the body below it.
 scenario_mixed_executor() {
-    local repo log rc
+    local repo log rc prompt
     repo=$(make_repo) || { echo "FAIL: C1 setup (make_repo)" >&2; FAIL=1; return; }
     install_stub_jira "$repo" 10022 "Scratch mixed-executor ticket"
     install_stub_herdr "$repo"
@@ -515,7 +532,11 @@ scenario_mixed_executor() {
     assert_eq "C1 worktree create calls" "1" "$(call_count "$log" "worktree create")"
     assert_eq "C1 agent start calls" "1" "$(call_count "$log" "agent start")"
     assert_eq "C1 agent prompt calls" "1" "$(call_count "$log" "agent prompt")"
-    assert_contains "C1 prompt instructs stopping at Awaiting Deployment" "$(grep '^agent prompt' "$log" || true)" "Awaiting Deployment"
+    prompt="$(grep '^agent prompt' "$log" || true)"
+    assert_contains "C1 prompt carries the mixed-only section" "$prompt" "## MIXED TICKET"
+    assert_contains "C1 it names the Human run list the worker must write" "$prompt" "Human run list"
+    assert_contains "C1 the LAB-211-corrected sentence is still present verbatim" "$prompt" "move this ticket through to Completed the same as any other"
+    assert_not_contains "C1 the section does not claim a person lands it from Awaiting Deployment" "$prompt" "Awaiting Deployment"
 }
 
 # C1b — agent-executor ticket's prompt carries NO Awaiting-Deployment
@@ -632,8 +653,8 @@ scenario_dry_run_no_wait() {
 }
 
 # D3 — LAB-211's own verify clause: a mixed-executor ticket under --dry-run
-# proceeds (exit 0, not refused) and the printed brief instructs the worker
-# to stop at Awaiting Deployment.
+# proceeds (exit 0, not refused) and the printed brief carries the
+# mixed-ticket section, without NWM-168's stale Awaiting-Deployment claim.
 scenario_dry_run_mixed_executor() {
     local repo log out rc
     repo=$(make_repo) || { echo "FAIL: D3 setup (make_repo)" >&2; FAIL=1; return; }
@@ -645,7 +666,8 @@ scenario_dry_run_mixed_executor() {
         run_sut "$repo" PROJ-933 1 --dry-run) && rc=0 || rc=$?
 
     assert_eq "D3 exit code (mixed dry-run proceeds, not refused)" "0" "$rc"
-    assert_contains "D3 printed brief instructs stopping at Awaiting Deployment" "$out" "Awaiting Deployment"
+    assert_contains "D3 printed brief carries the mixed-only section" "$out" "## MIXED TICKET"
+    assert_not_contains "D3 printed brief does not claim Awaiting Deployment" "$out" "Awaiting Deployment"
     assert_contains "D3 states nothing was created" "$out" "Nothing was created"
 }
 
