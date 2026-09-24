@@ -285,6 +285,17 @@ assert_exit "allows 'git stash' mentioned in prose inside a commit message strin
 GOT="$(run_guard "$FAKE_WORKTREE" 'bash -c "git stash"')"
 assert_exit "still blocks bash -c \"git stash\" — a real re-execution context, not prose (finding D)" 2 "$GOT"
 
+GOT="$(run_guard "$FAKE_WORKTREE" 'git commit -m "run git restore somefile after this"')"
+assert_exit "NWM-180: allows 'git restore' mentioned in prose inside a commit message string" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" 'git commit -m "will run git switch -f other later"')"
+assert_exit "NWM-180: allows 'git switch -f' mentioned in prose inside a commit message string" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" 'git commit -m "will run git checkout -f somefile later"')"
+assert_exit "NWM-180: allows 'git checkout -f' mentioned in prose inside a commit message string" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" 'git commit -m "will run git checkout . later"')"
+assert_exit "NWM-180: allows 'git checkout .' mentioned in prose inside a commit message string" 0 "$GOT"
+GOT="$(run_guard "$FAKE_WORKTREE" 'bash -c "git restore somefile"')"
+assert_exit "NWM-180: still blocks bash -c \"git restore somefile\" — a real re-execution context, not prose" 2 "$GOT"
+
 GOT="$(run_guard "$FAKE_WORKTREE" "find $NOT_WORKTREE_NOT_SCRATCH -exec rm -rf {} +")"
 assert_exit "blocks 'find <outside> -exec rm -rf {} +' (finding 1)" 2 "$GOT"
 
@@ -407,6 +418,92 @@ assert_exit "ticket verify: memorygraph store --content 'a -> /home/x' passes" 0
 
 GOT="$(run_guard "$FAKE_WORKTREE" "git stash")"
 assert_exit "ticket verify: local 'git stash' (against MAIN worktree) still blocked" 2 "$GOT"
+
+# NWM-180: git restore was not in the stash/reset/clean/checkout-- set, so
+# the same discard went through under a different verb. Every restore form
+# mutates the index or tree; there is no read-only one.
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git restore somefile")"
+assert_exit "NWM-180: blocks 'git restore somefile' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git restore somefile")"
+assert_exit "NWM-180: allows 'git restore somefile' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git restore --source=HEAD -- somefile")"
+assert_exit "NWM-180: blocks 'git restore --source=HEAD -- somefile' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git restore --source=HEAD -- somefile")"
+assert_exit "NWM-180: allows 'git restore --source=HEAD -- somefile' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git restore --staged somefile")"
+assert_exit "NWM-180: blocks 'git restore --staged somefile' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git restore --staged somefile")"
+assert_exit "NWM-180: allows 'git restore --staged somefile' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git restore --worktree --staged .")"
+assert_exit "NWM-180: blocks 'git restore --worktree --staged .' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git restore --worktree --staged .")"
+assert_exit "NWM-180: allows 'git restore --worktree --staged .' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git -C $FAKE_WORKTREE restore somefile")"
+assert_exit "NWM-180: blocks 'git -C <main-worktree> restore somefile' even when run from a linked worktree" 2 "$GOT"
+
+# `git switch` with a discard/force flag mutates the tree the same way a
+# checkout -f does; a plain 'git switch <branch>' or '-c' stays allowed —
+# it is how agents change or create branches, and git itself refuses when
+# the tree is dirty.
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git switch --discard-changes other")"
+assert_exit "NWM-180: blocks 'git switch --discard-changes other' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git switch --discard-changes other")"
+assert_exit "NWM-180: allows 'git switch --discard-changes other' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git switch -f other")"
+assert_exit "NWM-180: blocks 'git switch -f other' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git switch -f other")"
+assert_exit "NWM-180: allows 'git switch -f other' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git switch -C other")"
+assert_exit "NWM-180: blocks 'git switch -C other' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git switch -C other")"
+assert_exit "NWM-180: allows 'git switch -C other' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git switch other")"
+assert_exit "NWM-180: still allows plain 'git switch other' (an ordinary branch switch, git itself refuses if dirty)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git switch -c new")"
+assert_exit "NWM-180: still allows 'git switch -c new' (creates a branch, not a force/discard)" 0 "$GOT"
+
+# `git checkout -f`/`--force` and a bare `git checkout .` (never a valid ref
+# name — git check-ref-format rejects it) discard the tree without needing
+# a `--`; a bare `git checkout <word>` stays allowed, indistinguishable from
+# an ordinary branch switch.
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git checkout -f somefile")"
+assert_exit "NWM-180: blocks 'git checkout -f somefile' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git checkout -f somefile")"
+assert_exit "NWM-180: allows 'git checkout -f somefile' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git checkout .")"
+assert_exit "NWM-180: blocks 'git checkout .' in the MAIN worktree" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_LINKED_WORKTREE" "git checkout .")"
+assert_exit "NWM-180: allows 'git checkout .' in a LINKED worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git checkout somefile")"
+assert_exit "NWM-180: still allows bare 'git checkout somefile' (indistinguishable from a branch switch)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git checkout -b new")"
+assert_exit "NWM-180: still allows 'git checkout -b new' (creates a branch, not a force/discard)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "git checkout other-branch")"
+assert_exit "NWM-180: still allows 'git checkout other-branch' (an ordinary branch switch)" 0 "$GOT"
 
 GOT="$(run_guard "$FAKE_WORKTREE" "mv a $NOT_WORKTREE_NOT_SCRATCH/b")"
 assert_exit "ticket verify: local 'mv' outside the tree still blocked" 2 "$GOT"
