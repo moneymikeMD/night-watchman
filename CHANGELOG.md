@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.7.3](https://github.com/moneymikeMD/night-watchman/compare/v1.7.2...v1.7.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* guard-fs-writes.sh blocks git restore, forced switch and forced checkout on a main worktree (NWM-180) ([#92](https://github.com/moneymikeMD/night-watchman/issues/92)) ([7428be1](https://github.com/moneymikeMD/night-watchman/commit/7428be1b52580e8e350789de7b955837b4a9663b))
+
 ## [1.7.2](https://github.com/moneymikeMD/night-watchman/compare/v1.7.1...v1.7.2) (2026-09-24)
 
 
