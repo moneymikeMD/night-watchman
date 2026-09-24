@@ -58,15 +58,16 @@
 #   CLAUDE_PROJECT_DIR           repo root; falls back to two directories
 #                                above this script (hooks/..) when unset
 #
-# The extractor is resolved by a chain, first hit wins (NWM-156, NWM-130):
-# $SCRIPT_EVENTS_EXTRACTOR, then $CLAUDE_PLUGIN_ROOT/scripts/, then
-# $PROJECT_DIR/scripts/, then this script's own ../scripts/, then whatever
-# scripts/ai-toolkit-root.sh --script-analytics resolves. $PROJECT_DIR alone
-# was wrong: plugin.json registers this hook for EVERY installer, but a
-# consuming project has no reason to carry an extractor, so the hook was
-# dark everywhere except a checkout that happened to hold a copy. The last
-# step matters now: NWM-130 moved script-analytics.py to ai-toolkit, so the
-# four path candidates ahead of it find nothing here.
+# The extractor is resolved by a chain, first hit wins (NWM-156, NWM-130,
+# NWM-160): $SCRIPT_EVENTS_EXTRACTOR, then $CLAUDE_PLUGIN_ROOT/scripts/,
+# then this script's own ../scripts/, then whatever
+# scripts/ai-toolkit-root.sh --script-analytics resolves. The consuming
+# project's own scripts/ is NOT a candidate: this hook is registered for
+# every installer, and a same-named stranger there must never run with
+# this hook's argv. The resolved file is invoked only if it carries the
+# line "# script-analytics-extractor-sentinel: v1" — a grep, never an
+# execution, since running a file to ask whether it is the extractor is
+# the hazard the check closes. Otherwise it fails open, naming the path.
 #
 # --prices is passed EXPLICITLY, first of $PROJECT_DIR/templates/,
 # $CLAUDE_PLUGIN_ROOT/templates/, ../templates/. The extractor's own search
@@ -124,7 +125,6 @@ fi
 if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   CANDIDATES+=("$CLAUDE_PLUGIN_ROOT/scripts/script-analytics.py")
 fi
-CANDIDATES+=("$PROJECT_DIR/scripts/script-analytics.py")
 CANDIDATES+=("$SELF_DIR/../scripts/script-analytics.py")
 
 EXTRACTOR=""
@@ -153,6 +153,10 @@ fi
 if [ -z "$EXTRACTOR" ]; then
   fail_open "extractor not found; tried: $(printf '%s, ' "${CANDIDATES[@]}" | sed 's/, $//')"
 fi
+
+SENTINEL='^# script-analytics-extractor-sentinel: v1'
+grep -q "$SENTINEL" "$EXTRACTOR" 2>/dev/null \
+  || fail_open "extractor at $EXTRACTOR lacks the sentinel line (${SENTINEL#^}); refusing to invoke it"
 
 PYTHON_BIN="${SCRIPT_EVENTS_PYTHON_BIN:-python3}"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail_open "$PYTHON_BIN not found on PATH"

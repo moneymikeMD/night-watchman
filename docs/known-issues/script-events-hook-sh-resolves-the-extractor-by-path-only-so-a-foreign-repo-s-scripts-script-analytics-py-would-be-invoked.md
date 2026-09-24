@@ -2,7 +2,8 @@
 title: "script-events-hook.sh resolves the extractor by path only, so a foreign repo's scripts/script-analytics.py would be invoked"
 heading_raw: "script-events-hook.sh resolves the extractor by path only, so a foreign repo's scripts/script-analytics.py would be invoked — LOW"
 severity: LOW
-status: open
+status: resolved
+resolved: 2026-09-24
 qualifiers: []
 note: "user-scope SubagentStop hook; fail-open, no writes unless the foreign script writes"
 tickets: ["NWM-160"]
@@ -29,3 +30,14 @@ that the resolved file is an extractor at all. NWM-130 made the second point
 sharper rather than softer — since script-analytics.py no longer ships in this
 plugin, $PROJECT_DIR is now the FIRST path candidate that can match anything,
 and the legitimate answer lives at the end of the chain behind it.
+
+Resolved 2026-09-24 by NWM-160, both halves. The chain no longer has a
+$PROJECT_DIR step at all: $SCRIPT_EVENTS_EXTRACTOR, then
+$CLAUDE_PLUGIN_ROOT/scripts/, then the hook's own ../scripts/, then
+ai-toolkit-root.sh. And whatever it resolves is invoked only if the file
+carries the line `# script-analytics-extractor-sentinel: v1`, which
+ai-toolkit's script-analytics.py now does. The check is a grep, not an
+execution: the original fix candidate (`--help` must print a marker) would
+have run the stranger in order to ask whether it was one.
+hooks/script-events-hook-selftest.sh cases agent-13, agent-14, agent-19 and
+agent-20 prove it, red against the pre-fix hook.
