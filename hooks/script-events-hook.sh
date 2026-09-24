@@ -58,16 +58,17 @@
 #   CLAUDE_PROJECT_DIR           repo root; falls back to two directories
 #                                above this script (hooks/..) when unset
 #
-# The extractor is resolved by a chain, first hit wins (NWM-156, NWM-130,
-# NWM-160): $SCRIPT_EVENTS_EXTRACTOR, then $CLAUDE_PLUGIN_ROOT/scripts/,
-# then this script's own ../scripts/, then whatever
-# scripts/ai-toolkit-root.sh --script-analytics resolves. The consuming
-# project's own scripts/ is NOT a candidate: this hook is registered for
-# every installer, and a same-named stranger there must never run with
-# this hook's argv. The resolved file is invoked only if it carries the
-# line "# script-analytics-extractor-sentinel: v1" — a grep, never an
-# execution, since running a file to ask whether it is the extractor is
-# the hazard the check closes. Otherwise it fails open, naming the path.
+# The extractor is resolved by a chain, first VALID hit wins (NWM-156,
+# NWM-130, NWM-160, NWM-178): $SCRIPT_EVENTS_EXTRACTOR, then
+# $CLAUDE_PLUGIN_ROOT/scripts/, then this script's own ../scripts/, then
+# whatever scripts/ai-toolkit-root.sh --script-analytics resolves. The
+# consuming project's own scripts/ is NOT a candidate: a same-named stranger
+# there must never run with this hook's argv. A candidate is valid only when
+# it exists AND carries "# script-analytics-extractor-sentinel: v1" — a
+# grep, never an execution, since running a file to ask whether it is the
+# extractor is the hazard the check closes. An existing-but-unsentineled
+# candidate is skipped, not fatal: the chain keeps walking past it. Otherwise
+# it fails open, naming every path tried.
 #
 # --prices is passed EXPLICITLY, first of $PROJECT_DIR/templates/,
 # $CLAUDE_PLUGIN_ROOT/templates/, ../templates/. The extractor's own search
@@ -127,36 +128,50 @@ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
 fi
 CANDIDATES+=("$SELF_DIR/../scripts/script-analytics.py")
 
+SENTINEL='^# script-analytics-extractor-sentinel: v1'
+TRIED=()
 EXTRACTOR=""
-for _cand in "${CANDIDATES[@]}"; do
-  if [ -f "$_cand" ]; then
+for _cand in ${CANDIDATES[@]+"${CANDIDATES[@]}"}; do
+  if [ ! -f "$_cand" ]; then
+    TRIED+=("$_cand")
+    continue
+  fi
+  if grep -q "$SENTINEL" "$_cand" 2>/dev/null; then
     EXTRACTOR="$_cand"
     break
   fi
+  TRIED+=("$_cand (no sentinel)")
 done
 
 # Last resort: ask the resolver where the ai-toolkit checkout is. It reads
 # $AI_TOOLKIT_ROOT then a sibling directory — no network, no plugin list.
 if [ -z "$EXTRACTOR" ]; then
-  for _resolver in "${CLAUDE_PLUGIN_ROOT:-}/scripts/ai-toolkit-root.sh" \
-                   "$SELF_DIR/../scripts/ai-toolkit-root.sh"; do
-    [ -x "$_resolver" ] || continue
+  RESOLVERS=()
+  if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+    RESOLVERS+=("$CLAUDE_PLUGIN_ROOT/scripts/ai-toolkit-root.sh")
+  fi
+  RESOLVERS+=("$SELF_DIR/../scripts/ai-toolkit-root.sh")
+  for _resolver in ${RESOLVERS[@]+"${RESOLVERS[@]}"}; do
+    if [ ! -x "$_resolver" ]; then
+      TRIED+=("$_resolver (not found)")
+      continue
+    fi
     _resolved="$("$_resolver" --script-analytics 2>/dev/null)" || _resolved=""
-    if [ -n "$_resolved" ] && [ -f "$_resolved" ]; then
+    if [ -z "$_resolved" ] || [ ! -f "$_resolved" ]; then
+      TRIED+=("$_resolver --script-analytics")
+      continue
+    fi
+    if grep -q "$SENTINEL" "$_resolved" 2>/dev/null; then
       EXTRACTOR="$_resolved"
       break
     fi
+    TRIED+=("$_resolved (no sentinel)")
   done
-  CANDIDATES+=("ai-toolkit-root.sh --script-analytics")
 fi
 
 if [ -z "$EXTRACTOR" ]; then
-  fail_open "extractor not found; tried: $(printf '%s, ' "${CANDIDATES[@]}" | sed 's/, $//')"
+  fail_open "extractor not found; tried: $(printf '%s, ' ${TRIED[@]+"${TRIED[@]}"} | sed 's/, $//')"
 fi
-
-SENTINEL='^# script-analytics-extractor-sentinel: v1'
-grep -q "$SENTINEL" "$EXTRACTOR" 2>/dev/null \
-  || fail_open "extractor at $EXTRACTOR lacks the sentinel line (${SENTINEL#^}); refusing to invoke it"
 
 PYTHON_BIN="${SCRIPT_EVENTS_PYTHON_BIN:-python3}"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail_open "$PYTHON_BIN not found on PATH"
@@ -171,9 +186,13 @@ if [ -n "${SCRIPT_EVENTS_PROJECTS_DIR:-}" ]; then
   EXTRACT_ARGS+=(--projects-dir "$SCRIPT_EVENTS_PROJECTS_DIR")
 fi
 
-for _prices in "$PROJECT_DIR/templates/claude-prices.tsv" \
-               "${CLAUDE_PLUGIN_ROOT:-}/templates/claude-prices.tsv" \
-               "$SELF_DIR/../templates/claude-prices.tsv"; do
+PRICES_CANDIDATES=("$PROJECT_DIR/templates/claude-prices.tsv")
+if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  PRICES_CANDIDATES+=("$CLAUDE_PLUGIN_ROOT/templates/claude-prices.tsv")
+fi
+PRICES_CANDIDATES+=("$SELF_DIR/../templates/claude-prices.tsv")
+
+for _prices in ${PRICES_CANDIDATES[@]+"${PRICES_CANDIDATES[@]}"}; do
   if [ -f "$_prices" ]; then
     EXTRACT_ARGS+=(--prices "$_prices")
     break
