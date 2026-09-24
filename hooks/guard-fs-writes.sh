@@ -16,11 +16,16 @@
 #
 # Blocks when the command:
 #
-#   - is `git [global-opts] {stash|reset|clean}`, or `git [global-opts]
-#     checkout [...] -- [...]`, against the MAIN worktree. A linked worktree
-#     only touches its own tree, so it is allowed there. `git stash list`
-#     and `git stash show` are read-only and are never blocked; every other
-#     stash form is.
+#   - is `git [global-opts] {stash|reset|clean|restore}`, or `git
+#     [global-opts] checkout [...] -- [...]`, `checkout ... -f`/`--force`,
+#     `checkout .`, or `switch ... {-f|--force|--discard-changes|-C|
+#     --force-create}`, against the MAIN worktree. A linked worktree only
+#     touches its own tree, so it is allowed there. `git stash list` and
+#     `git stash show` are read-only and are never blocked; every other
+#     stash form is, and so is every `restore` form — there is no read-only
+#     one. A bare `git checkout <word>` or plain `git switch <branch>`/`-c`
+#     stays allowed: indistinguishable from an ordinary branch switch, which
+#     git itself refuses when the tree is dirty.
 #   - is `find [paths...] {-delete|-exec|-execdir|-ok|-okdir}` with a leading
 #     path resolving outside worktree+scratchpad. The path is checked BEFORE
 #     any -exec/-execdir/-ok command list is looked at.
@@ -72,7 +77,7 @@
 
 set -u
 
-RULE_TEXT='guard-fs-writes guard: this command is blocked. git stash/checkout --/reset/clean against the MAIN worktree (not a linked one) mutate the CURRENT tree, which may be shared with sibling agents doing uncommitted work ("agents write only inside their own trees") — use a WIP commit or a worktree instead (git stash list/show are read-only and are not blocked). find -delete and any xargs rm/mv are blocked the same way (xargs targets are stdin-sourced and unverifiable). An rm -r/-rf, mv, or > redirect whose target resolves outside both this worktree and the session scratchpad is blocked too — write only inside your own tree.'
+RULE_TEXT='guard-fs-writes guard: this command is blocked. git stash/checkout --/checkout -f/checkout ./reset/clean/restore, and git switch -f/--force/--discard-changes/-C, against the MAIN worktree (not a linked one) mutate the CURRENT tree, which may be shared with sibling agents doing uncommitted work ("agents write only inside their own trees") — use a WIP commit or a worktree instead (git stash list/show are read-only and are not blocked; restore has no read-only form). find -delete and any xargs rm/mv are blocked the same way (xargs targets are stdin-sourced and unverifiable). An rm -r/-rf, mv, or > redirect whose target resolves outside both this worktree and the session scratchpad is blocked too — write only inside your own tree.'
 
 fail_open() {
   echo "guard-fs-writes.sh: $1 — failing open (allow)" >&2
@@ -1106,14 +1111,26 @@ scan_segment() {
                 *) _ss_git_block=1 ;;
               esac
               ;;
-            reset|clean) _ss_git_block=1 ;;
+            reset|clean|restore) _ss_git_block=1 ;;
             checkout)
+              # A bare pathspec with no `--` stays allowed (indistinguishable
+              # from a branch switch); `.` is never a valid ref, so it is
+              # unambiguously a discard wherever it appears as its own word.
               _ss_gk=$((_ss_gj + 1))
               while [ "$_ss_gk" -lt "$_ss_n" ]; do
-                if [ "${_ss_words[$_ss_gk]}" = "--" ]; then
-                  _ss_git_block=1
-                  break
-                fi
+                case "${_ss_words[$_ss_gk]}" in
+                  --) _ss_git_block=1; break ;;
+                  -f|--force|.) _ss_git_block=1 ;;
+                esac
+                _ss_gk=$((_ss_gk + 1))
+              done
+              ;;
+            switch)
+              _ss_gk=$((_ss_gj + 1))
+              while [ "$_ss_gk" -lt "$_ss_n" ]; do
+                case "${_ss_words[$_ss_gk]}" in
+                  --discard-changes|-f|--force|-C|--force-create) _ss_git_block=1 ;;
+                esac
                 _ss_gk=$((_ss_gk + 1))
               done
               ;;
