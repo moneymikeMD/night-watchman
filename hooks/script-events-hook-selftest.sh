@@ -15,9 +15,14 @@
 # points at a scratch fixture directory under WORKDIR — never
 # ~/.claude/projects. This is the seam the shell-scripting skill requires:
 # the hook is never invoked against the real transcript store from a test.
-# CLAUDE_PLUGIN_ROOT and SCRIPT_EVENTS_EXTRACTOR are unset on every run
-# unless a case sets them deliberately, so an ambient value from the shell
-# running this selftest can never decide which extractor the hook picks.
+# CLAUDE_PLUGIN_ROOT is unset on every run unless a case sets it
+# deliberately, and SCRIPT_EVENTS_EXTRACTOR is either pinned to a scratch
+# file or unset, so an ambient value from the shell running this selftest
+# can never decide which extractor the hook picks. A case that expects
+# "nothing resolves" runs a COPY of the hook with no sibling scripts/, so
+# the real scripts/ai-toolkit-root.sh can never reach a sibling ai-toolkit
+# checkout from here (NWM-160). Every scratch extractor carries the
+# sentinel line the hook greps for, except the one case about its absence.
 #
 # $SCRIPT_EVENTS_HOOK_SCRIPT overrides the hook under test, so the NWM-156
 # cases can be run red against an older revision of it.
@@ -38,11 +43,15 @@ mkdir -p "$WORKDIR"
 cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
-# Only the two paths the hook itself stats need to exist; the extractor's
-# content is irrelevant because python3 is stubbed and never parses it.
+# The extractor's content is only ever grepped for the sentinel, never
+# parsed: python3 is stubbed throughout.
+SENTINEL_LINE='# script-analytics-extractor-sentinel: v1'
+make_extractor() { printf '%s\n' "$SENTINEL_LINE" > "$1"; }
+
 PROJECT_ROOT="$WORKDIR/project"
 mkdir -p "$PROJECT_ROOT/docs" "$PROJECT_ROOT/scripts"
-: > "$PROJECT_ROOT/scripts/script-analytics.py"
+PROJECT_EXTRACTOR="$PROJECT_ROOT/scripts/script-analytics.py"
+make_extractor "$PROJECT_EXTRACTOR"
 EVENTS_FILE="$PROJECT_ROOT/docs/script-events.jsonl"
 
 FIXTURE_PROJECTS="$WORKDIR/fixture-projects"
@@ -106,7 +115,8 @@ run_hook() {
   [ -n "$_timeout" ] && _timeout_env="SCRIPT_EVENTS_HOOK_TIMEOUT=$_timeout"
 
   # shellcheck disable=SC2086 # deliberate word-split: an empty _timeout_env must vanish, not pass "" as an env(1) arg
-  printf '%s' "$_payload" | env -u CLAUDE_PLUGIN_ROOT -u SCRIPT_EVENTS_EXTRACTOR \
+  printf '%s' "$_payload" | env -u CLAUDE_PLUGIN_ROOT \
+    SCRIPT_EVENTS_EXTRACTOR="$PROJECT_EXTRACTOR" \
     PATH="$_env_path" CLAUDE_PROJECT_DIR="$PROJECT_ROOT" \
     SCRIPT_EVENTS_PROJECTS_DIR="$FIXTURE_PROJECTS" $_timeout_env "$SCRIPT" \
     >"$WORKDIR/.last_stdout" 2>"$WORKDIR/.last_stderr"
@@ -281,7 +291,7 @@ CONSUMER_EVENTS="$CONSUMER_ROOT/docs/script-events.jsonl"
 PLUGIN_ROOT="$WORKDIR/plugin"
 mkdir -p "$PLUGIN_ROOT/scripts" "$PLUGIN_ROOT/hooks"
 PLUGIN_EXTRACTOR="$PLUGIN_ROOT/scripts/script-analytics.py"
-: > "$PLUGIN_EXTRACTOR"
+make_extractor "$PLUGIN_EXTRACTOR"
 cp "$SCRIPT" "$PLUGIN_ROOT/hooks/script-events-hook.sh"
 chmod +x "$PLUGIN_ROOT/hooks/script-events-hook.sh"
 
@@ -321,7 +331,7 @@ fi
 
 # $SCRIPT_EVENTS_EXTRACTOR beats both other candidates.
 OVERRIDE_EXTRACTOR="$WORKDIR/override-script-analytics.py"
-: > "$OVERRIDE_EXTRACTOR"
+make_extractor "$OVERRIDE_EXTRACTOR"
 ARGV="$WORKDIR/argv.12"; rm -f "$ARGV"
 OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
   run_hook_resolve "$SCRIPT" "agent-12" "$PROJECT_ROOT" "$PLUGIN_ROOT" "$OVERRIDE_EXTRACTOR")"
@@ -336,19 +346,29 @@ case "$_argv" in
     ;;
 esac
 
-# $PROJECT_DIR still wins when no override and no plugin root is set, so
-# this repo's own loop and homelab are unaffected by the chain.
+# NWM-160: the consuming project's own scripts/script-analytics.py is no
+# longer a candidate. An orphan hook copy with no override and no plugin
+# root, pointed at a project that carries one, must fail open without
+# calling it — that file is a stranger with the right name.
 ARGV="$WORKDIR/argv.13"; rm -f "$ARGV"
-OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
-  run_hook_resolve "$SCRIPT" "agent-13" "$PROJECT_ROOT" "" "")"
-assert_rc "PROJECT_DIR fallback: hook exits 0" "0" "$OUT"
-_argv="$(cat "$ARGV" 2>/dev/null)"
-case "$_argv" in
-  *"$PROJECT_ROOT/scripts/script-analytics.py"*)
-    pass "PROJECT_DIR fallback: still resolves the project's own extractor when nothing else is set"
+OUT="$(STUB_ARGV_FILE="$ARGV" run_hook_resolve "$ORPHAN_ROOT/hooks/script-events-hook.sh" \
+  "agent-13" "$PROJECT_ROOT" "" "")"
+assert_rc "PROJECT_DIR copy: hook exits 0" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  fail "PROJECT_DIR copy: the project's own scripts/script-analytics.py was invoked (argv: $(cat "$ARGV" | tr '\n' ' '))"
+else
+  pass "PROJECT_DIR copy: the project's own scripts/script-analytics.py is never invoked"
+fi
+_err="$(last_stderr)"
+case "$_err" in
+  *"$PROJECT_EXTRACTOR"*)
+    fail "PROJECT_DIR copy: diagnostic still lists the project path as a candidate: $_err"
+    ;;
+  *"extractor not found"*)
+    pass "PROJECT_DIR copy: diagnostic reports not-found without naming the project path"
     ;;
   *)
-    fail "PROJECT_DIR fallback: did not resolve the project extractor (argv: ${_argv:-<none>})"
+    fail "PROJECT_DIR copy: unexpected diagnostic: $_err"
     ;;
 esac
 
@@ -366,10 +386,10 @@ fi
 _err="$(last_stderr)"
 case "$_err" in
   *"$CONSUMER_ROOT/scripts/script-analytics.py"*)
-    pass "no extractor anywhere: diagnostic names the \$PROJECT_DIR candidate"
+    fail "no extractor anywhere: diagnostic names a \$PROJECT_DIR candidate the chain no longer has: $_err"
     ;;
   *)
-    fail "no extractor anywhere: diagnostic omits the \$PROJECT_DIR candidate: $_err"
+    pass "no extractor anywhere: diagnostic does not name \$PROJECT_DIR"
     ;;
 esac
 # Matched as a suffix, not against $ORPHAN_ROOT: the hook resolves its own
@@ -397,7 +417,7 @@ printf 'plugin table\n' >"$DONATED_PLUGIN/templates/claude-prices.tsv"
 FAKE_AITK="$WORKDIR/fake-ai-toolkit"
 mkdir -p "$FAKE_AITK/scripts"
 AITK_EXTRACTOR="$FAKE_AITK/scripts/script-analytics.py"
-: > "$AITK_EXTRACTOR"
+make_extractor "$AITK_EXTRACTOR"
 
 # A stand-in resolver: the real scripts/ai-toolkit-root.sh needs lib/kit.sh
 # and a checkout, neither of which belongs in a hook selftest.
@@ -487,6 +507,47 @@ case "$_argv" in
     pass "no prices anywhere: --prices is omitted rather than pointed at nothing"
     ;;
 esac
+
+# ---- NWM-160: the sentinel ---------------------------------------------
+
+# A plugin root whose extractor is a same-named stranger: resolved by path,
+# but it lacks the sentinel line, so it must never be invoked.
+STRANGER_ROOT="$WORKDIR/stranger-plugin"
+mkdir -p "$STRANGER_ROOT/scripts"
+STRANGER_EXTRACTOR="$STRANGER_ROOT/scripts/script-analytics.py"
+printf '#!/usr/bin/env python3\nprint("not the extractor")\n' > "$STRANGER_EXTRACTOR"
+
+ARGV="$WORKDIR/argv.19"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$SCRIPT" "agent-19" "$CONSUMER_ROOT" "$STRANGER_ROOT" "")"
+assert_rc "sentinel missing: hook fails open" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  fail "sentinel missing: the stranger was invoked (argv: $(cat "$ARGV" | tr '\n' ' '))"
+else
+  pass "sentinel missing: the stranger was not invoked"
+fi
+_err="$(last_stderr)"
+case "$_err" in
+  *"$STRANGER_EXTRACTOR"*"sentinel"*)
+    pass "sentinel missing: diagnostic names the path and the sentinel"
+    ;;
+  *)
+    fail "sentinel missing: diagnostic does not name the path and the sentinel: $_err"
+    ;;
+esac
+
+# The same file with the sentinel line is invoked: the check is on content,
+# not on where the file sits.
+make_extractor "$STRANGER_EXTRACTOR"
+ARGV="$WORKDIR/argv.20"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$SCRIPT" "agent-20" "$CONSUMER_ROOT" "$STRANGER_ROOT" "")"
+assert_rc "sentinel present: hook exits 0" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  pass "sentinel present: the same path is invoked once it carries the line"
+else
+  fail "sentinel present: extractor was NOT called"
+fi
 
 echo ""
 echo "script-events-hook-selftest.sh: $PASS passed, $FAIL failed"

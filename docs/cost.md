@@ -253,10 +253,12 @@ USD, and wall time to acceptance, per script and per agent type.
   that fires whenever one of those two subagents stops, and runs
   `script-analytics.py extract --agent-id ...` for just the subagent that
   finished. It resolves the extractor through a chain — first
-  `$SCRIPT_EVENTS_EXTRACTOR`, then `$CLAUDE_PLUGIN_ROOT/scripts/`, then
-  `$CLAUDE_PROJECT_DIR/scripts/`, then its own `../scripts/` — because the
-  plugin ships the extractor while a consuming project has no reason to
-  carry a copy (NWM-156). Idempotent by its own event `key`, fails open on
+  `$SCRIPT_EVENTS_EXTRACTOR`, then `$CLAUDE_PLUGIN_ROOT/scripts/`, then its
+  own `../scripts/`, then whatever `scripts/ai-toolkit-root.sh
+  --script-analytics` finds — never the consuming project's own `scripts/`,
+  and only invokes a file that carries the line
+  `# script-analytics-extractor-sentinel: v1` (NWM-156, NWM-130, NWM-160).
+  Idempotent by its own event `key`, fails open on
   any error (never blocks a subagent's stop), and never prints the hook's
   stdin payload or the extractor's own output — see the hook's own header
   for its wall-clock budget and retry behavior.
