@@ -29,6 +29,21 @@ Written from the second adopter (ADOPT) adoption, 2026-09-13.
      | jq '.[] | select(.id == "work-order@moneymike-plugins") | {version, errors}'
    ```
 
+   **Landing also needs an ai-toolkit checkout.** Since NWM-131 (v1.7.0),
+   `scripts/land-branch.sh` keeps the ticket lifecycle and hands the merge,
+   lint gate, push and cleanup to ai-toolkit's `scripts/land-core.sh`.
+   ai-toolkit is not a plugin, so nothing installs it: clone
+   `moneymikeMD/ai-toolkit` beside this plugin's checkout, or set
+   `AI_TOOLKIT_ROOT` to an existing clone. Without one, every
+   `land-branch.sh` run, `--dry-run` included, stops with exit 2 before it
+   touches anything. Confirm it resolves:
+   ```
+   <path>/scripts/ai-toolkit-root.sh --land-core
+   ```
+   It must print a path to `land-core.sh`. That checkout's `scripts/` is
+   unpinned, so it is live to every landing as soon as it is on disk:
+   `git pull` there is how a land-core fix arrives.
+
 3. **Merge `templates/CLAUDE.md` into the adopter's CLAUDE.md, additively.**
    Append a clearly delimited section (HTML comment markers work well);
    never replace the adopter's own product overview. Copy
@@ -212,7 +227,8 @@ fallback for a field it did not touch.
   `.night-watchman/closing-state.md` belongs on that list too. It is
   per-run state a worker writes and does not commit. Not gitignoring it
   no longer *blocks* a landing — `land-branch.sh` exempts exactly that one
-  path from its dirty-worktree check (NWM-147) — but it still shows up in
+  path from the dirty-worktree check, by passing `--allow-untracked` to
+  land-core.sh (NWM-147, NWM-175) — but it still shows up in
   every `git status` the worker and the reviewer run.
 - **The adopter's first session-start committed `dispatch = "herdr"`,
   had `herdr` on PATH, and `HERDR_ENV=1` set — and still dispatched
