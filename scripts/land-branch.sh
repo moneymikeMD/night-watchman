@@ -1132,7 +1132,8 @@ save_state TRACKER ISSUES_DIR JIRA_API JIRA_DONE_STATUS JIRA_AWAITING_STATUS JIR
 HOOK_MODE=0
 
 CORE_ARGS=(--repo "$MAIN_WORKTREE" --branch "$BRANCH" --target "$TARGET_BRANCH"
-    --label "$TICKET_ID" --merge-message "$MERGE_MSG" --hook "$SELF")
+    --label "$TICKET_ID" --merge-message "$MERGE_MSG" --hook "$SELF"
+    --allow-untracked .night-watchman/closing-state.md)
 [ "$RESET_LAND" != 1 ] || CORE_ARGS+=(--reset-land)
 [ -z "$LINT_CMD" ] || CORE_ARGS+=(--lint-cmd "$LINT_CMD")
 
