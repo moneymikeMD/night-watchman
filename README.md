@@ -9,6 +9,7 @@
 Claude Code plugin: tickets become dispatch contracts, a session starts
 itself, cheap models do the reading, the expensive one only decides.
 
+
 - **tickets an agent can start cold** — frontmatter says what to touch,
   how to verify, who finishes.
 - **a session that opens itself** — orient, verify what's pending, fan
