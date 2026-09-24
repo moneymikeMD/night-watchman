@@ -11,8 +11,8 @@ reviewer can read in ten seconds.
 
 This is also the standing directive behind the whole plugin, not just this
 directory: every capability lands as a provider-neutral contract first,
-with the source project (homelab) as its first *provider* — never as the
-shape of the contract itself. See `docs/decisions.md`'s 2026-09-14 entry
+with the source project as its first *provider* — never as the shape of
+the contract itself. See `docs/decisions.d/2026-09-14-every-capability-lands-as-a-provider-neutral-contract-first.md`
 and `scripts/parity-sweep.sh --source-root`, which enumerates the
 source project's own orchestration surface to catch a capability nobody
 has mapped yet, not just drift on rows already in `templates/parity-map.tsv`.
@@ -32,8 +32,10 @@ pluggable seam quietly becomes a hard dependency on one tool.
 | `memory` | `store` `recall` | Durable cross-session knowledge |
 | `publish` | `publish-brief` `post-headline` | Where the owner-facing wave brief is written, and where its headline is posted |
 
-**Shipped so far:** `secrets/op` and `secrets/env`, and
-`tracker/jira` — a port of the source project's `jira-api.sh` +
+**Shipped:** `secrets/op` and `secrets/env`; `tracker/jira`;
+`dispatch/workflow` and `dispatch/herdr`; `memory/memorygraph`
+(`store`/`recall` over the `memorygraph` CLI); `publish/atlassian`.
+`tracker/jira` is a port of the source project's `jira-api.sh` +
 `jira-common.sh`, de-identified: the site host comes from
 `[tracker.jira] host` in config and the credentials from the configured
 `secrets` provider (refs `jira.user` / `jira.token`), never a hardcoded
@@ -72,20 +74,14 @@ the full skip/exit-code contract.
 companion script, not a `dispatch` verb: run from inside a Herdr pane, it
 splits the current pane and starts a named coding agent in the new one —
 no ticket/tracker involvement, just `herdr pane split` + `herdr agent
-start`; see its own header for the flag contract. The rest is planned as a
-separate ticket, porting code that already exists elsewhere in the repo:
+start`; see its own header for the flag contract.
 
-| Kind | Planned implementation |
-| --- | --- |
-| `memory` | `memory/memorygraph` |
-
-Until that lands, `provider.sh doctor` reports that kind as
-`not-installed`, and that is the correct answer rather than a fault. The
-names above are the built-in defaults — what a kind resolves *to* — which
-is a separate question from whether it is installed. They are defaults,
-not requirements: the core still works with none of them reachable,
-because nothing in the core calls a provider unless the operation it was
-asked to do actually needs one.
+The names above are the built-in defaults — what a kind resolves *to* —
+which is a separate question from whether it is installed; `provider.sh
+doctor` reports a kind whose implementation is missing as `not-installed`.
+They are defaults, not requirements: the core still works with none of
+them reachable, because nothing in the core calls a provider unless the
+operation it was asked to do actually needs one.
 
 ## Layout
 
@@ -109,9 +105,10 @@ to your own repo is how you swap the tracker without forking this plugin.
 
 Highest priority first:
 
-1. **`NW_TRACKER` / `NW_SECRETS` / `NW_DISPATCH` / `NW_MEMORY`** — a
-   per-run override, for trying an implementation without committing to
-   it. Never the reviewed answer, always the temporary one.
+1. **`NW_TRACKER` / `NW_SECRETS` / `NW_DISPATCH` / `NW_MEMORY` /
+   `NW_PUBLISH`** — a per-run override, for trying an implementation
+   without committing to it. Never the reviewed answer, always the
+   temporary one.
 2. **`[providers]` in the nearest committed `.night-watchman/config.toml`**,
    found by walking up from the working directory. This is the reviewed
    answer. Copy `templates/night-watchman.config.toml` to
@@ -148,7 +145,7 @@ providers/lib/provider.sh verbs tracker              # -> fetch transition comme
 providers/lib/provider.sh dir tracker                # -> .../providers/tracker/jira
 providers/lib/provider.sh config tracker.jira.host   # -> a key from the config
 providers/lib/provider.sh run tracker fetch PROJ-17   # -> execs the implementation
-providers/lib/provider.sh doctor                     # -> a table of all four kinds
+providers/lib/provider.sh doctor                     # -> a table of all five kinds
 ```
 
 `resolve` reports the winner; `origin` reports which of the three rules it
@@ -270,12 +267,11 @@ is also where this contract's only declared gap lives.
 
 **`workflow`** runs subagents in-process, inside the orchestrating turn,
 under a deterministic script — Claude Code's Workflow tool. It is the
-default because a wave already ran this way: 2026-09-19, seven tickets,
-fourteen agents, zero dispatch failures, against three standing herdr
-dispatch bugs on the other path (a cold boot swallowing the brief, the
-reached-working wait failing on back-to-back starts, a fresh worktree
-hitting the folder-trust dialog). None of the three exists here, because
-none of the machinery they live in exists here.
+default because the three open herdr dispatch issues (a cold boot
+swallowing the brief, the reached-working wait failing on back-to-back
+starts, a fresh worktree hitting the folder-trust dialog; see
+`docs/known-issues.md`) cannot occur here, because none of the machinery
+they live in exists here.
 
 **`herdr`** opens a pane per ticket in a worktree-dispatch tool. It stays
 registered and working, and it is still the right answer for three things
@@ -366,7 +362,7 @@ That file is the committed config plus `[tracker.jira] host = ...`, the
 `[secrets.op.jira.user]` / `[secrets.op.jira.token]` tables (item, field,
 optional vault), and — if a `publish` provider is used — the
 `[publish.atlassian]` site identifiers (`space`, `root_page`,
-`project_feed`, `[publish.atlassian.feeds]`). It holds names only; the value is fetched by `op read` at
-run time and reaches only the wrapper's stdin. Without `NW_CONFIG` the
-tracker verbs fail with "no 1Password item configured", which is the
-intended behaviour on a fresh checkout.
+`project_feed`, `[publish.atlassian.feeds]`). It holds names only; the
+value is fetched by `op read` at run time and reaches only the wrapper's
+stdin. Without `NW_CONFIG` the tracker verbs fail with `no Jira host
+configured`, which is the intended behaviour on a fresh checkout.

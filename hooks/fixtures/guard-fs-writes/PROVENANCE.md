@@ -1,13 +1,12 @@
 # Provenance — hooks/fixtures/guard-fs-writes/
 
 `case4-long-quoted-prompt.recorded.txt` is the exact `.tool_input.command`
-text of a real fail-first reproduction captured during hardening of the
-guard this fixture ships alongside: `<remote-agent-dispatch-tool>
+text of a real command of the shape `<remote-agent-dispatch-tool>
 agent-prompt x "<long double-quoted argument containing single quotes, a
-literal '--', and a literal '\$'>" >/dev/null && echo done`, which produced
-a false block (RC=2) with a trailing-space "(resolves to: /dev/null )"
-message signature before the fix that made `target_is_outside` trim
-whitespace both before and after same-command variable substitution.
+literal '--', and a literal '\$'>" >/dev/null && echo done`. A guard that
+does not trim whitespace both before and after same-command variable
+substitution blocks it falsely (RC=2, "(resolves to: /dev/null )" with a
+trailing space); `target_is_outside` trims, and this fixture proves it.
 
 Captured byte-for-byte from the original diagnostic run rather than
 retyped by hand, specifically because this exact text is long, has nested

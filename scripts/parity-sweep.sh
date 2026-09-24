@@ -1,8 +1,7 @@
 #!/bin/bash
 #
 # Recurring drift check between this repo and a source project it was
-# extracted from (see docs/parity/2026-09-13.md). Reads a committed map file
-# and reports, read-only.
+# extracted from. Reads a committed map file and reports, read-only.
 #
 # A map row is SOURCE-PATH TAB LOCAL-PATH, optionally followed by a third
 # tab-separated field 'diverged:TICKET-KEY'. LOCAL-PATH may be a bare '-'

@@ -1,7 +1,6 @@
 # Adopting night-watchman on an existing repo
 
 A terse runbook for wiring an existing repo up as a night-watchman adopter.
-Written from the second adopter (ADOPT) adoption, 2026-09-13.
 
 ## Runbook
 
@@ -29,9 +28,9 @@ Written from the second adopter (ADOPT) adoption, 2026-09-13.
      | jq '.[] | select(.id == "work-order@moneymike-plugins") | {version, errors}'
    ```
 
-   **Landing also needs an ai-toolkit checkout.** Since NWM-131 (v1.7.0),
-   `scripts/land-branch.sh` keeps the ticket lifecycle and hands the merge,
-   lint gate, push and cleanup to ai-toolkit's `scripts/land-core.sh`.
+   **Landing also needs an ai-toolkit checkout.** `scripts/land-branch.sh`
+   keeps the ticket lifecycle and hands the merge, lint gate, push and
+   cleanup to ai-toolkit's `scripts/land-core.sh`.
    ai-toolkit is not a plugin, so nothing installs it: clone
    `moneymikeMD/ai-toolkit` beside this plugin's checkout, or set
    `AI_TOOLKIT_ROOT` to an existing clone. Without one, every
@@ -123,7 +122,7 @@ Global automation, scoped to all software projects, with no `project =`
 clause in the JQL (`status = Deferred AND "defer_until" <= now()`). Every
 project bootstrapped by `jira-space-create.sh` gets the Deferred status and
 the `defer_until` field, so the rule covers projects created later with no
-further work. This is what the first adopter did (2026-09-14). A global
+further work. A global
 rule counts against the site-wide Automation execution allowance; at one
 run a day that is about 30 executions a month. Per-project rules (the
 steps below, or the import template) are the fallback when a site wants
@@ -187,9 +186,9 @@ providers/tracker/jira/jira-api.sh --yes write PUT /field/<customfield id> \
 
 `GET /rest/api/3/field` keeps reporting `searcherKey: null` afterwards;
 prove it with a JQL search on the field instead. `jira-space-create.sh`
-now does this probe-and-repair for every field it creates or finds — see
-its own header, THE RECIPE step 4; the manual form above is the
-fallback for a field it did not touch.
+does this probe-and-repair for every field it creates or finds (its
+step 4); the manual form above is the fallback for a field it did not
+touch.
 
 ## Snags
 
@@ -214,10 +213,6 @@ fallback for a field it did not touch.
   to `.claude/*` (ignore contents, not the directory itself) and keep
   the `!.claude/settings.json` negation under it. `settings.local.json`
   stays ignored under the same `.claude/*` line.
-- **No template collisions were hit** on this adoption — `docs/ethos.md`
-  and `.night-watchman/config.toml` didn't already exist in the adopter,
-  and `docs/README.md` already existed as a real index (not a template),
-  so it only needed one new row rather than a fresh file.
 - **`.night-watchman/last-session-cost.txt` (written by the `SessionEnd`
   cost hook, see `docs/cost.md`) is per-machine, per-session state, not
   project config — add `.night-watchman/last-session-cost.txt` to the
@@ -225,15 +220,8 @@ fallback for a field it did not touch.
   don't gitignore the whole `.night-watchman/` directory, since
   `config.toml` there is real project config that should commit.
   `.night-watchman/closing-state.md` belongs on that list too. It is
-  per-run state a worker writes and does not commit. Not gitignoring it
-  no longer *blocks* a landing — `land-branch.sh` exempts exactly that one
-  path from the dirty-worktree check, by passing `--allow-untracked` to
-  land-core.sh (NWM-147, NWM-175) — but it still shows up in
-  every `git status` the worker and the reviewer run.
-- **The adopter's first session-start committed `dispatch = "herdr"`,
-  had `herdr` on PATH, and `HERDR_ENV=1` set — and still dispatched
-  through a plain `git worktree` subagent** because session-start framed provider dispatch as an optional
-  layer the orchestrator could choose not to reach for. Fixed by making
-  provider dispatch the rule once doctor reports it installed and ready,
-  with a preflight check that stops orientation loudly instead of
-  silently falling through.
+  per-run state a worker writes and does not commit. Leaving it
+  untracked does not block a landing — `land-branch.sh` exempts exactly
+  that one path from the dirty-worktree check, by passing
+  `--allow-untracked` to land-core.sh — but it shows up in every
+  `git status` the worker and the reviewer run.

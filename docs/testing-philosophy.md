@@ -44,8 +44,7 @@ proves nothing about the thing it claims to protect.
 
 ## Testing a skill or agent change
 
-Ported from pstack's `eval` skill, 2026-09-14. Five rules, held to by
-`evals/` cases here:
+Five rules, held to by `evals/` cases here:
 
 - Candidate never sees eval/test/judge/candidate — `evals/librarian`,
   `evals/researcher`, `evals/diagnose-and-pr` ask for a plan, not a test.
@@ -68,13 +67,13 @@ the code does what the test **enumerates**. It cannot prove anything about a
 seam it replaced with a stub, and it cannot notice a cost that only appears
 when the real thing runs many times.
 
-NWM-171 is the worked example. NWM-155 moved `kit.sh`'s tmpfile registry
-behind an `EXIT` trap. A bash `EXIT` trap does not run when `exec` replaces
-the process image, and `providers/lib/provider.sh` execs on **every** provider
-verb call — so every call leaked a registry file. 48 assertions across three
-copies of `kit.sh` were green and blind: none of them execs, because execing
-into a real provider implementation is exactly what the isolation rule
-removes. It surfaced days later, after release, by looking at `TMPDIR`.
+The worked example: `kit.sh` removes its tmpfile registry from an `EXIT`
+trap, a bash `EXIT` trap does not run when `exec` replaces the process
+image, and `providers/lib/provider.sh` execs on **every** provider verb
+call — so every call leaked a registry file. Every `kit.sh` selftest was
+green and blind: none of them execs, because execing into a real provider
+implementation is exactly what the isolation rule removes. The leak
+surfaced after release, by looking at `TMPDIR`.
 
 So: **a change to a hook, a provider, or anything reached through
 `${CLAUDE_PLUGIN_ROOT}` is not done when its selftest is green.** Run it.
@@ -87,7 +86,7 @@ scripts/dev-install.sh --uninstall
 
 An edit is live with no reinstall. Then do ordinary work with it and watch
 what the work produces — `ls "$TMPDIR" | wc -l` before and after a session is
-the check that would have caught NWM-171 in minutes. Never reach for `claude
+the check that catches a leak in minutes. Never reach for `claude
 plugin update` to refresh it: at an unchanged version that command is a no-op
 that prints success and leaves the old copy, which is worse than not trying.
 

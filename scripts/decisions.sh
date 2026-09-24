@@ -5,7 +5,7 @@
 # order. Modelled on ai-toolkit's known-issue.sh shape (add/index/lint); no
 # manifest/hash tamper-check (WO-022 found known-issue.sh's had drifted
 # from every entry) and no status/severity, since a decision is never
-# resolved or reopened, only superseded by a later entry.
+# resolved or reopened, only deleted when it no longer holds.
 #
 # Subcommands:
 #   migrate               ONE-SHOT. Split the hand-written docs/decisions.md
@@ -168,7 +168,7 @@ next_seq() {
 # render_index — the full generated docs/decisions.md, to stdout.
 render_index() {
     cat <<'HEADER'
-# Decisions — dated append log of "why"
+# Decisions — the "why" behind how things are
 
 **GENERATED — do not hand-edit.** Produced by `scripts/decisions.sh index`
 from the frontmatter and body of every file in `docs/decisions.d/`. Add an
@@ -176,10 +176,11 @@ entry with `scripts/decisions.sh add --title T --body B`, which writes the
 file there and reindexes for you. `scripts/decisions.sh lint` fails if this
 file ever drifts from what `index` would produce.
 
-Append-only. Never rewrite or delete an entry — if a decision changes,
-append a new entry that names the old one it supersedes. The point is a
-fresh session (or a fresh agent) can read this file top-to-bottom and see
-not just what was decided but why, and whether that reasoning still holds.
+One file per decision. An entry states the decision and the reasoning that
+still holds, as the current state of the world; a decision that no longer
+holds is deleted, not annotated, and its replacement stands on its own.
+The point is a fresh session (or a fresh agent) can read this file
+top-to-bottom and see not just what was decided but why.
 
 Newest entries at the bottom. Each entry: a date, one line naming the
 decision, then the reasoning that led to it — the constraint, tradeoff, or
@@ -187,8 +188,8 @@ incident that made one option win. A decision with no reasoning is a
 fact, not a decision, and belongs in a `docs/` topic file instead — see
 `tickets-protocol`'s routing table.
 
-Append only when all three gates hold: costly to reverse, a future reader
-would be surprised without it, and real alternatives were weighed.
+Add an entry only when all three gates hold: costly to reverse, a future
+reader would be surprised without it, and real alternatives were weighed.
 Otherwise it is a fact for a topic file, or nothing. Rejected alternatives
 worth remembering stay as cancelled tickets with an outcome, not an entry
 here.

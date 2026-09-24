@@ -54,8 +54,9 @@ doc there in its place.
 
 Decide only at a phase boundary, in order — first yes wins:
 
-1. **Continue** — next phase needs this verbatim and session is under
-   session-start's split threshold.
+1. **Continue** — next phase needs this verbatim and no wave boundary has
+   been reached (`session-start` splits the orchestrator session at every
+   wave boundary).
 2. **Clear** — nothing here matters to what follows.
 3. **Handoff** — work moves to another harness, repo, person, or forked
    side task.

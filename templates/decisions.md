@@ -1,12 +1,13 @@
-# Decisions — dated append log of "why"
+# Decisions — the "why" behind how things are
 
 *Template. Copy this into your own repo as `docs/decisions.md`. Delete this
 header comment once you do.*
 
-Append-only. Never rewrite or delete an entry — if a decision changes,
-append a new entry that names the old one it supersedes. The point is a
-fresh session (or a fresh agent) can read this file top-to-bottom and see
-not just what was decided but why, and whether that reasoning still holds.
+One entry per decision. An entry states the decision and the reasoning that
+still holds, as the current state of the world; a decision that no longer
+holds is deleted, not annotated, and its replacement stands on its own. The
+point is a fresh session (or a fresh agent) can read this file top-to-bottom
+and see not just what was decided but why.
 
 Newest entries at the bottom. Each entry: a date, one line naming the
 decision, then the reasoning that led to it — the constraint, tradeoff, or
@@ -14,11 +15,11 @@ incident that made one option win. A decision with no reasoning is a
 fact, not a decision, and belongs in a `docs/` topic file instead — see
 `tickets-protocol`'s routing table.
 
-Append only when all three gates hold: costly to reverse, a future reader
+Add an entry only when all three gates hold: costly to reverse, a future reader
 would be surprised without it, and real alternatives were weighed.
 Otherwise it is a fact for a topic file, or nothing. Rejected alternatives
 worth remembering stay as cancelled tickets with an outcome, not an entry
-here. Adapted from mattpocock/skills domain-modeling, 2026-09-14.
+here.
 
 ## Log
 

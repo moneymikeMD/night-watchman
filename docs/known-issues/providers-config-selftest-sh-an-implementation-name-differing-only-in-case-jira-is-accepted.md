@@ -4,13 +4,17 @@ heading_raw: "providers/config-selftest.sh: an implementation name differing onl
 severity: LOW
 status: open
 qualifiers: []
-note: "pre-existing on main; found while verifying NWM-112, unrelated to it"
+note: "one assertion; the selftest is quarantined in .github/workflows/ci.yml"
 tickets: ["NWM-112"]
 slug: providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted
 ---
 
-Found 2026-09-18 while the NWM-112 worker ran providers/config-selftest.sh to cover its new [dispatch.brief] assertions. One assertion fails, named "implementation name 'Jira' was accepted": the config reader accepts a provider implementation name that differs from the canonical one only by capitalisation, where the selftest expects it to be rejected.
+providers/config-selftest.sh fails one of its 126 assertions,
+"implementation name 'Jira' was accepted": the config reader accepts a
+provider implementation name that differs from the canonical one only by
+capitalisation, where the selftest expects a refusal. CI quarantines this
+selftest by exact path and re-runs it with continue-on-error.
 
-Measured on both sides before filing, so this is not NWM-112's doing: the branch run was 125 of 126 assertions passing with this one failure, and the same script on the main checkout at the time was 122 of 123 with the same failure. The delta between the two counts is exactly the three assertions NWM-112 added, all of which pass.
-
-Not diagnosed further. The open question is which side is wrong — whether implementation names are meant to be case-insensitive (in which case the assertion is stale) or strictly lower-case (in which case the reader needs to reject, and every provider lookup should be audited for the same leniency). Whoever picks this up should answer that first rather than making the assertion pass.
+Open question: are implementation names case-insensitive (the assertion is
+wrong) or strictly lower-case (the reader must reject, and every provider
+lookup needs the same audit)? Answer that before making the assertion pass.

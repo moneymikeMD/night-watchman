@@ -47,7 +47,7 @@ blocker surfaced. One row per ticket landed is the minimum bar for a wave
 run through `land-branch.sh`. Append with `scripts/decision-log.sh --phase
 P --decision D [--why W] [--evidence E] [--result R]` (it writes the header
 on first use and keeps cells single-line); append-only — a wrong call gets
-a new row that supersedes it, never an edit to history.
+a new row, never an edit to an earlier one.
 
 ## Wrap-up: audit the log against the transcript
 
@@ -103,9 +103,8 @@ label and phase. Never let it show up as a silent absence from the list.
 ## The Attention section
 
 Once the log is audited and the run record is built, dispatch one
-`sonnet`-model agent (not the model that ran the wave, kept to one reviewer
-— see the epic's cost note) with read access to the trail, the transcript
-and the run record. It is not redoing the work; it scans for what the human
+`sonnet`-model agent (not the model that ran the wave, and one reviewer
+only) with read access to the trail, the transcript and the run record. It is not redoing the work; it scans for what the human
 should look at:
 
 - an agent that started and never returned a result

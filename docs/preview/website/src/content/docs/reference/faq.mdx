@@ -15,7 +15,7 @@ No, and the cleanest proof is that night-watchman has already been run both
 ways without noticing the difference.
 
 `providers/dispatch/` is a provider-neutral contract. `herdr` is one
-implementation behind it. The 2026-09-19 work-order wave was dispatched through
+implementation behind it. A work-order wave was dispatched through
 Claude Code's Workflow tool instead, and nothing above the dispatch seam
 changed: the same tickets, the same lifecycle, the same gates, the same
 end-of-wave report. A thing that treats "a workflow" and "a herdr pane" as
@@ -92,7 +92,7 @@ issues — a cold boot swallowing the brief, the reached-working wait failing on
 back-to-back starts, a fresh worktree hitting the folder-trust dialog — do not
 exist when the same wave runs under the Workflow tool.
 
-WO-026 answered that by adding the Workflow tool as the second implementation
+WO-26 answered that by adding the Workflow tool as the second implementation
 and making it the default; herdr stays as the fallback for a supervised pane, a
 session outliving the turn, and anything needing a real terminal. So the seam
 now carries two implementations rather than one, which is the only way its
@@ -114,7 +114,7 @@ whole and over-broad for the parts.
 `agents/`, `skills/` and `hooks/` as directories are ordinary Claude Code plugin
 surface. What is not ordinary:
 
-1. **The ticket as a cold-executable contract** — being extracted into
+1. **The ticket as a cold-executable contract** — extracted into
    `work-order` precisely because it is the reusable idea rather than a detail
    of this implementation.
 2. **The capability ladder** — repeated work climbs down to something cheaper

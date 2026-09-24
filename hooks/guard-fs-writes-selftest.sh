@@ -440,8 +440,7 @@ assert_exit "still blocks 'git stash push -u -m ssh' — 'ssh' as a -m VALUE aft
 
 # _ss_opaque's push/pop is deliberately NOT asserted here: any word after a
 # nested scan_command_text call in the same segment is already unreachable by
-# the outer dispatch loop for an unrelated reason, so no probe could isolate
-# it — see docs/known-issues/guard-fs-writes-sh-trailing-words-after-a-re-execution-context-in-the-same-segment-bypass-local-rules.md
+# the outer dispatch loop for an unrelated reason, so no probe could isolate it.
 
 OUT="$NOT_WORKTREE_NOT_SCRATCH"
 GOT="$(run_guard "$FAKE_WORKTREE" "bash -c \"true\" rm -rf $OUT")"

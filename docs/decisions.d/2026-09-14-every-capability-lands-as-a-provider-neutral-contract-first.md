@@ -7,31 +7,21 @@ title: "Every capability lands as a provider-neutral contract first"
 ---
 
 Owner directive: "do everything homelab can do, but written in a generic
-way so other tools can implement the interface." homelab (the source
-project this plugin was extracted from) is the first *provider* of every
-kind, never the shape of the contract itself.
+way so other tools can implement the interface." homelab, the project this
+plugin was extracted from, is the first *provider* of every kind, never the
+shape of the contract itself.
 
-Reasoning: a same-day audit that only diffed rows already in
-`templates/parity-map.tsv` missed a real gap — `scripts/api/confluence-api.sh`,
-`scripts/api/atlassian-graphql.sh`, and homelab's session-start "publish"
-step were absent from both the map and `docs/parity/2026-09-13.md`. A same-day bottom-up sweep — enumerate every script, agent,
-skill, and hook actually *referenced* from homelab's own CLAUDE.md,
-`.claude/skills/*/SKILL.md`, `.claude/agents/*.md`, `.claude/settings*.json`,
-`docs/scripts.md`, `docs/cost/README.md`, then classify each as
-PORTED / PORTED-DRIFT / UNMAPPED GAP / SOURCE-SPECIFIC — found that gap
-immediately and confirmed no other capability was unmapped. The map alone
-was the audit's blind spot: it can only ever report drift on a row someone
-already thought to add, never a capability nobody mapped in the first
-place.
+Reasoning: a parity audit that only diffs rows already in
+`templates/parity-map.tsv` can report drift on a row someone thought to
+add, never a capability nobody mapped. A bottom-up walk over the source
+project's own orchestration surface (every script, agent, skill and hook
+referenced from its CLAUDE.md, skills, agents, settings and docs),
+classified as PORTED / PORTED-DRIFT / UNMAPPED GAP / SOURCE-SPECIFIC, is
+what finds the unmapped ones.
 
-Decision: the map stays the classification *store* (drift/new/vanished are
-still worth tracking there), but the *source of truth for what exists* is
-the enumeration walk over the source project's own orchestration surface,
-not the map. `scripts/parity-sweep.sh --source-root DIR`
-implements this as a fourth pass, with an explicit SOURCE-SPECIFIC
-allowlist (`templates/parity-allowlist.txt`) for lab-infra capabilities
-(host/media/network ops, TrueNAS, Proxmox, Grafana, Caddy) so the sweep
-stays quiet about scope this plugin does not intend to generalize.
-
-Out of scope here: porting any individual gap the sweep finds — each is
-its own ticket.
+Decision: the map is the classification *store*; the source of truth for
+what exists is the enumeration walk. `scripts/parity-sweep.sh --source-root
+DIR` runs it as a fourth pass, with `templates/parity-allowlist.txt` naming
+the SOURCE-SPECIFIC lab-infra capabilities (host/media/network ops, TrueNAS,
+Proxmox, Grafana, Caddy) this plugin does not generalise. Porting any gap the
+sweep finds is its own ticket.

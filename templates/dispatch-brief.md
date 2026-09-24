@@ -3,10 +3,10 @@ Rendered by providers/dispatch/herdr/herdr-ticket-start.sh into the agent's
 first prompt. Placeholders: @KEY@ @BRANCH@ @MODEL@ @TIMEBOX@ @FORBIDDEN@
 @TRACKER@. STANDING is the single source of this project's standing orders;
 the session-start skill points here. Text above the first heading is dropped.
-WORKTREE and CLOSING STATE sections are appended by the script rather than
-templated here, because the worktree path and the base branch it is cut
-from are resolved per run (NWM-144); both providers append a MIXED TICKET
-one for an executor:mixed ticket (the workflow provider since NWM-146).
+WORKTREE and CLOSING STATE sections are appended by the dispatch provider
+rather than templated here, because the worktree path and the base branch
+it is cut from are resolved per run; both providers append a MIXED TICKET
+section for an executor:mixed ticket.
 -->
 # @KEY@ worker brief
 

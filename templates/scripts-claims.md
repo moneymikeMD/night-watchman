@@ -18,4 +18,4 @@ the `Reality` column here rather than duplicated.
 
 | Script | Claim (from header) | Verified reality | Checked |
 | --- | --- | --- | --- |
-| `scripts/known-issue.sh` | `reindex` never runs against a live host — repo-docs only, touches nothing outside `docs/known-issues/` | Confirmed: no network calls, no credential reads in the script | 2026-09-11 |
+| `scripts/decisions.sh` | `index` never runs against a live host — repo-docs only, touches nothing outside `docs/decisions.d/` and `docs/decisions.md` | Confirmed: no network calls, no credential reads in the script | 2026-09-24 |

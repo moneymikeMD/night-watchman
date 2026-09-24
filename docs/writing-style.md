@@ -1,9 +1,13 @@
 # docs/ writing style
 
-Ported from pstack's `technical-writing` skill (report 5.12). This section
-applies to committed `docs/` prose. Skill and agent prose (`skills/`,
-`agents/`, `CLAUDE.md`) follows the separate rules below — caveman mode
-shapes chat output only, not committed files.
+This section applies to committed `docs/` prose. Skill and agent prose
+(`skills/`, `agents/`, `CLAUDE.md`) follows the separate rules below —
+caveman mode shapes chat output only, not committed files.
+
+Declare the world as it is. A doc states the current fact, never the path
+it took to get there: no correction notes, dated ledgers, "used to say" or
+strikethrough. The history is in git. A question that is genuinely open
+is written as a question.
 
 ## Diátaxis compass, mapped to this repo
 
@@ -15,7 +19,8 @@ One file, one mode.
 - **Reference** (facts for lookup, no opinion) — the topic files:
   `ethos.md`, `known-issues.md`, `cost.md`, `scripts.md`,
   `testing-philosophy.md`.
-- **Explanation** (why, opinion allowed) — `docs/decisions.md`.
+- **Explanation** (why, opinion allowed) — `docs/decisions.md`,
+  `docs/faq.md`, `docs/evidence.md`.
 
 Don't mix modes in one file: no reference tables inside a how-to, no
 arguing inside reference. Split and link instead.
@@ -42,12 +47,11 @@ modify, one name per thing, no slashes.
 
 Existing docs keep their em dashes as written — no rewrite pass. A new
 doc prefers a full stop or comma instead of an em dash, but an em dash
-in new prose is not a review finding. (Assumption; flag for the owner
-to flip if wrong.)
+in new prose is not a review finding. Is that the rule the owner wants,
+or should new prose ban the em dash outright?
 
 ## Skill and agent prose
 
-Adapted from mattpocock/skills `writing-for-agents`, `retro`, 2026-09-14.
 Applies to `skills/*/SKILL.md`, `agents/*.md`, and `CLAUDE.md` — anything
 an agent reads as steering, not anything a human reads as reference.
 
