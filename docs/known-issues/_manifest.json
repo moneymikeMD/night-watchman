@@ -17,7 +17,7 @@
   "jira-workflow-apply-selftest-13b-assertion-expects-the-phrase-project-key-but-the-script-says-project-key": "250fdfb214217f646eee5d5cf146c4c4c55603c1446557c43fb59f81a350513e",
   "known-issues-manifest-json-hashes-disagree-with-every-entry-file-so-the-force-mode-tamper-check-is-meaningless-directory-wide": "cfb64b4c48404126c0cb5dcd1356c970a9f59c7490ac6131f0099e0f2bf0314f",
   "land-branch-selftest-sh-needs-pyyaml-but-neither-declares-nor-checks-for-it": "8111da9d48073e06fcbd0ce70d2b0f04c29ccfda97f4c0346828028125ed6354",
-  "land-branch-sh-lint-cmd-is-word-split-not-shell-evaluated": "134d03b245f16f097ba94966364cfae80353a6a57a207dfea55c597c35d9d0ec",
+  "land-branch-sh-lint-cmd-is-word-split-not-shell-evaluated": "40abfa17dcb0a8a9a8a4d0a3f34377d5652e37e2daf4e4118d569776491f3e12",
   "memorygraph-link-rejects-supersedes-and-relates-to-so-a-memory-cannot-be-superseded-by-an-edge": "9646dc9f8729ed9a09790a19adb0e1ad8a41b1540caf5c008d09c8490f84061d",
   "nwm-workflow-previous-status-validator-on-completed-refuses-the-normal-in-progress-to-completed-path-it-counts-only-statuses-before-the-current-one": "ca3c406a982fa46ce926020cdcfd7c64393c09d54b25638bf1ca083b5f8ba556",
   "providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted": "acaa6af0a8d5c3f33513892ede2aad0333f9f453041dc289698aaaae23eea213",

@@ -12,11 +12,12 @@ ai-toolkit-root.sh — print the root of the ai-toolkit checkout this repo
 consumes operator scripts from, so nothing here needs a second copy of one.
 
 ```text
-Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire]
+Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core]
   Prints the directory holding ai-toolkit's scripts/. With a flag, prints
   that script's path inside it instead. Each flag names a script this repo
   donated and now consumes: known-issue.sh (NWM-128), script-analytics.py
-  and script-retire.sh (NWM-130).
+  and script-retire.sh (NWM-130), and land-core.sh, the merge-and-push
+  core land-branch.sh wraps (NWM-131).
 ```
 
 ### scripts/bash-family-report.py
@@ -113,9 +114,10 @@ Usage: land-ack.sh <ack-file>
 ### scripts/land-branch.sh
 
 Land a finished ticket branch onto the target branch (default: main),
-complete its ticket, and clean up.
-TRACKER. Two backends, via --tracker / LAND_BRANCH_TRACKER (default: file,
-so this plugin ships needing zero external accounts):
+complete its ticket, and clean up. The ticket LIFECYCLE is this script's;
+the merge, lint gate, push and branch cleanup are ai-toolkit's land-core.sh,
+resolved at run time by scripts/ai-toolkit-root.sh --land-core and driven
+through its four-point hook contract, with this script as the hook.
 
 ```text
 Usage:

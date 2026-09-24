@@ -31,6 +31,7 @@ make_ai_toolkit() {
     : > "$1/scripts/known-issue.sh"
     : > "$1/scripts/script-analytics.py"
     : > "$1/scripts/script-retire.sh"
+    : > "$1/scripts/land-core.sh"
 }
 
 # run_sut [AI_TOOLKIT_ROOT=...] ARGS... — sets RC, OUT and ERR. A leading
@@ -122,7 +123,7 @@ else
 fi
 
 run_sut --help
-if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire]"* ]] && [ -z "$ERR" ]; then
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core]"* ]] && [ -z "$ERR" ]; then
     ok "--help prints the header on stdout, exit 0"
 else
     bad "--help: rc=$RC out='$OUT' err='$ERR'"
@@ -148,6 +149,23 @@ if [ "$RC" -eq 0 ] && [ "$OUT" = "$REAL_AT/scripts/script-retire.sh" ]; then
     ok "--script-retire appends the retirement script's path"
 else
     bad "--script-retire: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+run_sut "AI_TOOLKIT_ROOT=$REAL_AT" --land-core
+if [ "$RC" -eq 0 ] && [ "$OUT" = "$REAL_AT/scripts/land-core.sh" ]; then
+    ok "--land-core appends the merge-and-push core's path"
+else
+    bad "--land-core: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+OLD_AT="$WORK/old-ai-toolkit"
+mkdir -p "$OLD_AT/scripts"
+: > "$OLD_AT/scripts/known-issue.sh"
+run_sut "AI_TOOLKIT_ROOT=$OLD_AT" --land-core
+if [ "$RC" -ne 0 ] && [ -z "$OUT" ] && [[ "$ERR" == *"has no scripts/land-core.sh"* ]]; then
+    ok "--land-core against a checkout that predates land-core.sh exits non-zero naming it"
+else
+    bad "--land-core on an old checkout: rc=$RC out='$OUT' err='$ERR'"
 fi
 
 # A checkout that resolves but predates the move must say so, not print a

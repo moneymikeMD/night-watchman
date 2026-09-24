@@ -30,6 +30,12 @@ KIT="$HERE/lib/kit.sh"
 FIXTURES="$HERE/../providers/tracker/jira/fixtures"
 [ -r "$LAND_BRANCH" ] || { echo "cannot read $LAND_BRANCH" >&2; exit 2; }
 [ -r "$KIT" ] || { echo "cannot read $KIT" >&2; exit 2; }
+# land-branch.sh drives ai-toolkit's land-core.sh; each fixture gets this
+# repo's resolver, pointed at the checkout it resolves here.
+AI_TOOLKIT_ROOT="$("$HERE/ai-toolkit-root.sh")" || { echo "cannot resolve ai-toolkit (set AI_TOOLKIT_ROOT)" >&2; exit 2; }
+export AI_TOOLKIT_ROOT
+"$HERE/ai-toolkit-root.sh" --land-core >/dev/null || { echo "ai-toolkit at $AI_TOOLKIT_ROOT has no scripts/land-core.sh" >&2; exit 2; }
+unset LAND_CORE_LINT_CMD LAND_CORE_HOOK LAND_CORE_TARGET_BRANCH
 [ -r "$FIXTURES/issue.transitions.live.json" ] || { echo "cannot read the recorded transitions fixture" >&2; exit 2; }
 [ -r "$FIXTURES/issue.transition.rules-rejected.txt" ] || { echo "cannot read the recorded 400 fixture" >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || { echo "python3 required" >&2; exit 2; }
@@ -196,6 +202,7 @@ fresh_jira_repo() {
         git remote add origin "$d.git"
         cp "$LAND_BRANCH" scripts/land-branch.sh
         cp "$KIT" scripts/lib/kit.sh
+        cp "$HERE/ai-toolkit-root.sh" scripts/ai-toolkit-root.sh
         chmod +x scripts/land-branch.sh
         printf 'placeholder\n' > README.md
         git add -A
@@ -490,6 +497,38 @@ elif grep -q "untouched" "$WORK/j11.out"; then
 $(cat "$WORK/j11.out")"
 else
     ok "testJ11: a pre-push failure after the Awaiting move reverts the merge, pushes nothing, and says the issue stays Awaiting Deployment"
+fi
+
+# ---- test J12 (NWM-131): a push that fails AFTER the merge leaves the merge
+# in place and exits 1 — the contract that saved a landing on 2026-09-19. The
+# push URL names a path that does not exist, so fetch works and push cannot.
+# The issue must stay Awaiting Deployment: nothing was deployed.
+
+fresh_jira_repo j12 3 10009 >/dev/null
+STATE="$WORK/j12.jira-state.json"
+BEFORE=$(git -C "$WORK/j12.git" rev-parse main)
+git -C "$WORK/j12" config remote.origin.pushurl "$WORK/j12-nowhere.git"
+run_land j12 --jira-done-status 10014
+LAND_HEAD_SUBJECT=$(git -C "$WORK/j12-land" log -1 --format=%s 2>/dev/null) || LAND_HEAD_SUBJECT=""
+if [ "$RC" -ne 1 ]; then
+    bad "testJ12 (push fails): exit $RC, expected 1:
+$(cat "$WORK/j12.out")"
+elif [ "$(git -C "$WORK/j12.git" rev-parse main)" != "$BEFORE" ]; then
+    bad "testJ12: origin/main moved although the push failed"
+elif [ "$LAND_HEAD_SUBJECT" != "PROJ-1: merge branch 'work' into main" ]; then
+    bad "testJ12: the integration worktree's HEAD is '$LAND_HEAD_SUBJECT' — the merge was reverted or never made:
+$(cat "$WORK/j12.out")"
+elif ! git -C "$WORK/j12-land" merge-base --is-ancestor work HEAD 2>/dev/null; then
+    bad "testJ12: 'work' is not in the integration worktree's HEAD — the merge did not stay"
+elif [ "$(posted_transitions "$STATE")" != "61" ]; then
+    bad "testJ12: transitions posted were '$(posted_transitions "$STATE")', expected only '61' (no Completed after a failed push)"
+elif [ "$(state_field "$STATE" status_id)" != "10012" ]; then
+    bad "testJ12: status_id is '$(state_field "$STATE" status_id)', expected 10012 (Awaiting Deployment)"
+elif ! grep -q "was NOT completed" "$WORK/j12.out"; then
+    bad "testJ12: the stop message does not say the issue was not completed:
+$(cat "$WORK/j12.out")"
+else
+    ok "testJ12: a failed push keeps the merge in the integration worktree, exits 1, and leaves the issue Awaiting Deployment"
 fi
 
 # ---- test J10: the default tracker is still 'file', not 'jira' — a run with
