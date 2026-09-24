@@ -40,12 +40,10 @@ the artifact — a bare terminal, CI, a cheap model, reviewable once. MCP is
 only its signature — schema-validated parameters, call by name, a distinct
 `tool_name` in tool analytics.
 
-The premise that used to rule this out is stale: tool schemas are deferred
-in this harness, so an unused tool costs one name in a list, not a schema
-in context. A 2026-09-19 session observed roughly 230 deferred tool names,
-about 100 of them `tokensave_*`, with only five carrying eager schemas. The
-dominant cost of a crowded tool list is picking the wrong one, not tokens —
-an argument for narrow, per-domain servers, not against surfacing at all.
+Tool schemas are deferred in this harness, so an unused tool costs one
+name in a list, not a schema in context. The dominant cost of a crowded
+tool list is picking the wrong one, not tokens — an argument for narrow,
+per-domain servers, not against surfacing at all.
 
 Reach for the surface only when *both* hold, otherwise stay a script:
 

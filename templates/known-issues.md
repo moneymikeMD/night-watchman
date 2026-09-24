@@ -14,9 +14,8 @@ which reindexes for you, or run `reindex` directly. `known-issue.sh lint`
 fails the moment this file stops matching what `reindex` would produce.
 
 Severity is blast radius if the thing goes wrong, not effort to fix it:
-`HIGH` | `MEDIUM` | `LOW` | `COSMETIC`. A resolved entry stays in the
-table, struck through and marked `RESOLVED` — the history is the useful
-part, so entries are never deleted.
+`HIGH` | `MEDIUM` | `LOW` | `COSMETIC`. `reindex` renders a resolved entry
+struck through and marked `RESOLVED`.
 
 | Severity | Finding |
 | --- | --- |

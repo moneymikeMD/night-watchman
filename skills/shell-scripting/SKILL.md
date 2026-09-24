@@ -19,12 +19,17 @@ command block in the ticket, not a script.
 
 ## Shape
 
-Every script sources the shared library:
+Every script sources the shared library — here `scripts/lib/kit.sh`
+(`die`, `warn`, `need`, `show_help`, `tmpfile`, `kit_exec`, `kit_on_exit`,
+`known_command`); `providers/lib/kit.sh` is its copy for provider scripts:
 
 ```bash
-LIBMAIN="$0"
-. "$(cd "$(dirname "$0")" && pwd)/lib/shell-lib.sh"
+. "$(cd "$(dirname "$0")" && pwd)/lib/kit.sh"
 ```
+
+`pipe_ok`, `blank()` and the curl-config helpers named below are
+conventions a script or a domain library (`providers/tracker/jira/lib/http.sh`
+has `curl_auth_config`) defines; `kit.sh` does not ship them.
 
 API client shape: header comment → source the library → resolve credentials
 **once at startup** (not per request) → a request helper → one `view_*` per

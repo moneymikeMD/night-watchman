@@ -6,8 +6,8 @@ description: Generated from docs/evidence.md and docs/cost.md, both reproduced v
 
 ## Evidence before pitch
 
-This plugin was extracted from a production system that has been measuring
-its own cost, so the claims below are measured, not projected.
+This plugin was extracted from a production system that measures its own
+cost, so the claims below are measured, not projected.
 
 **A tool-result-filtering hook cut subagent spend on the wave it landed.**
 One operating wave ran with a PreToolUse hook in place that filters
@@ -22,32 +22,21 @@ that wave to the one immediately before it, on the same ledger:
 | wave duration | 3.59h | 2.50h | -30.4% |
 | cost per hour | $19.45/h | $20.29/h | +4.3% |
 
-Read that honestly, not triumphantly: cost per hour actually *rose* — the
-wave got cheaper only because it got shorter, not because it got cheaper to
-run per hour of work. The same wave also shifted much of its work onto
+Read that honestly, not triumphantly: cost per hour *rose* — the wave got
+cheaper only because it got shorter, not because it got cheaper to run per
+hour of work. The same wave also shifted much of its work onto
 worktree-dispatched worker processes rather than direct main-thread
 subagent calls (worker share of spend rose from 47.16% to 72.17%). The
 review that produced this comparison flagged its own result, verbatim:
 "consistent with the shunt working, but it is also exactly what a wave
 with almost no direct subagent fan-out would produce regardless of the
-hook." The causal claim was never fully isolated from that confound. The
-subagent-share number is real and the direction is the one you'd want; the
-attribution is not yet proven, and this README says so instead of quietly
-rounding up.
-
-**Status as of 2026-09-11: still not isolated.** Six waves have run since,
-and `subagent_pct` has moved between 27% and 70% without settling below the
-40% target the source project treats as a clean read (`docs/cost/ledger.tsv`,
-`docs/cost/reviews/2026-09-11-{am,early,morning,overnight}.md`). A
-`2026-09-11-quiet` wave was deliberately run to get a clean measurement
-point — zero diff to the filtering hook itself, checked by
-`git log -- scripts/dev/bash-result-shunt.sh` over the window — but its
-9-hour ledger window still spanned unrelated script-authorship work landed
-in an earlier sprint, so the ticket-load leg of "clean" wasn't met either
-(`docs/cost/reviews/2026-09-11-quiet.md`). The 27.11% → 3.32% comparison
-above remains the only clean-looking data point on record; it has not been
-reproduced since, and this README is not going to claim otherwise until it
-is.
+hook." The causal claim has not been isolated from that confound: later
+waves have moved `subagent_pct` between 27% and 70% without settling
+below the 40% the source project treats as a clean read, and the
+comparison above is the only clean-looking data point on record. The
+subagent-share number is real and the direction is the one you'd want;
+the attribution is not proven, and this document says so instead of
+quietly rounding up.
 
 **A self-check that can't fail is not a self-check.** A migration script's
 "did this work" check once shared the exact heading matcher its write path
@@ -66,11 +55,9 @@ Deploy-state claims still route through the same re-verification this
 document already argues for above; a clean wave trail is not a substitute
 for running a ticket's `verify` block against the live system.
 
-Ported from pstack show-me-your-work, 2026-09-14.
-
 # Cost ledger
 
-An optional layer (see the README's "Core plus optional layers"): a
+An optional layer (see the README's "Optional layers"): a
 per-wave record of what a wave of agentic work cost, so `cost-reviewer`
 (or a human) can ask "did last wave's change actually move the number"
 without re-deriving it from raw logs each time.
@@ -86,9 +73,8 @@ Two scripts, split on purpose — scan is optional, the ledger is not:
   `--turns` pair on this machine: scans local Claude Code JSONL
   transcripts under `~/.claude/projects/<slug>/` (main session + any
   `subagents/agent-*.jsonl` for Agent-tool turns and
-  `subagents/workflows/wf_*/agent-*.jsonl` for Workflow-tool turns — both
-  shapes, since NWM-152; missing the second under-counted a wide fan-out by
-  a factor of several), dedupes the several JSONL lines a single
+  `subagents/workflows/wf_*/agent-*.jsonl` for Workflow-tool turns),
+  dedupes the several JSONL lines a single
   streamed message can produce (grouped by `message.id`, last one wins),
   and prices tokens against `--prices` (default
   `templates/claude-prices.tsv`). `--ledger-line` prints exactly `cost:
@@ -102,10 +88,10 @@ Two scripts, split on purpose — scan is optional, the ledger is not:
   `script-analytics.py` reads the same table and finds it by search:
   `$CLAUDE_PRICES_TSV`, then `../templates/claude-prices.tsv` beside the
   script, then `claude-prices.tsv` beside the script, then the same two
-  under `$CLAUDE_PROJECT_DIR`. Since it now lives in another repo, the
+  under `$CLAUDE_PROJECT_DIR`. Because it lives in another repo, the
   search's first candidate is *that* repo's `templates/`, so
   `hooks/script-events-hook.sh` pins `--prices` explicitly rather than
-  trusting the order, and a run by hand should do the same (NWM-130).
+  trusting the order, and a run by hand should do the same.
   When none exists it exits 2 naming every path it tried.
 - `templates/cost-ledger.tsv` — a header-only starting point. Copy it into
   the project (a common convention is `docs/cost-ledger.tsv`) and start
@@ -133,7 +119,7 @@ One TSV row per wave:
 | `notes` | text | what changed this wave, what was adopted from the previous review |
 
 `turns`/`cost_usd` stay the wave's totals; `orchestrator_*`/`worker_*`
-split the same wave by role (NWM-119), so a reviewer can compare what an
+split the same wave by role, so a reviewer can compare what an
 orchestrator model+effort choice itself costs without re-deriving it from
 the transcript. `claude-cost-scan.py --ledger-fields` (below) produces
 these six columns directly from a local transcript, tagging the main
@@ -164,12 +150,11 @@ ledger itself holds only cost and turns, never quality signals.
 
 ## Orchestrator model choice is a ledger-visible decision
 
-Owner, 2026-09-15: hit the weekly cap on `claude-fable-5-1` mid-session and
-learned it is a separate cap from every other model — Opus, Sonnet and
-Haiku draw from a different pool. Fable has been the default orchestrator
-model, so routine dispatch, review triage and landing work all burn the
-scarcest budget by default, whether or not that wave needed Fable's
-quality. That choice was habit, not evidence (NWM-119).
+The weekly cap on `claude-fable-5-1` is separate from every other model's:
+Opus, Sonnet and Haiku draw from a different pool. Fable is the default
+orchestrator model, so routine dispatch, review triage and landing work
+burn the scarcest budget by default, whether or not the wave needed
+Fable's quality.
 
 The `orchestrator_model`/`orchestrator_effort` columns above, plus
 `claude-cost.py model-compare` and `cost-reviewer`'s Model section, make
@@ -180,11 +165,10 @@ reviewer can ask whether the cheaper model held quality on the ledger's
 quality proxies (rework ratio, owner-wait, reviewer rounds per ticket,
 verify failures discovered after landing) instead of asserting it.
 
-**No such comparison has been run yet** (tracked as NWM-119's still-open
-item 4), so there is no recommendation the data supports and this
-document makes none. Per the owner's 2026-09-23 decision, the default in
-`~/.claude/settings.json` does not change until it does — measure first,
-then decide.
+Does Opus at high effort hold quality as the orchestrator? No such
+comparison has run (NWM-119 is open on it), so this document makes no
+recommendation, and the default in `~/.claude/settings.json` does not
+change until one has — measure first, then decide.
 
 ## What this deliberately does not do
 
@@ -270,7 +254,7 @@ from the jsonl if the two ever look out of sync — the tsv is what to
 trust; investigate the jsonl append instead.
 
 This plugin ships no shipper config, pipeline, or dashboard for the jsonl
-twin — see the README's "Core plus optional layers": the plugin never
+twin — see the README's "Optional layers": the plugin never
 assumes an observability stack. The jsonl file is the seam; wiring it to
 Loki/Elasticsearch/whatever a project already runs is the adopter's own
 work.
@@ -327,7 +311,7 @@ USD, and wall time to acceptance, per script and per agent type.
   own `../scripts/`, then whatever `scripts/ai-toolkit-root.sh
   --script-analytics` finds — never the consuming project's own `scripts/`,
   and only invokes a file that carries the line
-  `# script-analytics-extractor-sentinel: v1` (NWM-156, NWM-130, NWM-160).
+  `# script-analytics-extractor-sentinel: v1`.
   Idempotent by its own event `key`, fails open on
   any error (never blocks a subagent's stop), and never prints the hook's
   stdin payload or the extractor's own output — see the hook's own header
@@ -413,9 +397,8 @@ wave's window changed. Every OTHER per-script column IS windowed by
 `invocations`/`sessions`/`pass`/`fail`/`lint_runs`/`selftest_runs`/
 `rework_rounds`/`lint_wall_clock_s`/`author_usd`/`rework_ratio` reflect
 only that window's activity, not the script's lifetime. With no window,
-these columns keep their pre-existing lifetime behaviour and the output
-is byte-identical to before this ticket. `flag` follows a fixed
-precedence, evaluated in order:
+these columns are lifetime figures. `flag` follows a fixed precedence,
+evaluated in order:
 
 1. `>=10` lifetime invocations always reads `"keep"`, regardless of how
    recently the script landed.
@@ -462,9 +445,8 @@ python3 "$(scripts/ai-toolkit-root.sh --script-analytics)" backfill-script-paths
 ### Wave summary line
 
 `report --usage` prints `# window rework_ratio: <n>` unconditionally
-(unwindowed rework cost / author cost across every script, lifetime with
-no `--since`/`--until` given — this line predates this ticket and its
-unwindowed value is unchanged). When `--since` or `--until` IS given, two
+(rework cost / author cost across every script, lifetime with no
+`--since`/`--until` given). When `--since` or `--until` IS given, two
 more lines follow: `# window owner_wait_s: <n>` (the owner_wait summary's
 wave-total, same number as the "total" row below it) and `# window
 tickets_per_owner_hour: \<n or ->` (distinct tickets with an accepted/pass
@@ -512,11 +494,7 @@ more than one page is truncated to its most recent page, named on stderr.
 A third, separate tool answering a narrower question than either lane
 above: not "what did a wave cost" or "is a script getting used", but
 "which repeated Bash invocation is actually a function in disguise" —
-answered by counting, not by impression. A one-off scratchpad scan on
-2026-09-19 found 39,652 Bash tool calls across 4,735 distinct command
-families in the local transcript corpus, and counting reversed the wave's
-first pick: a `gh` release family had been chosen as the pilot before
-anyone counted, and counting showed it was comparatively rare.
+answered by counting, not by impression.
 
 - `scripts/bash-family-report.py` — streams every
   `~/.claude/projects/**/*.jsonl` file (same corpus as
@@ -552,6 +530,5 @@ rules and every flag against fixture transcripts under
 real `~/.claude/projects` tree.
 
 This tool only ranks; it does not decide. Turning a ranked family into an
-actual typed MCP tool, and picking the pilot, is out of scope here — see
-the ticket that specified this report (WO-033) and the one that covers
-the pilot pattern (WO-029).
+actual typed MCP tool, and picking the pilot, is out of scope here (WO-33
+specified this report; WO-29 covers the pilot pattern).

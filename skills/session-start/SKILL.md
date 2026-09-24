@@ -49,16 +49,15 @@ fed, not re-read as living truth. Open it only if the user says to.
 Skip open tickets whose `blocked_by` is non-empty and whose `executor` is
 `human`; `next` already filters these.
 
-If `NW_PARITY_SOURCE` is set (an optional layer — this project was forked
-from a source project some deployments keep folding generic work in from,
-see `docs/parity/`), run
+If `NW_PARITY_SOURCE` is set (an optional layer for a deployment that keeps
+folding generic work in from the project this one was extracted from), run
 `${CLAUDE_PLUGIN_ROOT}/scripts/parity-sweep.sh --source "$NW_PARITY_SOURCE"`
 here. It is read-only against both trees. Exit 2 (could not evaluate) stops
 orientation the same way an unreachable tracker does. A non-empty "new"
 section — source files under a mapped directory with no row in
-`templates/parity-map.tsv` — means file a parity ticket the way a prior sweep did,
-one row per CANDIDATE/PORTED-DRIFT item; a non-empty "vanished" section
-means the map itself needs a hand-edit to drop the stale row.
+`templates/parity-map.tsv` — means file a parity ticket, one row per item;
+a non-empty "vanished" section means the map itself needs a hand-edit to
+drop the stale row.
 
 ## 2. Verify awaiting-deployment (delegate, read-only)
 
@@ -149,10 +148,10 @@ When the reports come back:
 - **A spec-review brief carries the ticket-specific concerns only.** The
   repo's required checks are assumed, not listed: `spec-reviewer` discovers
   and runs them itself before any verdict, so enumerating them in the brief
-  adds nothing and rots the moment one is forgotten. Reviewing to an
-  enumerated list is what let NWM-120 land red on 2026-09-19 — three
-  reviewers answered every question asked, and the unasked one turned main
-  red. Ask about what is peculiar to this ticket; never about the gates.
+  adds nothing and rots the moment one is forgotten. A reviewer briefed
+  with an enumerated list answers every question asked and misses the
+  unasked one. Ask about what is peculiar to this ticket; never about the
+  gates.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh` lands a finished branch:
   moves the ticket to Awaiting Deployment, merges, lints the merged tree,
   pushes, and moves the ticket to Completed (file-mode directory moves, or
@@ -176,7 +175,7 @@ When the reports come back:
   touch the ticket body only if the acceptance criteria moved; it stays put.
 - New fact about the project → the matching `docs/` topic file, updated in
   place; new "why" → a dated append to the decisions log; problem found,
-  not fixed → `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" add` (NWM-145/NWM-159: pass the root, never rely on cwd).
+  not fixed → `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" add` (pass the root; never rely on cwd).
 - Run `"$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh --issues-py)" lint` before any ticket transition.
 - Every user answer this session → a row in `ethos.md`'s decision log, and
   a default adjusted if the pattern moved.
@@ -216,20 +215,8 @@ thread's average per-turn cost creeps up the longer it runs. **Measure that
 with cost per orchestrator turn, not with the turn count.** A turn count
 moves with how much work a wave contains, so it says nothing on its own,
 and where fan-out is dispatched in-process a naive turn count also sweeps
-in the agents.
-
-Two waves measured 2026-09-19 and 2026-09-20, one continuous orchestrator
-session across both, no split at the boundary:
-
-| | wave 1 | wave 2 |
-| --- | --- | --- |
-| orchestrator cost | $127.04 | $164.37 |
-| orchestrator turns | 824 | 465 |
-| **USD per orchestrator turn** | **0.154** | **0.353** |
-
-Turns fell 44% while cost per turn rose 2.29x. Fewer, far more expensive
-turns is what an unreset context looks like — and note that the raw turn
-count fell, so a turn-count threshold would have read this as improving.
+in the agents. Fewer, far more expensive turns is what an unreset context
+looks like; a turn-count threshold reads that as improving.
 
 An owner-approved unattended run is not the same decision as whether to
 split at the boundary — the two are independent, and the split applies
@@ -280,7 +267,7 @@ Have Comin' Next — as markdown, with the H1 and any `harness:` line
 stripped (the title is the page title):
 
 ```bash
-P=$HOME/code/night-watchman/providers/lib/provider.sh
+P=${CLAUDE_PLUGIN_ROOT}/providers/lib/provider.sh
 URL=$("$P" publish publish-brief "<date> <project> Update" brief.md)
 "$P" publish post-headline default "<headline, under 200 chars>" "$URL"
 "$P" publish post-headline <EPIC-KEY> "<headline>" "$URL"   # once per epic with a landed ticket, if mapped
@@ -302,16 +289,13 @@ say so explicitly rather than silently omitting the line.
 If this wave also invokes `cost-reviewer` (the optional per-wave review in
 `docs/cost.md`, distinct from the automatic `SessionEnd` ledger row above),
 first record the `accepted` event for every script whose ticket reached
-completion this wave — `librarian`, or the main thread (this project has
-no lab-librarian), runs ai-toolkit's `script-analytics.py record --event
-accepted ...`
-per script — and confirm each row landed by re-reading
-`docs/script-events.jsonl`. Only once that is confirmed, invoke
-`cost-reviewer`. A wave where the accepted-event write and cost-reviewer's
-`script-analytics.py extract` ran concurrently had the event land after
-extract, so a script accepted that wave showed no sign anything raced —
-just a quietly missing data point. Fix the ordering, not the symptom:
-don't have `cost-reviewer` poll or retry for a late-arriving event.
+completion this wave — `librarian` or the main thread runs ai-toolkit's
+`script-analytics.py record --event accepted ...` per script — and confirm
+each row landed by re-reading `docs/script-events.jsonl`. Only once that is
+confirmed, invoke `cost-reviewer`: an `accepted` event written while
+`cost-reviewer`'s `extract` runs lands after it and is silently missing
+from that wave's report. Fix the ordering, not the symptom: `cost-reviewer`
+never polls or retries for a late-arriving event.
 
 ## Dispatching a wave through a worktree-dispatch tool
 
@@ -336,11 +320,10 @@ ticket's progress note with the date, then fall back for that ticket.
 
 Never resume or restart a dispatched agent just to check on it — a resume
 restarts an idle agent rather than observing it. Probe read-only instead:
-the branch, the ticket's progress note, or `herdr workspace list`
-agent_status (a `watch` verb, once it lands). If a dispatched agent
-shows no progress for 5 minutes, check in read-only rather than waiting
-longer (owner's idle rule, memorygraph 2026-09-14). Ported from pstack
-orchestrate playbook, 2026-09-14.
+the branch, the ticket's progress note, or the provider's `dispatch watch`
+verb. If a dispatched agent shows no progress for 5 minutes, check in
+read-only rather than waiting longer. Ported from pstack orchestrate
+playbook, 2026-09-14.
 
 Land each branch on the target branch from the orchestrating thread once
 its `verify` passes, via

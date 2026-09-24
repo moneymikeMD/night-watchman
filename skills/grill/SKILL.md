@@ -73,9 +73,8 @@ start implementation inside this skill.
 - Every owner answer that confirms or moves a repo default becomes an
   `docs/ethos.md` decision-log row.
 - A decision passing the three-gate test (costly to reverse, surprising
-  without it, real alternatives weighed — see `tickets-protocol`'s
-  frontmatter contract) goes to `docs/decisions.md` as a dated append,
-  never a rewrite.
+  without it, real alternatives weighed — see `tickets-protocol`'s routing
+  table) goes to the decisions log as its own entry.
 - Anything considered and dropped becomes a cancelled ticket recording the
   outcome, not a silently vanished option.
 

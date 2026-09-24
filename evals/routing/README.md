@@ -23,8 +23,9 @@ it that way — and say so in the PR.
 ## Running it
 
 ```bash
-python3 ../../../ai-toolkit/actions/skill-routing/skill-routing.py \
-  night-watchman=skills --fixtures evals/routing/prompts.json
+python3 ../ai-toolkit/actions/skill-routing/skill-routing.py \
+  night-watchman=skills --fixtures evals/routing/prompts.json \
+  --allow evals/routing/allowed-collisions.json
 ```
 
 The `night-watchman=` label pins the skill ids, so a fixture keeps working
@@ -50,10 +51,11 @@ defaults, so changing what this repo demands of its own skills is a diff here
 and not a diff in ai-toolkit. It is `1.0` with `top-k: "1"`: every positive
 prompt must put its own skill first.
 
-## Known misses, 2026-09-21
+## Known misses
 
-CI runs this `report-only: "true"`. Two fixture prompts miss today, and both
-are descriptions to fix, not prompts to soften:
+CI runs this `report-only: "true"`. Two fixture prompts miss (rank-1 rate
+0.846 over 13 positives), and both are descriptions to fix, not prompts to
+soften:
 
 - *"Poke holes in this before I commit to it — I want the weak spots found
   now, not after."* → wants `grill`, shares **no** stemmed term with its

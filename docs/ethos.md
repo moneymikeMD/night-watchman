@@ -3,7 +3,8 @@
 Prune before adding: this table is capped at 10 rows. Before adding a new
 row, check whether an existing row already covers it (fix that row's
 evidence instead) or whether a row has gone stale and can be cut. A row
-with no repo evidence does not belong here.
+with no repo evidence does not belong here. The table below holds 11 rows:
+which one goes, or does the cap move?
 
 A profile of this project's decision preferences, built only from what has
 actually happened in this repo's own history. The point is to ask fewer
@@ -20,7 +21,6 @@ classify it first: if the answer is a fact you could observe by running
 something (behavior, timing, output, whether an eval separates), it is not
 the owner's to answer — go observe it instead of asking. Reserve questions
 for a genuine preference or product call no experiment can settle.
-Ported from pstack poteto-mode, 2026-09-14.
 
 ## Defaults that can be assumed
 

@@ -5,14 +5,14 @@ description: Mine a settled planning, grilling, or design conversation into a de
 
 # to-issues-mine
 
-`to-issues` used to read a settled conversation and write ticket files in one
-pass. This skill is the first half only: read the conversation, decide what
-counts as a decision, and write a decision list. Turning that list into
-ticket files is work-order's `emit-tickets` skill, run separately, against a
-format both sides can test independently — see
-`~/code/home_workspace/work-order/decision-list/FORMAT.md`.
+This skill is the first half of turning a conversation into tickets: read
+the conversation, decide what counts as a decision, and write a decision
+list. Turning that list into ticket files is work-order's `emit-tickets`
+skill, run separately, against a format both sides test independently —
+`decision-list/FORMAT.md` in the work-order checkout
+(`"$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh)"/decision-list/`).
 
-The bar is the same one `to-issues` always used: an agent with no memory of
+The bar is the same one `to-issues` sets: an agent with no memory of
 this conversation must be able to finish the resulting ticket without asking
 a question. That bar is set by the *content* of each decision, which is this
 skill's job — the mechanics of turning content into a valid ticket file are
@@ -36,7 +36,7 @@ surface. No build decision's `blocked_by` should list a decision id that is
 itself still a build decision if the destination isn't actually settled —
 that's the tell that it should have been mined as a decision ticket instead.
 
-**Slicing for independence.** Same rule `to-issues` always used: split on
+**Slicing for independence.** Same rule as `to-issues`: split on
 whether an agent could finish it alone in its own worktree, not on size. A
 piece that needs another's output first is two decisions and a `blocked_by`,
 not one.
@@ -67,7 +67,7 @@ gap; mine one more entry for it.
    parsing:
 
    ```
-   python3 ~/code/home_workspace/work-order/decision-list/validate.py decisions.json
+   python3 "$(${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh)/decision-list/validate.py" decisions.json
    ```
 
    A schema error names the field and the decision index. Fix the capture
