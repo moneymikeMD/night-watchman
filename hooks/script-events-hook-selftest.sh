@@ -549,6 +549,80 @@ else
   fail "sentinel present: extractor was NOT called"
 fi
 
+# A sentinel-less file EARLIER in the chain must not shadow a valid one
+# LATER in it: the CLAUDE_PLUGIN_ROOT candidate exists but lacks the
+# sentinel, so the chain must keep walking to the ai-toolkit resolver step
+# (DONATED_PLUGIN/FAKE_AITK fixtures, as above) (NWM-178).
+STALE_PLUGIN="$WORKDIR/stale-plugin"
+mkdir -p "$STALE_PLUGIN/scripts" "$STALE_PLUGIN/hooks"
+cp "$SCRIPT" "$STALE_PLUGIN/hooks/script-events-hook.sh"
+chmod +x "$STALE_PLUGIN/hooks/script-events-hook.sh"
+cp "$DONATED_PLUGIN/scripts/ai-toolkit-root.sh" "$STALE_PLUGIN/scripts/ai-toolkit-root.sh"
+STALE_EXTRACTOR="$STALE_PLUGIN/scripts/script-analytics.py"
+printf '#!/usr/bin/env python3\nprint("pre-NWM-130, no sentinel")\n' > "$STALE_EXTRACTOR"
+
+ARGV="$WORKDIR/argv.21"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
+  run_hook_resolve "$STALE_PLUGIN/hooks/script-events-hook.sh" "agent-21" \
+  "$CONSUMER_ROOT" "$STALE_PLUGIN" "" "$FAKE_AITK")"
+assert_rc "stale sentinel-less cache entry: hook exits 0" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  pass "stale sentinel-less cache entry: extractor was called"
+  _argv="$(cat "$ARGV")"
+  case "$_argv" in
+    *"$AITK_EXTRACTOR"*)
+      pass "stale sentinel-less cache entry: argv names the later, valid ai-toolkit extractor"
+      ;;
+    *)
+      fail "stale sentinel-less cache entry: argv did not name $AITK_EXTRACTOR (should have fallen through): $_argv"
+      ;;
+  esac
+  case "$_argv" in
+    *"$STALE_EXTRACTOR"*)
+      fail "stale sentinel-less cache entry: argv named the stale sentinel-less file"
+      ;;
+    *) : ;;
+  esac
+else
+  fail "stale sentinel-less cache entry: extractor was NOT called (chain stopped at the sentinel-less hit)"
+fi
+
+# With CLAUDE_PLUGIN_ROOT unset, resolver/prices candidates must never
+# become root-anchored (/scripts/..., /templates/...). The orphan copy has
+# no sibling scripts/ or templates/, so the diagnostic must name only the
+# hook-relative resolver candidate, never a bare "/scripts/..." (NWM-178).
+ARGV="$WORKDIR/argv.22"; rm -f "$ARGV"
+OUT="$(STUB_ARGV_FILE="$ARGV" run_hook_resolve "$ORPHAN_ROOT/hooks/script-events-hook.sh" \
+  "agent-22" "$CONSUMER_ROOT" "" "")"
+assert_rc "CLAUDE_PLUGIN_ROOT unset: still fails open" "0" "$OUT"
+if [ -e "$ARGV" ]; then
+  fail "CLAUDE_PLUGIN_ROOT unset: extractor was called (should not be)"
+else
+  pass "CLAUDE_PLUGIN_ROOT unset: extractor not called"
+fi
+# A bare root-anchored candidate reads as "tried: " or ", " immediately
+# followed by "/scripts" or "/templates" — a hook-relative path like
+# ".../orphan/hooks/../scripts/ai-toolkit-root.sh" also contains that
+# substring further in, so only a leading occurrence counts as the bug.
+_err="$(last_stderr)"
+if printf '%s' "$_err" | grep -qE '(tried: |, )/(scripts|templates)/'; then
+  fail "CLAUDE_PLUGIN_ROOT unset: diagnostic names a bare root-anchored /scripts or /templates candidate: $_err"
+else
+  pass "CLAUDE_PLUGIN_ROOT unset: diagnostic names no root-anchored /scripts or /templates candidate"
+fi
+# The pre-fix hook never named the resolver paths it actually consulted —
+# it appended the fixed literal "ai-toolkit-root.sh --script-analytics"
+# regardless of what was tried. Naming the real, hook-relative resolver
+# path here is what lets the two forms be told apart.
+case "$_err" in
+  *"/orphan/hooks/../scripts/ai-toolkit-root.sh"*)
+    pass "CLAUDE_PLUGIN_ROOT unset: diagnostic names the actual hook-relative resolver path consulted"
+    ;;
+  *)
+    fail "CLAUDE_PLUGIN_ROOT unset: diagnostic does not name the hook-relative resolver path: $_err"
+    ;;
+esac
+
 echo ""
 echo "script-events-hook-selftest.sh: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]
