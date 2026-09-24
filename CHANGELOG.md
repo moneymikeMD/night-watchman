@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.7.1](https://github.com/moneymikeMD/night-watchman/compare/v1.7.0...v1.7.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* map homelab's script-analytics pair as not ported (LAB-228) ([#83](https://github.com/moneymikeMD/night-watchman/issues/83)) ([0047e7e](https://github.com/moneymikeMD/night-watchman/commit/0047e7e2b35dea314baf0637212690fd5c1a273f))
+
 ## [1.7.0](https://github.com/moneymikeMD/night-watchman/compare/v1.6.0...v1.7.0) (2026-09-24)
 
 
