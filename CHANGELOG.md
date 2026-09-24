@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here.
 
+## [1.7.2](https://github.com/moneymikeMD/night-watchman/compare/v1.7.1...v1.7.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* land-branch.sh keeps one definition of clean-except-the-closing-state, matching land-core's (NWM-177) ([#90](https://github.com/moneymikeMD/night-watchman/issues/90)) ([d440e5d](https://github.com/moneymikeMD/night-watchman/commit/d440e5d70e13065450d2f8537769547a8115e707))
+* script-events-hook.sh drops the project-dir extractor step and greps a sentinel before invoking (NWM-160) ([#86](https://github.com/moneymikeMD/night-watchman/issues/86)) ([d398a14](https://github.com/moneymikeMD/night-watchman/commit/d398a14d555051ef824e52498dc86147527493ff))
+* script-events-hook.sh keeps first-valid-hit semantics and never builds a root-anchored candidate (NWM-178) ([#89](https://github.com/moneymikeMD/night-watchman/issues/89)) ([420ac98](https://github.com/moneymikeMD/night-watchman/commit/420ac98cab96d68c74206468984ffa7da3078a21))
+* split the atlassian publish selftest so parity-map rows can converge (NWM-161) ([#85](https://github.com/moneymikeMD/night-watchman/issues/85)) ([7fdb43d](https://github.com/moneymikeMD/night-watchman/commit/7fdb43d604e534b35be43e47d749a8ae622ffc1c))
+
 ## [1.7.1](https://github.com/moneymikeMD/night-watchman/compare/v1.7.0...v1.7.1) (2026-09-24)
 
 
