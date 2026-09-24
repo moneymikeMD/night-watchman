@@ -28,6 +28,8 @@ scripts/api/atlassian-graphql.sh	providers/publish/atlassian/townsquare.sh
 scripts/api/atlassian-graphql-selftest.sh	providers/publish/atlassian/selftest.sh	diverged:NWM-161
 scripts/dev/claude-cost.py	scripts/claude-cost.py	diverged:NWM-129
 scripts/dev/claude-cost-selftest.sh	scripts/claude-cost-selftest.sh	diverged:NWM-129
+scripts/dev/script-analytics.py	-
+scripts/dev/script-analytics-selftest.sh	-
 scripts/dev/script-events-hook.sh	-
 scripts/dev/script-events-hook-selftest.sh	-
 scripts/dev/herdr-agent-pane.sh	providers/dispatch/herdr/herdr-agent-pane.sh
