@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here.
 
+## [1.7.0](https://github.com/moneymikeMD/night-watchman/compare/v1.6.0...v1.7.0) (2026-09-24)
+
+
+### Features
+
+* land-branch.sh wraps ai-toolkit's land-core.sh through its four-point hook contract (NWM-131) ([#80](https://github.com/moneymikeMD/night-watchman/issues/80)) ([52ac4a3](https://github.com/moneymikeMD/night-watchman/commit/52ac4a31256b43b0dc608c9600559aaa12c476dd))
+* model-aware cost ledger for orchestrator vs worker spend (NWM-119) ([#79](https://github.com/moneymikeMD/night-watchman/issues/79)) ([511039a](https://github.com/moneymikeMD/night-watchman/commit/511039aa965d48356d1e308d844722bf80767eee))
+* night-watchman owns wave computation and preflight (NWM-174) ([#78](https://github.com/moneymikeMD/night-watchman/issues/78)) ([d1581d9](https://github.com/moneymikeMD/night-watchman/commit/d1581d939ba3e3a6f2c7e757ed34ae0fdb05441c))
+
+
+### Bug Fixes
+
+* herdr mixed-ticket brief no longer claims a stop at Awaiting Deployment (NWM-168) ([#77](https://github.com/moneymikeMD/night-watchman/issues/77)) ([753716a](https://github.com/moneymikeMD/night-watchman/commit/753716af266174b00f4693fb870a9ebf498078ea))
+
 ## [1.6.0](https://github.com/moneymikeMD/night-watchman/compare/v1.5.0...v1.6.0) (2026-09-23)
 
 
