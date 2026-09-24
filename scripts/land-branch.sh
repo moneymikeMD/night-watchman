@@ -90,6 +90,10 @@ JIRA_DONE_STATUS="${LAND_BRANCH_JIRA_DONE_STATUS:-}"
 JIRA_AWAITING_STATUS="${LAND_BRANCH_JIRA_AWAITING_STATUS:-}"
 JIRA_PROGRESS_STATUS="${LAND_BRANCH_JIRA_PROGRESS_STATUS:-}"
 LINT_CMD="${LAND_BRANCH_LINT_CMD:-}"
+# NWM-147: the worker brief requires this file uncommitted in the branch
+# worktree. The one definition of "clean except this" — land-core.sh gets
+# the same list via --allow-untracked; HANDOFF_FILE's default derives from it.
+ALLOWED_UNTRACKED=(.night-watchman/closing-state.md)
 # Set once the jira issue reaches Awaiting Deployment, so every later stop
 # says the issue stays there.
 LIFECYCLE_NOTE=""
@@ -99,6 +103,35 @@ JIRA_ERR=""
 
 stop2() { echo "Error: $*${LIFECYCLE_NOTE:+
 $LIFECYCLE_NOTE}" >&2; exit 2; }
+
+# worktree_dirty_except WORKTREE — mirrors land-core.sh's dirty check: only an
+# untracked entry exactly matching ALLOWED_UNTRACKED is exempt, a tracked-and-
+# modified allowed path included. Prints the offending record(s) on stdout;
+# returns 0 clean, 1 dirty, 2 the status check itself failed.
+worktree_dirty_except() {
+    local wt="$1" entry allowed dirty="" rc=""
+    while IFS= read -r -d '' entry; do
+        case "$entry" in
+            "") continue ;;
+            "wde-status-rc="*) rc="${entry#wde-status-rc=}"; continue ;;
+            "?? "*)
+                for allowed in ${ALLOWED_UNTRACKED[@]+"${ALLOWED_UNTRACKED[@]}"}; do
+                    if [ "${entry#\?\? }" = "$allowed" ]; then
+                        continue 2
+                    fi
+                done ;;
+        esac
+        dirty="${dirty}${entry}
+"
+    done < <(rc=0; git -C "$wt" status --porcelain -z --untracked-files=all 2>&1 || rc=$?; printf '\0wde-status-rc=%s\0' "$rc")
+    if [ "$rc" != 0 ]; then
+        printf '%s' "$dirty"
+        return 2
+    fi
+    [ -z "$dirty" ] && return 0
+    printf '%s' "$dirty"
+    return 1
+}
 
 # save_state VAR... — in hook mode, persist VARs for the later hook points and
 # for the wrapper, which sources the file again once land-core.sh returns.
@@ -802,14 +835,13 @@ BRANCH_WT=$(printf '%s\n' "$WT_PORCELAIN" | awk -v b="refs/heads/$BRANCH" '
     /^branch /   { br=$0; sub(/^branch /,"",br); if (br==b) print path }
 ')
 if [ -n "$BRANCH_WT" ]; then
-    # NWM-147: the worker brief requires .night-watchman/closing-state.md
-    # uncommitted in this worktree; -uall makes the exclusion exact.
-    if ! WT_STATUS=$(git -C "$BRANCH_WT" status --porcelain -uall \
-            -- . ':!.night-watchman/closing-state.md' 2>&1); then
-        stop2 "could not check worktree '$BRANCH_WT' for branch '$BRANCH' (git status failed — removed or corrupt worktree?): $WT_STATUS"
+    WT_DIRTY=""; WT_RC=0
+    WT_DIRTY=$(worktree_dirty_except "$BRANCH_WT") || WT_RC=$?
+    if [ "$WT_RC" = 2 ]; then
+        stop2 "could not check worktree '$BRANCH_WT' for branch '$BRANCH' (git status failed — removed or corrupt worktree?): $WT_DIRTY"
     fi
-    [ -z "$WT_STATUS" ] || stop2 "branch '$BRANCH' worktree at '$BRANCH_WT' has uncommitted changes — commit or stash them first (.night-watchman/closing-state.md is exempt; nothing else is):
-$WT_STATUS"
+    [ "$WT_RC" = 0 ] || stop2 "branch '$BRANCH' worktree at '$BRANCH_WT' has uncommitted changes — commit or stash them first (${ALLOWED_UNTRACKED[*]} is exempt only while untracked; nothing else is):
+$WT_DIRTY"
 fi
 
 # --already-merged: prove the branch's work is ON the target before anything
@@ -950,9 +982,9 @@ WRAPPER_RC=""
 ORCH_PANE="${LAND_BRANCH_ORCHESTRATOR_PANE:-}"
 if [ "${HERDR_ENV:-}" = "1" ]; then
     HANDOFF_FILE="${LAND_BRANCH_HANDOFF_FILE:-}"
-    WORKER_WT=$(git worktree list --porcelain 2>/dev/null | awk -v b="refs/heads/$BRANCH" '/^worktree /{p=substr($0,10)} $1=="branch" && $2==b {print p}') || WORKER_WT=""
+    WORKER_WT="$BRANCH_WT"
     if [ -z "$HANDOFF_FILE" ] && [ -n "$WORKER_WT" ]; then
-        HANDOFF_FILE="$WORKER_WT/.night-watchman/closing-state.md"
+        HANDOFF_FILE="$WORKER_WT/${ALLOWED_UNTRACKED[0]}"
     fi
     [ -n "$HANDOFF_FILE" ] && [ -r "$HANDOFF_FILE" ] && CLOSING=1
 
@@ -976,8 +1008,8 @@ if [ "${HERDR_ENV:-}" = "1" ]; then
     }
     BRANCH_CONDITION="landed; nothing left uncommitted in the worker's worktree"
     if [ -n "$WORKER_WT" ] && [ -d "$WORKER_WT" ]; then
-        WT_DIRTY=$(git -C "$WORKER_WT" status --porcelain -- . ':!.night-watchman' 2>/dev/null) || WT_DIRTY=""
-        [ -z "$WT_DIRTY" ] || BRANCH_CONDITION="landed, but the worker's worktree has UNCOMMITTED work that was not landed"
+        worktree_dirty_except "$WORKER_WT" >/dev/null \
+            || BRANCH_CONDITION="landed, but the worker's worktree has UNCOMMITTED work that was not landed"
     else
         BRANCH_CONDITION="landed; worker worktree not found, uncommitted state unknown"
     fi
@@ -989,10 +1021,10 @@ Landed via land-branch.sh."
 
 LAND_CORE=""
 if [ "$ALREADY_MERGED" != 1 ]; then
-    CORE_ERR=$("$SELF_DIR/ai-toolkit-root.sh" --land-core 2>&1 >/dev/null) || true
-    LAND_CORE=$("$SELF_DIR/ai-toolkit-root.sh" --land-core 2>/dev/null) \
+    CORE_ERR_TMP=$(tmpfile) || stop2 "could not create a temp file for ai-toolkit-root.sh diagnostics"
+    LAND_CORE=$("$SELF_DIR/ai-toolkit-root.sh" --land-core 2>"$CORE_ERR_TMP") \
         || stop2 "cannot resolve ai-toolkit's land-core.sh, which does this landing's merge and push. Nothing mutated. ai-toolkit-root.sh said:
-$CORE_ERR"
+$(cat "$CORE_ERR_TMP")"
     [ -x "$LAND_CORE" ] || stop2 "ai-toolkit's land-core.sh at '$LAND_CORE' is not executable. Nothing mutated"
 fi
 
@@ -1132,8 +1164,10 @@ save_state TRACKER ISSUES_DIR JIRA_API JIRA_DONE_STATUS JIRA_AWAITING_STATUS JIR
 HOOK_MODE=0
 
 CORE_ARGS=(--repo "$MAIN_WORKTREE" --branch "$BRANCH" --target "$TARGET_BRANCH"
-    --label "$TICKET_ID" --merge-message "$MERGE_MSG" --hook "$SELF"
-    --allow-untracked .night-watchman/closing-state.md)
+    --label "$TICKET_ID" --merge-message "$MERGE_MSG" --hook "$SELF")
+for allowed in ${ALLOWED_UNTRACKED[@]+"${ALLOWED_UNTRACKED[@]}"}; do
+    CORE_ARGS+=(--allow-untracked "$allowed")
+done
 [ "$RESET_LAND" != 1 ] || CORE_ARGS+=(--reset-land)
 [ -z "$LINT_CMD" ] || CORE_ARGS+=(--lint-cmd "$LINT_CMD")
 

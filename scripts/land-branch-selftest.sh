@@ -1294,6 +1294,72 @@ else
     ok "test36: merge and push are delegated to land-core.sh; without it the landing stops at exit 2, nothing mutated"
 fi
 
+# ---- NWM-177 test 37: a closing-state.md the WORKER already committed on
+# its branch, then edited again uncommitted, must refuse BEFORE the
+# integration-worktree lock is taken — RED against origin/main's old script,
+# whose pathspec exempted the path in ANY state, tracked-and-modified included.
+
+REPO=$(fresh_repo t37 "$TICKET_OK")
+WT37="$WORK/t37-wt"
+git -C "$REPO" worktree add -q "$WT37" work
+mkdir -p "$WT37/.night-watchman"
+printf '## Human run list\n- none\n' > "$WT37/.night-watchman/closing-state.md"
+git -C "$WT37" add .night-watchman/closing-state.md
+git -C "$WT37" commit -q -m "worker: commit closing-state.md"
+printf '## Human run list\n- none\n\nedited after commit, still uncommitted\n' > "$WT37/.night-watchman/closing-state.md"
+LOCKFILE="$REPO-land.lock"
+LANDDIR="$REPO-land"
+rm -rf "$LANDDIR" "$LOCKFILE"
+set +e
+(cd "$REPO" && HERDR_ENV=1 ./scripts/land-branch.sh work PROJ-1) >"$WORK/t37.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 0 ]; then
+    bad "test37 (tracked-and-modified closing-state.md): landing exited 0, expected a pre-lock refusal"
+elif [ -e "$LOCKFILE" ]; then
+    bad "test37: the integration-worktree lock '$LOCKFILE' exists after the refusal — the lock was taken before the check ran"
+elif [ -e "$LANDDIR" ]; then
+    bad "test37: the integration worktree '$LANDDIR' was created/reset despite the pre-lock refusal"
+elif grep -q "^Plan:" "$WORK/t37.out"; then
+    bad "test37: a Plan was printed before the refusal — this is not the wrapper's pre-lock check, something downstream (e.g. land-core.sh) caught it instead:
+$(cat "$WORK/t37.out")"
+elif ! sed -n '/^Error:/,$p' "$WORK/t37.out" | grep -q "closing-state.md"; then
+    bad "test37: the refusal message does not name closing-state.md:
+$(tail -8 "$WORK/t37.out")"
+else
+    ok "test37: a tracked-and-modified closing-state.md refuses before the integration-worktree lock is taken, naming the file"
+fi
+
+# ---- NWM-177 test 38: a stray untracked .night-watchman/notes.md refuses
+# before the lock too, naming the file. Not a RED case on its own (the old
+# script's pathspec excluded only closing-state.md, so it already caught
+# this) — kept as a guard on the new shared check.
+
+REPO=$(fresh_repo t38 "$TICKET_OK")
+WT38="$WORK/t38-wt"
+git -C "$REPO" worktree add -q "$WT38" work
+mkdir -p "$WT38/.night-watchman"
+printf 'stray notes\n' > "$WT38/.night-watchman/notes.md"
+LOCKFILE="$REPO-land.lock"
+LANDDIR="$REPO-land"
+rm -rf "$LANDDIR" "$LOCKFILE"
+set +e
+(cd "$REPO" && HERDR_ENV=1 ./scripts/land-branch.sh work PROJ-1) >"$WORK/t38.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 0 ]; then
+    bad "test38 (stray untracked .night-watchman/notes.md): landing exited 0, expected a pre-lock refusal"
+elif [ -e "$LOCKFILE" ]; then
+    bad "test38: the integration-worktree lock '$LOCKFILE' exists after the refusal"
+elif [ -e "$LANDDIR" ]; then
+    bad "test38: the integration worktree '$LANDDIR' was created/reset despite the pre-lock refusal"
+elif ! grep -q "notes.md" "$WORK/t38.out"; then
+    bad "test38: the refusal does not name notes.md:
+$(tail -8 "$WORK/t38.out")"
+else
+    ok "test38: a stray untracked .night-watchman/notes.md refuses before the lock, naming the file"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]
