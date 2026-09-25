@@ -47,10 +47,18 @@ Code is mechanics, not evidence of its own intent. Causal words ("because", "fix
 
 ## Ticket flow
 
-```
-open ──> in-progress ──> awaiting-deployment ──> completed
-  │
-  └────────────────────────────────────────────> cancelled
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> open
+    open --> in_progress
+    in_progress --> awaiting_deployment
+    awaiting_deployment --> completed
+    open --> cancelled
+    in_progress: in-progress
+    awaiting_deployment: awaiting-deployment
+    completed --> [*]
+    cancelled --> [*]
 ```
 
 **File mode (the default): the directory is the status.** Moving a ticket is
