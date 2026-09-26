@@ -25,5 +25,6 @@ docs/preview/website/.astro/
 # land-branch.sh refuse the tree (NWM-150).
 .plan/
 
-# per-session cost figures appended by hooks/session-cost.sh; stays local on this public repo
+# per-session cost figures (the ledger and claude-cost.py's JSONL sidecar); stay local on this public repo
 docs/cost-ledger.tsv
+docs/cost-ledger.jsonl
