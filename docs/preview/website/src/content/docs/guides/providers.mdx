@@ -41,8 +41,7 @@ interactive confirmation) — deliberate, so a wave-dispatch script can call
 the tracker kind unattended; set `$NW_DRY_RUN=1`, or pass `--dry-run`
 before the verb, to have any verb print the request it would issue and
 exit 0 instead. `tracker/jira/jira-space-create.sh` is a
-one-run bootstrap for a brand-new Jira Space — project + the six stage
-statuses (via `trackers/jira/jira-workflow-apply.sh`) + the six custom
+one-run bootstrap for a brand-new Jira Space — project + the six custom
 fields + those fields on every project screen — each step idempotent, so
 a re-run converges rather than failing on "already there"; not a verb of
 the `tracker` contract itself, since it is a one-time setup operation, not
@@ -352,50 +351,8 @@ wherever your session-start or wrap-up step lives. Requires
 it never touches a real Jira site or a real credential, only a stubbed
 `curl` with `JIRA_HOST` pointed at `127.0.0.1`.
 
-**Jira workflow bootstrap.** A company-managed Jira project created from
-the "simplified scrum classic" template ships a workflow with only To
-Do/In Progress/Done — too few statuses for this plugin's own stage set.
-`providers/tracker/jira/jira-workflow-apply.sh <PROJECT_KEY> [--dry-run]
-[--yes]` adds the missing six (Open, Triage, Awaiting Deployment,
-Deferred, Completed, Cancelled), each reached from any status via a
-GLOBAL transition, by rendering the project's own default workflow's FULL
-definition (its existing statuses/transitions plus the missing ones —
-never a delta) through a `jira-api.sh`-shaped wrapper (`--jira-api PATH` /
-`$ISSUES_JIRA_API`, the same convention as `land-branch.sh`'s jira mode).
-It resolves every status by name at request time rather than hardcoding a
-site-specific id or category, validates the rendered body against Jira's
-own `/workflows/update/validation` endpoint before ever showing the "about
-to write" preview, reports "already complete" and exits 0 if nothing is
-missing, and always prints the exact final request body and waits for
-`--yes` before issuing the one call that actually mutates state. That
-validation endpoint turned out to need its own envelope — `{"payload":
-<the update body>, "validationOptions": {"levels": ["ERROR","WARNING"]}}`,
-not the bare body — found live against a disposable scratch project; a
-real ERROR-level finding refuses the write, a WARNING-level one is shown
-but does not. Every read-only-by-semantics call this script makes (the
-two GETs, a version bulk-get, and the validation call itself) runs
-unconditionally, even under `--dry-run`, precisely so a caller can see
-Jira's own verdict on a candidate body before anyone reaches for `--yes`.
-Run `providers/tracker/jira/jira-workflow-apply-selftest.sh` after
-copying it in — like its sibling above, it never touches a real Jira
-site, replaying fixtures through a fake wrapper that hard-refuses the one
-call that actually mutates state (`write POST /workflows/update`) in
-every case that should never reach it.
-
-The bulk-get read this script rebuilds an update from goes through the
-wrapper's `--show-secrets` flag, and every existing status/transition is
-carried forward with EVERY field the read returned, not a reshaped
-subset — a live apply found the hard way that `/workflows/update`
-**replaces** a transition wholesale rather than merging it, so a request
-missing a field (a post-function, a validator) doesn't leave it
-defaulted, it deletes it. The fields in question (`ruleKey`,
-`permissionKey`) are Jira-internal rule identifiers, not credentials, but
-the wrapper's own redaction can't tell the difference by name alone.
-Every write prints a before/after snapshot pair and a deep diff of each
-existing transition's rules; any difference is a distinct exit code (2),
-not a silent success. `--restore-from PATH` re-applies an earlier
-snapshot's workflow document verbatim (with a freshly-fetched version) —
-useful for repairing a project a pre-fix run damaged, provided that
-snapshot was itself captured with `--show-secrets`; one that wasn't is
-refused outright, since there is no way to recover a rule value that was
-only ever seen as `"<redacted>"`.
+**Jira workflow.** The workflow is work-order's, not this plugin's.
+work-order's `plugins/work-order-jira/universal-apply.sh` provisions the
+shared Universal Managed workflows (the six stage statuses and their
+transition rules) once per site, and
+`plugins/work-order-jira/universal-switch.sh` moves a project onto them.

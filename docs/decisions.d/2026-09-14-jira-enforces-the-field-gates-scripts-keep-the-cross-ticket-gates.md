@@ -26,6 +26,6 @@ at transition time. Automation is post-hoc and is used only where reacting
 late is fine (deferral expiry). Automation execution caps on this plan are
 UNVERIFIED.
 
-Implementation: an additive rules spec applied through
-`providers/tracker/jira/jira-workflow-apply.sh`, rehearsed on a scratch
-project with recorded fixtures. The Automation rule is a UI step.
+Implementation: the rules live in the Universal Managed workflows that
+work-order provisions (`plugins/work-order-jira/universal-apply.sh`, with
+`universal-switch.sh` moving a project onto them). The Automation rule is a UI step.

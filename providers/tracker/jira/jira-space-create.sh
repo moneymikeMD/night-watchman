@@ -1,9 +1,8 @@
 #!/bin/bash
 #
 # jira-space-create.sh — one-run bootstrap for a new Jira Space (company-
-# managed, "simplified scrum classic" template): project + the six stage
-# statuses + the six custom fields + those fields on every screen the
-# project's issue types use. Each step is idempotent; a re-run converges.
+# managed, "simplified scrum classic" template): project + the six custom
+# fields + those fields on every screen the project's issue types use. Each step is idempotent; a re-run converges.
 #
 # Never hardcode a field id, status id, screen id or lead accountId — all
 # are per-site and resolved live, by name, at runtime.
@@ -12,7 +11,10 @@
 # it is a classic software project with an Epic issue type: `style` is a
 # computed property of the template with no request-time equivalent, so a
 # stale template key silently yields a Business project instead.
-# Step 3 shells out to jira-workflow-apply.sh for the statuses.
+# Step 3 is only the statuses hook: work-order owns the workflow, and
+# plugins/work-order-jira/universal-switch.sh moves the project onto the
+# shared Universal Managed workflows. --workflow-apply PATH runs a script
+# here instead; without it, step 3 prints that pointer and continues.
 # Step 4 discovers-or-creates the six fields, adds executor's options, and
 # probes each field's JQL-searchability (repairing via PUT searcherKey).
 # Step 5 walks issuetypescreenscheme -> mapping -> screenscheme -> screens
@@ -29,17 +31,17 @@
 #                    A deleted project's key stays reserved site-wide.
 #   "Name"           the project's display name, quoted if it has spaces.
 #   --dry-run        print every planned request and exit 0, reaching no
-#                    network. Step 3 is announced, never invoked:
-#                    jira-workflow-apply.sh's own reads are NOT gated by
-#                    its --dry-run, so calling it would issue real,
-#                    credentialed GETs.
+#                    network. Step 3 is announced, never invoked: a
+#                    workflow script's reads need not honour --dry-run.
 #   --yes            actually run it. Without --yes, on a terminal, this
 #                    asks y/N once up front, before any write.
 #   --lead ACCOUNT_ID  the project lead's Jira accountId. Default: this
 #                    script's own `jira-api.sh whoami`.
 #   --jira-api PATH  path to a jira-api.sh-shaped wrapper. Defaults to
 #                    $ISSUES_JIRA_API, else jira-api.sh beside this file.
-#   --workflow-apply PATH  step 3's script. Default: beside this file.
+#   --workflow-apply PATH  step 3's script, called as PATH KEY --jira-api
+#                    WRAPPER --yes. Default: none (step 3 prints a pointer
+#                    to work-order's universal-switch.sh).
 #
 # Board and the first sprint are OUT OF SCOPE.
 #
@@ -92,6 +94,7 @@ ASSUME_YES=0
 LEAD_ACCOUNT_ID=""
 JIRA_API_PATH="${ISSUES_JIRA_API:-}"
 WORKFLOW_APPLY_PATH=""
+UNIVERSAL_SWITCH_HINT="work-order owns the workflow; run work-order's plugins/work-order-jira/universal-switch.sh for this project"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -145,8 +148,7 @@ KEY_LEN=${#PROJECT_KEY}
 [ -n "$JIRA_API_PATH" ] || JIRA_API_PATH="$DIR/jira-api.sh"
 [ -x "$JIRA_API_PATH" ] || die "--jira-api path is not an executable file: '$JIRA_API_PATH'"
 
-[ -n "$WORKFLOW_APPLY_PATH" ] || WORKFLOW_APPLY_PATH="$DIR/jira-workflow-apply.sh"
-[ -x "$WORKFLOW_APPLY_PATH" ] || die "--workflow-apply path is not an executable file: '$WORKFLOW_APPLY_PATH'"
+[ -z "$WORKFLOW_APPLY_PATH" ] || [ -x "$WORKFLOW_APPLY_PATH" ] || die "--workflow-apply path is not an executable file: '$WORKFLOW_APPLY_PATH'"
 
 need jq
 
@@ -173,9 +175,12 @@ if [ "$DRY_RUN" = "1" ]; then
     echo
     echo "2. would then ASSERT on the read-back project: .style == \"classic\", .projectTypeKey == \"software\", an Epic issue type at .hierarchyLevel == 1."
     echo
-    echo "3. would run (not invoked here — see this script's own header on why):"
-    echo "   $WORKFLOW_APPLY_PATH $PROJECT_KEY --jira-api $JIRA_API_PATH --yes"
-    echo "   (adds statuses: Open, Triage, Awaiting Deployment, Deferred, Completed, Cancelled)"
+    if [ -n "$WORKFLOW_APPLY_PATH" ]; then
+        echo "3. would run (not invoked here — see this script's own header on why):"
+        echo "   $WORKFLOW_APPLY_PATH $PROJECT_KEY --jira-api $JIRA_API_PATH --yes"
+    else
+        echo "3. statuses: not invoked here — $UNIVERSAL_SWITCH_HINT"
+    fi
     echo
     echo "4. discover-or-create these custom fields (id TBD — per-site, never hardcoded):"
     "$JIRA_API_PATH" --dry-run raw GET /field
@@ -334,7 +339,11 @@ ensure_project() {
 
 
 apply_statuses() {
-    echo "applying the six stage statuses via $WORKFLOW_APPLY_PATH ..."
+    if [ -z "$WORKFLOW_APPLY_PATH" ]; then
+        echo "statuses: skipped — $UNIVERSAL_SWITCH_HINT"
+        return 0
+    fi
+    echo "applying statuses via $WORKFLOW_APPLY_PATH ..."
     "$WORKFLOW_APPLY_PATH" "$PROJECT_KEY" --jira-api "$JIRA_API_PATH" --yes \
         || die "$WORKFLOW_APPLY_PATH failed for '$PROJECT_KEY' — see its own output above"
 }

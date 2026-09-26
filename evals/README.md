@@ -6,8 +6,8 @@ failures rather than synthetic fixtures.
 ## evals/script-reviewer
 
 One case, `nwm8-round1-five-bugs`. The prompt inlines a reconstructed
-"round 1" snapshot of what is now
-`providers/tracker/jira/jira-workflow-apply.sh` (and its selftest) with
+"round 1" snapshot of the Jira workflow provisioner this plugin shipped before
+work-order took it over (and its selftest), with
 five real bugs from that history still present:
 
 1. **delta-body-vs-full-definition** — the update body carries only the
