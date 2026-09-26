@@ -24,3 +24,6 @@ docs/preview/website/.astro/
 # name tickets and local paths, and an untracked file here would make
 # land-branch.sh refuse the tree (NWM-150).
 .plan/
+
+# per-session cost figures appended by hooks/session-cost.sh; stays local on this public repo
+docs/cost-ledger.tsv
