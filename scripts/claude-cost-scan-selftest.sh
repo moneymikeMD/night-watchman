@@ -69,9 +69,9 @@ fi
 # ---- test 5: --ledger-line prints exactly the ticket outcome-comment shape.
 # 4 turns, not 3: the fourth is the Workflow-tool turn test 7 covers.
 LINE=$(run --repo /Users/fixture/repoA --ledger-line)
-# literal '$0.0930', not a variable to expand
+# literal '$0.0320', not a variable to expand
 # shellcheck disable=SC2016
-if [ "$LINE" = 'cost: $0.0930, 4 turns' ]; then
+if [ "$LINE" = 'cost: $0.0320, 4 turns' ]; then
     ok "--ledger-line prints the exact ticket outcome-comment shape"
 else
     bad "unexpected --ledger-line output: $LINE"

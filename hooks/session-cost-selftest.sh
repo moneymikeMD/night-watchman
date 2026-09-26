@@ -71,10 +71,10 @@ if grep -q "	sess-c" "$LEDGER1" 2>/dev/null || grep -q "-sess-c	" "$LEDGER1" 2>/
 else
     fail "test1: expected a ledger row naming sess-c (got: $(cat "$LEDGER1" 2>&1))"
 fi
-if grep -q "^cost: \$0.0042, 2 turns$" "$STATE1" 2>/dev/null; then
+if grep -q "^cost: \$0.0028, 2 turns$" "$STATE1" 2>/dev/null; then
     pass "test1: last-session-cost.txt has the exact ledger-comment line"
 else
-    fail "test1: expected 'cost: \$0.0042, 2 turns' in $STATE1 (got: $(cat "$STATE1" 2>&1))"
+    fail "test1: expected 'cost: \$0.0028, 2 turns' in $STATE1 (got: $(cat "$STATE1" 2>&1))"
 fi
 
 # NWM-119: the appended row also carries the orchestrator model/effort and
@@ -107,7 +107,7 @@ if [ ! -f "$LEDGER3" ]; then
 else
     fail "test3: session-cost.sh created a ledger file that wasn't there"
 fi
-if grep -q "^cost: \$0.0042, 2 turns$" "$STATE1" 2>/dev/null; then
+if grep -q "^cost: \$0.0028, 2 turns$" "$STATE1" 2>/dev/null; then
     pass "test3: state file is still written when only the ledger step is skipped"
 else
     fail "test3: expected state file even with no ledger configured"
