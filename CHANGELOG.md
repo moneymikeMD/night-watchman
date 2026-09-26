@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [1.7.4](https://github.com/moneymikeMD/night-watchman/compare/v1.7.3...v1.7.4) (2026-09-26)
+
+
+### Bug Fixes
+
+* gitignore the cost ledger and correct the Claude price table (NWM-119) ([#96](https://github.com/moneymikeMD/night-watchman/issues/96)) ([bcf9a01](https://github.com/moneymikeMD/night-watchman/commit/bcf9a01a0946ba7a8fc8440fa5cc9c8d05f3f262))
+* gitignore the cost ledger's JSONL sidecar (NWM-119) ([484b4f9](https://github.com/moneymikeMD/night-watchman/commit/484b4f95f81aa156390beda9ea500ded747890fa))
+
 ## [1.7.3](https://github.com/moneymikeMD/night-watchman/compare/v1.7.2...v1.7.3) (2026-09-24)
 
 
