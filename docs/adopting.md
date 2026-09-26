@@ -90,11 +90,11 @@ A terse runbook for wiring an existing repo up as a night-watchman adopter.
 ## Jira-native gates
 
 Once the tracker is Jira (company-managed project), three ticket gates are
-enforced by the workflow itself and one by an Automation rule. The
-workflow rules are applied by
-`providers/tracker/jira/jira-workflow-apply.sh <PROJECT> --rules
-providers/tracker/jira/workflow-rules.json` (additive, idempotent; dry-run
-first). They are:
+enforced by the workflow itself and one by an Automation rule. work-order
+owns that workflow: its `plugins/work-order-jira/universal-apply.sh`
+provisions the shared Universal Managed workflows once per site, and
+`plugins/work-order-jira/universal-switch.sh` moves a project onto them.
+The rules are:
 
 | Transition | Rule | Message |
 | --- | --- | --- |
@@ -120,8 +120,8 @@ with a past date is simply invisible until someone notices.
 **One global rule is enough.** Create it under Jira Settings → System →
 Global automation, scoped to all software projects, with no `project =`
 clause in the JQL (`status = Deferred AND "defer_until" <= now()`). Every
-project bootstrapped by `jira-space-create.sh` gets the Deferred status and
-the `defer_until` field, so the rule covers projects created later with no
+project on the Universal Managed workflows has the Deferred status, and
+`jira-space-create.sh` adds the `defer_until` field, so the rule covers projects created later with no
 further work. A global
 rule counts against the site-wide Automation execution allowance; at one
 run a day that is about 30 executions a month. Per-project rules (the

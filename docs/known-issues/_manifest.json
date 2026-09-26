@@ -4,7 +4,6 @@
   "dispatch-herdr-start-the-60s-reached-working-wait-fails-when-several-agents-are-started-back-to-back-agent-left-idle-with-no-brief": "979addc5d0aac5c690dd2972392b8483cc996a6ebcff82031dc3f5e2713439c0",
   "guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2": "0850695fd105aa69cd14d487fac7767bd3672f30ce0dc9c49fbb031850005a9f",
   "guard-fs-writes-sh-at-user-scope-blocks-git-stash-in-every-repo-s-main-worktree-not-just-this-plugin-s": "bdab2903bb1348992c9fe465d545db5fc97e2b5f8508eab37677245c64fda85c",
-  "jira-workflow-apply-selftest-13b-assertion-expects-the-phrase-project-key-but-the-script-says-project-key": "52ffcd68759c9b80a3d8fdf96b0de831267661646e2444e970c1748b12eaffe8",
   "land-branch-selftest-sh-needs-pyyaml-but-neither-declares-nor-checks-for-it": "2d6fed73124c694b8036fcc1fa0313b025a5e8f1d572c775d312a59431b70ac5",
   "memorygraph-link-rejects-supersedes-and-relates-to-so-a-memory-cannot-be-superseded-by-an-edge": "9c35c07d18b5b7a15cead84b286fb1f10a2200c94067df05308fa989bf08b9e9",
   "providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted": "700ebe4aa6c3f649f1689674d25a82b53292f299516d820033f6f88232948dfc",

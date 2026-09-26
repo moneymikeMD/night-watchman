@@ -96,8 +96,8 @@ completing it (`--no-complete` stops there on purpose).
 
 **A ticket cannot leave To Do without `verify` and `touches` set, and
 cannot reach Completed without `verify`.** Both are workflow-level required
-fields (`providers/tracker/jira/workflow-rules.json`), not merely a
-convention. Both fields take an Atlassian Document, not a plain string: a
+fields in the Universal Managed workflow that work-order provisions
+(`plugins/work-order-jira/universal-apply.sh`), not merely a convention. Both fields take an Atlassian Document, not a plain string: a
 string PUT is refused with HTTP 400. An Epic issue type has no `touches`
 field at all, so an Epic can never satisfy that gate structurally —
 `NWM-10` cannot close for this reason and is tracked as **WO-71** (a
@@ -151,11 +151,9 @@ bash would hide a regression. Its steps, in order:
   source a sibling through a runtime-resolved path shellcheck can't follow).
 - **kit.sh cleanup contract** — `scripts/kit-consumer-lint.sh`.
 - **selftests** — discovers every `*selftest*.sh` by `find` and runs it; a
-  new selftest needs no workflow edit. Two are quarantined by exact path
-  (`providers/config-selftest.sh`,
-  `providers/tracker/jira/jira-workflow-apply-selftest.sh`, each failing one
-  known assertion) — skipped in the gating step, re-run informationally
-  with `continue-on-error`.
+  new selftest needs no workflow edit. One is quarantined by exact path
+  (`providers/config-selftest.sh`, failing one known assertion) — skipped
+  in the gating step, re-run informationally with `continue-on-error`.
 - **known-issues index is not drifted** — `known-issue.sh --root lint`, run
   out of the ai-toolkit checkout. `docs/known-issues.md` is **generated**
   from `docs/known-issues/*.md` frontmatter by `known-issue.sh reindex`

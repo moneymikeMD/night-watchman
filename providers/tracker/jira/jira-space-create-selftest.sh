@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Selftest for jira-space-create.sh. Runs entirely against a fake
-# `jira-api.sh`-shaped stub and a fake `jira-workflow-apply.sh`-shaped stub
+# `jira-api.sh`-shaped stub and a fake `--workflow-apply` script stub
 # — never the real wrappers, never a real Jira site or credential. There is
 # no `curl` in this file's process tree at all; NW_JIRA_HOST=127.0.0.1 is
 # exported anyway, belt and braces.
@@ -12,8 +12,7 @@
 # rule, flagged rather than shipped as if it were real. Only the
 # screen-scheme chain (ZZSPIKE run 2) and the searchability probe pair are
 # real; each fixture's own header says which it is. Re-record the rest
-# against a throwaway project before trusting this at the same level as
-# jira-workflow-apply.sh.
+# against a throwaway project before trusting them as recorded fixtures.
 #
 # Usage: ./jira-space-create-selftest.sh
 
@@ -325,6 +324,7 @@ assert_eq "1: --dry-run exits 0" "0" "$LAST_RC"
 check "1: announces step 1 (project)" "$LAST_OUT" "read-or-create the project"
 check "1: announces step 2 (ASSERT)" "$LAST_OUT" "would then ASSERT"
 check "1: announces step 3 without invoking a real workflow-apply wrapper" "$LAST_OUT" "not invoked here"
+check "1: with no --workflow-apply, step 3 points at work-order's universal-switch.sh" "$LAST_OUT" "universal-switch.sh"
 check "1: announces step 4 (fields)" "$LAST_OUT" "discover-or-create these custom fields"
 check "1: announces the searchability probe" "$LAST_OUT" "would probe searchability"
 check "1: the probe GET is a real (dry-run) wrapper call, e.g. for touches" "$LAST_OUT" 'would issue: raw GET /search/jql?jql=project%20%3D%20ZZSPACE%20AND%20%22touches%22%20is%20EMPTY&fields=key&maxResults=1'
@@ -374,7 +374,7 @@ check "4: names the actual style found" "$LAST_ERR" "next-gen"
 assert_nonempty "4: the wrapper was reached (proves the refusal is real, not vacuous)" "$TMPD/$(basename "$WRAP_BIZ").calllog"
 BIZLOG="$TMPD/$(basename "$WRAP_BIZ").calllog"
 check_not "4: never reached POST /project (no create attempted against an existing project)" "$(cat "$BIZLOG")" "write POST /project"
-assert_eq "4: jira-workflow-apply.sh was never invoked" "" "$(cat "$TMPD/$(basename "$WF_BIZ").calllog" 2>/dev/null || true)"
+assert_eq "4: the --workflow-apply script was never invoked" "" "$(cat "$TMPD/$(basename "$WF_BIZ").calllog" 2>/dev/null || true)"
 
 # 5. happy path against an existing classic project: no-ops where the fixture has it
 WRAP_HAPPY="$TMPD/wrap-happy.sh"
@@ -386,8 +386,8 @@ assert_eq "5: the happy path exits 0" "0" "$LAST_RC"
 check "5: says the project already exists (idempotent — no creation)" "$LAST_OUT" "already exists"
 HAPPYLOG="$TMPD/$(basename "$WRAP_HAPPY").calllog"
 check_not "5: no POST /project was issued for an already-existing project" "$(cat "$HAPPYLOG")" "write POST /project "
-check "5: jira-workflow-apply.sh was invoked with the right project key" "$(cat "$TMPD/$(basename "$WF_HAPPY").calllog")" "ZZSPACE"
-check "5: jira-workflow-apply.sh was invoked with --yes" "$(cat "$TMPD/$(basename "$WF_HAPPY").calllog")" "--yes"
+check "5: the --workflow-apply script was invoked with the right project key" "$(cat "$TMPD/$(basename "$WF_HAPPY").calllog")" "ZZSPACE"
+check "5: the --workflow-apply script was invoked with --yes" "$(cat "$TMPD/$(basename "$WF_HAPPY").calllog")" "--yes"
 check "5: an already-present field is reported as a no-op" "$LAST_OUT" "field 'touches' already present"
 check "5: the absent field (executor) is reported as created" "$LAST_OUT" "field 'executor' absent — creating"
 check "5: an already-present executor option is a no-op" "$LAST_OUT" "executor option 'agent' already present"
@@ -406,6 +406,14 @@ check "5: bootstrap-complete banner shown" "$LAST_OUT" "bootstrap complete"
 # `table` turns real tabs into aligned spaces, so a literal backslash-t
 # in the output can only mean the string-interpolation bug. That shipped.
 check_not "5: no literal backslash-t leaked into the final table (real tabs, column-aligned like the header)" "$LAST_OUT" '\t'
+
+# 5b. no --workflow-apply: step 3 is skipped with a pointer, the rest still runs
+WRAP_NOWF="$TMPD/wrap-nowf.sh"
+make_jira_api_stub "$WRAP_NOWF"
+run nowf ZZSPACE "ZZ Space" --yes --jira-api "$WRAP_NOWF"
+assert_eq "5b: without --workflow-apply the run still exits 0" "0" "$LAST_RC"
+check "5b: step 3 names work-order's universal-switch.sh" "$LAST_OUT" "universal-switch.sh"
+check "5b: bootstrap-complete banner shown" "$LAST_OUT" "bootstrap complete"
 
 # 6. a field already existing under the wrong schema type is refused before any write
 WRAP_WRONGTYPE="$TMPD/wrap-wrongtype.sh"
@@ -454,7 +462,7 @@ assert_nonzero "8: a non-404 GET failure is a hard die" "$LAST_RC"
 check "8: names the refusal, not a false 'not found'" "$LAST_ERR" "refusing to guess whether it exists"
 ERRLOG="$TMPD/$(basename "$WRAP_ERR").calllog"
 check_not "8: no POST /project was attempted after a non-404 error" "$(cat "$ERRLOG")" "write POST /project "
-assert_eq "8: jira-workflow-apply.sh was never invoked" "" "$(cat "$TMPD/$(basename "$WF_ERR").calllog" 2>/dev/null || true)"
+assert_eq "8: the --workflow-apply script was never invoked" "" "$(cat "$TMPD/$(basename "$WF_ERR").calllog" 2>/dev/null || true)"
 
 # 9. an already-on-screen field is an idempotent no-op
 WRAP_SCREENSKIP="$TMPD/wrap-screenskip.sh"

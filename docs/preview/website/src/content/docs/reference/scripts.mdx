@@ -448,29 +448,14 @@ Usage:
 ### providers/tracker/jira/jira-space-create.sh
 
 jira-space-create.sh — one-run bootstrap for a new Jira Space (company-
-managed, "simplified scrum classic" template): project + the six stage
-statuses + the six custom fields + those fields on every screen the
-project's issue types use. Each step is idempotent; a re-run converges.
+managed, "simplified scrum classic" template): project + the six custom
+fields + those fields on every screen the project's issue types use. Each step is idempotent; a re-run converges.
 
 ```text
 Usage:
   jira-space-create.sh KEY "Name" --dry-run
   jira-space-create.sh KEY "Name" --yes [--lead ACCOUNT_ID]
                         [--jira-api PATH] [--workflow-apply PATH]
-```
-
-### providers/tracker/jira/jira-workflow-apply.sh
-
-jira-workflow-apply.sh — adds this plugin's six stage statuses (Open,
-Triage, Awaiting Deployment, Deferred, Completed, Cancelled) and a GLOBAL
-transition into each to a Jira company-managed project's own copy of the
-"simplified scrum classic" template workflow, which ships only To Do/In
-Progress/Done. Idempotent: "already complete" exits 0 doing nothing.
-
-```text
-Usage:
-  ./jira-workflow-apply.sh <PROJECT_KEY> [--jira-api PATH] [--dry-run]
-                            [--yes] [--restore-from PATH] [--rules PATH]
 ```
 
 ### providers/tracker/jira/provider.sh

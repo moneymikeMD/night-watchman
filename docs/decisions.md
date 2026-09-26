@@ -70,9 +70,9 @@ at transition time. Automation is post-hoc and is used only where reacting
 late is fine (deferral expiry). Automation execution caps on this plan are
 UNVERIFIED.
 
-Implementation: an additive rules spec applied through
-`providers/tracker/jira/jira-workflow-apply.sh`, rehearsed on a scratch
-project with recorded fixtures. The Automation rule is a UI step.
+Implementation: the rules live in the Universal Managed workflows that
+work-order provisions (`plugins/work-order-jira/universal-apply.sh`, with
+`universal-switch.sh` moving a project onto them). The Automation rule is a UI step.
 
 ### 2026-09-14 — Ticket status mirrors the real lifecycle, and the scripts drive it
 
@@ -120,12 +120,11 @@ the `/bin/bash` every macOS ships — and its scripts are written to that
 limit deliberately. A Linux runner's bash 5.x would pass code that breaks on
 the machines this actually runs on.
 
-Two selftests run in a separate informational step rather than gating
-(`providers/config-selftest.sh` and
-`providers/tracker/jira/jira-workflow-apply-selftest.sh`): each fails one
-assertion for a filed reason. Quarantining them by name keeps `main`
-honestly green while leaving a second failure in the same suite visible.
-Each moves back into the gating step when its known issue is resolved.
+A selftest failing one assertion for a filed reason
+(`providers/config-selftest.sh`) runs in a separate informational step
+rather than gating. Quarantining it by name keeps `main` honestly green
+while leaving a second failure in the same suite visible. It moves back
+into the gating step when its known issue is resolved.
 
 Versioning is release-please's, bumping `.claude-plugin/plugin.json`. It
 needs a one-time Actions permission grant from the owner's own terminal

@@ -1,7 +1,7 @@
 # ./jira-api.sh --yes write POST /issue/PROJ-108/transitions '{"transition":{"id":"21"}}'   (then id 81)
 # Captured live 2026-09-14 against example.atlassian.net, run from the
-# orchestrating session right after `jira-workflow-apply.sh <KEY> --rules
-# workflow-rules.json --yes` applied the four rules (deep diff sent-vs-stored []).
+# orchestrating session right after the four workflow rules were applied
+# (deep diff sent-vs-stored []).
 # Scratch issue PROJ-108 had empty verify and touches, was never In Progress, and
 # was Cancelled afterwards. Both transitions were rejected with HTTP 400 — live
 # proof the validators are enforced, not merely stored. The first three messages

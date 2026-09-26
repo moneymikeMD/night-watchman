@@ -44,10 +44,12 @@ interactive confirmation) — deliberate, so a wave-dispatch script can call
 the tracker kind unattended; set `$NW_DRY_RUN=1`, or pass `--dry-run`
 before the verb, to have any verb print the request it would issue and
 exit 0 instead. `tracker/jira/jira-space-create.sh` is a
-one-run bootstrap for a brand-new Jira Space — project + the six stage
-statuses (via `providers/tracker/jira/jira-workflow-apply.sh`) + the six
+one-run bootstrap for a brand-new Jira Space — project + the six
 custom fields + those fields on every project screen — each step
-idempotent, so a re-run converges rather than failing on "already there";
+idempotent, so a re-run converges rather than failing on "already there".
+Statuses and transition rules are not its job: work-order's
+`plugins/work-order-jira/universal-switch.sh` moves the project onto the
+shared Universal Managed workflows. It is
 not a verb of the `tracker` contract itself, since it is a one-time setup
 operation, not part of the fetch/transition/comment/create surface every
 implementation must offer. `dispatch` ships two implementations —
