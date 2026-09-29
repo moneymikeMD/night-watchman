@@ -36,6 +36,17 @@ recorded working directory the call ran from, falling back to this
 process's own `pwd -P`).
 ```
 
+### hooks/memory-push.sh
+
+memory-push.sh — Claude Code SessionStart, UserPromptSubmit and
+PostToolUseFailure hook. Pushes recalled memory into the session as
+additionalContext, so a model that does not recall on its own still sees
+what the store knows (homelab LAB-345/LAB-355; payload per LAB-361).
+
+```text
+Usage: fed the hook JSON on stdin, no arguments.
+```
+
 ### hooks/read-shunt.sh
 
 read-shunt.sh — Claude Code PreToolUse hook for Read (and simple `cat` Bash
@@ -102,6 +113,9 @@ Usage: not a CLI. Fed the PreToolUse payload on stdin.
 | PreToolUse | Read | `${CLAUDE_PLUGIN_ROOT}/hooks/read-shunt.sh` | 60 |
 | PreToolUse | WebFetch | `${CLAUDE_PLUGIN_ROOT}/hooks/webfetch-cache-pre.sh` | 20 |
 | PostToolUse | WebFetch | `${CLAUDE_PLUGIN_ROOT}/hooks/webfetch-cache-post.sh` | 20 |
+| SessionStart | - | `${CLAUDE_PLUGIN_ROOT}/hooks/memory-push.sh` | 10 |
+| UserPromptSubmit | - | `${CLAUDE_PLUGIN_ROOT}/hooks/memory-push.sh` | 10 |
+| PostToolUseFailure | - | `${CLAUDE_PLUGIN_ROOT}/hooks/memory-push.sh` | 10 |
 | SessionEnd | - | `${CLAUDE_PLUGIN_ROOT}/hooks/session-cost.sh` | 30 |
 | SubagentStop | script-author|script-reviewer | `${CLAUDE_PLUGIN_ROOT}/hooks/script-events-hook.sh` | 30 |
 
