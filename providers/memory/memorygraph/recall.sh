@@ -1,11 +1,16 @@
 #!/bin/bash
 #
-# recall.sh — the `recall` verb. `memorygraph recall --query` finds nothing
-# for a multi-word phrase, so this tokenises the query into single-noun
-# candidates (stopwords and sub-3-char words dropped, deduped, capped at
-# --max-queries), runs one `memorygraph recall --query WORD --limit N` per
-# token, and fuses the per-token rankings with reciprocal rank fusion
-# (score = sum over matching tokens of 1/(60 + rank_in_that_token)).
+# recall.sh — the `recall` verb. On falkordb and falkordblite, `memorygraph
+# recall --query` finds nothing for a multi-word phrase, so there this
+# tokenises the query into single-noun candidates (stopwords and sub-3-char
+# words dropped, deduped, capped at --max-queries), runs one `memorygraph
+# recall --query WORD --limit N` per token, and fuses the per-token rankings
+# with reciprocal rank fusion (score = sum over matching tokens of
+# 1/(60 + rank_in_that_token)). Every other backend, postgres's hybrid
+# recall included, gets the whole query in one call.
+#
+# The backend is $MEMORY_BACKEND, defaulting to falkordblite as the
+# memorygraph CLI itself does when it is unset.
 #
 # RRF rather than match count: on the real store tokens barely overlap, so
 # ranking by match count degenerates to sorting by importance and buries the
@@ -27,15 +32,19 @@ usage() {
     cat >&2 <<'EOF'
 usage: recall.sh QUERY [--limit N] [--top N] [--max-queries N] [--dry-run]
 
-Splits QUERY into single-noun tokens (stopwords and words under 3 chars
-dropped, deduped, capped at --max-queries, default 8) and runs one
-`memorygraph recall --query WORD --limit N` per token (default limit 20)
--- memorygraph returns zero results for a multi-word --query, so this is
-the fan-out that actually finds things. Results are merged across tokens
-by reciprocal rank fusion (RRF: score = sum of 1/(60 + rank) over every
-token that returned the memory) and the top --top (default 10) are
-printed, ranked by score. --dry-run prints the planned per-token
-commands, shell-quoted, instead of running them.
+On any backend but falkordb/falkordblite, runs one `memorygraph recall
+--query QUERY --limit N` (default limit 20) with the whole query.
+
+On falkordb and falkordblite ($MEMORY_BACKEND, default falkordblite), whose
+recall returns zero results for a multi-word --query, it splits QUERY into
+single-noun tokens (stopwords and words under 3 chars dropped, deduped,
+capped at --max-queries, default 8), runs one call per token, and merges
+the results by reciprocal rank fusion (RRF: score = sum of 1/(60 + rank)
+over every token that returned the memory).
+
+Either way the top --top (default 10) are printed, ranked by score.
+--dry-run prints the planned commands, shell-quoted, instead of running
+them.
 EOF
     exit 1
 }
@@ -63,44 +72,57 @@ done
 
 [ -n "$query" ] || usage
 
-# Deliberately not exhaustive: the goal is to stop "why does the api fail"
-# wasting a query on "does" and "the", not to build an NLP pipeline.
-STOPWORDS=" a an the is are was were does do did why how what when where who \
+backend=$(printf '%s' "${MEMORY_BACKEND:-falkordblite}" | tr '[:upper:]' '[:lower:]')
+case "$backend" in
+    falkordb | falkordblite) split=1 ;;
+    *) split=0 ;;
+esac
+
+if [ "$split" -eq 1 ]; then
+    # Deliberately not exhaustive: the goal is to stop "why does the api fail"
+    # wasting a query on "does" and "the", not to build an NLP pipeline.
+    STOPWORDS=" a an the is are was were does do did why how what when where who \
 which for to of in on at and or but with from this that it its be been \
 being can could should would will shall not no nor so than then too very \
 about into over under again further out up down all any both each few more \
 most other some such only own same as if because until while "
 
-# Lowercase, then collapse every non-[a-z0-9] run to one space: strips
-# punctuation and word-splits in one pass, with POSIX tr, not bash 4 ${var,,}.
-CANDIDATES=$(printf '%s' "$query" \
-    | tr '[:upper:]' '[:lower:]' \
-    | tr -c 'a-z0-9' ' ' \
-    | tr -s ' ')
+    # Lowercase, then collapse every non-[a-z0-9] run to one space: strips
+    # punctuation and word-splits in one pass, with POSIX tr, not bash 4 ${var,,}.
+    CANDIDATES=$(printf '%s' "$query" \
+        | tr '[:upper:]' '[:lower:]' \
+        | tr -c 'a-z0-9' ' ' \
+        | tr -s ' ')
 
-words=()
-n_words=0
-for w in $CANDIDATES; do
-    [ "$n_words" -lt "$max_queries" ] || break
-    [ "${#w}" -ge 3 ] || continue
-    case "$STOPWORDS" in
-        *" $w "*) continue ;;
-    esac
-    dupe=0
-    if [ "${#words[@]}" -gt 0 ]; then
-        for existing in "${words[@]}"; do
-            [ "$existing" = "$w" ] && { dupe=1; break; }
-        done
-    fi
-    [ "$dupe" -eq 1 ] && continue
-    words=("${words[@]-}" "$w")
-    # bash 3.2: appending via "${words[@]-}" to an array declared empty can
-    # leave a LEADING EMPTY element, hence the non-empty guards at every use.
-    n_words=$((n_words + 1))
-done
+    words=()
+    n_words=0
+    for w in $CANDIDATES; do
+        [ "$n_words" -lt "$max_queries" ] || break
+        [ "${#w}" -ge 3 ] || continue
+        case "$STOPWORDS" in
+            *" $w "*) continue ;;
+        esac
+        dupe=0
+        if [ "${#words[@]}" -gt 0 ]; then
+            for existing in "${words[@]}"; do
+                [ "$existing" = "$w" ] && { dupe=1; break; }
+            done
+        fi
+        [ "$dupe" -eq 1 ] && continue
+        words=("${words[@]-}" "$w")
+        # bash 3.2: appending via "${words[@]-}" to an array declared empty can
+        # leave a LEADING EMPTY element, hence the non-empty guards at every use.
+        n_words=$((n_words + 1))
+    done
 
-[ "$n_words" -ge 1 ] \
-    || { echo "Error: no usable search terms in '$query' (every word was a stopword or shorter than 3 characters)" >&2; exit 1; }
+    [ "$n_words" -ge 1 ] \
+        || { echo "Error: no usable search terms in '$query' (every word was a stopword or shorter than 3 characters)" >&2; exit 1; }
+    scope="across $n_words token(s) queried"
+else
+    words=("$query")
+    n_words=1
+    scope="from one whole-query recall"
+fi
 
 if [ "$dry_run" -eq 1 ]; then
     for w in "${words[@]}"; do
@@ -207,7 +229,7 @@ done
 TOTAL_ROWS=$(wc -l < "$ROWS" | tr -d ' ')
 
 if [ "$TOTAL_ROWS" -eq 0 ]; then
-    echo "0 unique memories across $n_words token(s) queried (hit: none)"
+    echo "0 unique memories $scope (hit: none)"
 else
     # Deliberately NOT `|| pipe_ok`: this is a single awk command, not a
     # pipeline, and `set -e` on its own exit status is what catches awk dying
@@ -231,9 +253,9 @@ else
 
     UNIQUE_COUNT=$(wc -l < "$MERGED" | tr -d ' ')
     if [ "$UNIQUE_COUNT" -gt "$top" ]; then
-        echo "$UNIQUE_COUNT unique memories across $n_words token(s) queried -- showing top $top by score"
+        echo "$UNIQUE_COUNT unique memories $scope -- showing top $top by score"
     else
-        echo "$UNIQUE_COUNT unique memories across $n_words token(s) queried"
+        echo "$UNIQUE_COUNT unique memories $scope"
     fi
     echo ""
     # Post-merge fields: score(1) matched(2) best-rank(3) id(4) title(5)

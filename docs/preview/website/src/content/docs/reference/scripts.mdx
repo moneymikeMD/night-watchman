@@ -256,12 +256,14 @@ only; the work is in the sibling script named after each verb.
 
 ### providers/memory/memorygraph/recall.sh
 
-recall.sh — the `recall` verb. `memorygraph recall --query` finds nothing
-for a multi-word phrase, so this tokenises the query into single-noun
-candidates (stopwords and sub-3-char words dropped, deduped, capped at
---max-queries), runs one `memorygraph recall --query WORD --limit N` per
-token, and fuses the per-token rankings with reciprocal rank fusion
-(score = sum over matching tokens of 1/(60 + rank_in_that_token)).
+recall.sh — the `recall` verb. On falkordb and falkordblite, `memorygraph
+recall --query` finds nothing for a multi-word phrase, so there this
+tokenises the query into single-noun candidates (stopwords and sub-3-char
+words dropped, deduped, capped at --max-queries), runs one `memorygraph
+recall --query WORD --limit N` per token, and fuses the per-token rankings
+with reciprocal rank fusion (score = sum over matching tokens of
+1/(60 + rank_in_that_token)). Every other backend, postgres's hybrid
+recall included, gets the whole query in one call.
 
 ### providers/memory/memorygraph/store.sh
 

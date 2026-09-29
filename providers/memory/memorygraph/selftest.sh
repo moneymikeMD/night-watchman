@@ -2,8 +2,8 @@
 #
 # Selftest for providers/memory/memorygraph/{provider,store,recall}.sh.
 # Runs entirely against a stubbed `memorygraph` binary put on PATH for the
-# duration of the test — nothing here touches the operator's real
-# ~/.memorygraph store.
+# duration of the test, with every MEMORY_* variable unset first so no
+# inherited backend setting reaches it — nothing here touches a real store.
 #
 # Usage: providers/memory/memorygraph/selftest.sh
 
@@ -38,6 +38,12 @@ contains() {
     esac
 }
 
+for v in $(env | sed -n 's/^\(MEMORY[A-Za-z0-9_]*\)=.*/\1/p'); do
+    unset "$v"
+done
+eq "the harness starts with no MEMORY* variable set" "0" \
+    "$(env | grep -c '^MEMORY')"
+
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
@@ -48,6 +54,7 @@ mkdir -p "$WORK/bin"
 cat > "$WORK/bin/memorygraph" <<'STUB'
 #!/bin/bash
 printf '%s\n' "$*" >> "$WORK_LOG"
+printf '%s\n' "${MEMORY_BACKEND-<unset>}" >> "$WORK_LOG.backend"
 
 block() {
     # block RANK ID TITLE TYPE IMPORTANCE TAGS CONTENT
@@ -62,6 +69,7 @@ case "$1" in
                 [ "$1" = "--query" ] && word="$2"
                 shift
             done
+            printf '%s\n' "$word" >> "$WORK_LOG.query"
             ID_A=11111111-1111-1111-1111-111111111111
             ID_C=33333333-3333-3333-3333-333333333333
             ID_D=44444444-4444-4444-4444-444444444444
@@ -82,6 +90,12 @@ case "$1" in
                     echo "**Found 1 relevant memories:**"
                     echo ""
                     block 1 "$ID_D" "Standalone auth note" general 0.9 "auth" "Auth only, single hit"
+                    ;;
+                "jira api auth" | "how do jira and api auth")
+                    echo "**Found 2 relevant memories:**"
+                    echo ""
+                    block 1 "$ID_A" "Jira auth flow" solution 0.8 "jira,auth" "How jira auth works"
+                    block 2 "$ID_D" "Standalone auth note" general 0.9 "auth" "Auth only, single hit"
                     ;;
                 *)
                     echo "No memories found matching your query"
@@ -119,6 +133,10 @@ if "$STORE_SH" --type problem --title "T" --content "C" >/dev/null 2>&1; then
 else
     ok "store.sh without --project is refused"
 fi
+
+# The per-word fan-out below is the falkordb path; the whole-query path
+# (postgres and every other backend) is tested after it.
+export MEMORY_BACKEND=falkordb
 
 DRY=$("$RECALL_SH" "jira api auth" --dry-run)
 LINES=$(printf '%s\n' "$DRY" | grep -c '^memorygraph recall')
@@ -173,6 +191,49 @@ else
 fi
 contains "the fused memory reports matching 2 of 3 tokens" "matched 2/3 tokens" "$OUT"
 contains "the single-token memory reports matching 1 of 3 tokens" "matched 1/3 tokens" "$OUT"
+
+reset_logs() { : > "$WORK_LOG"; : > "$WORK_LOG.query"; : > "$WORK_LOG.backend"; }
+
+export MEMORY_BACKEND=postgres
+reset_logs
+OUT=$("$RECALL_SH" "jira api auth")
+eq "postgres: a multi-word query makes exactly one memorygraph call" "1" \
+    "$(wc -l < "$WORK_LOG" | tr -d ' ')"
+eq "postgres: that call's --query is the whole phrase" "jira api auth" "$(cat "$WORK_LOG.query")"
+contains "postgres: the whole-query hit is printed" "Jira auth flow" "$OUT"
+contains "postgres: the second whole-query hit is printed" "Standalone auth note" "$OUT"
+contains "postgres: the summary counts one query, not tokens" "from one whole-query recall" "$OUT"
+
+reset_logs
+OUT=$("$RECALL_SH" "how do jira and api auth")
+eq "postgres: stopwords are left in the query, not stripped" \
+    "how do jira and api auth" "$(cat "$WORK_LOG.query")"
+
+DRY=$("$RECALL_SH" "jira api auth" --dry-run --limit 7)
+eq "postgres: dry-run plans one command carrying the whole phrase" \
+    "memorygraph recall --query jira\ api\ auth --limit 7" "$DRY"
+
+for b in memgraph sqlite; do
+    export MEMORY_BACKEND="$b"
+    reset_logs
+    "$RECALL_SH" "jira api auth" > /dev/null
+    eq "$b: a multi-word query makes exactly one call" "1" "$(wc -l < "$WORK_LOG" | tr -d ' ')"
+done
+
+for b in falkordblite FalkorDB; do
+    export MEMORY_BACKEND="$b"
+    reset_logs
+    "$RECALL_SH" "jira api auth" > /dev/null
+    eq "$b: a three-word query still fans out to three calls" "3" "$(wc -l < "$WORK_LOG" | tr -d ' ')"
+done
+
+unset MEMORY_BACKEND
+reset_logs
+"$RECALL_SH" "jira api auth" > /dev/null
+eq "MEMORY_BACKEND unset: falkordblite, memorygraph's own default, so per-word" "3" \
+    "$(wc -l < "$WORK_LOG" | tr -d ' ')"
+eq "MEMORY_BACKEND unset: the stub saw it unset too" "<unset>" \
+    "$(sort -u "$WORK_LOG.backend")"
 
 : > "$WORK_LOG"
 OUT=$("$PROVIDER_SH" store --type problem --title T --content C --project nwm)
