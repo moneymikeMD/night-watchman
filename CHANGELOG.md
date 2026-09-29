@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [1.8.1](https://github.com/moneymikeMD/night-watchman/compare/v1.8.0...v1.8.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **providers:** recall sends the whole query unless the backend is FalkorDB (NWM-186) ([2400812](https://github.com/moneymikeMD/night-watchman/commit/240081217b1fa6c602b7cc3537e63ee2502afab3))
+* **providers:** recall sends the whole query unless the backend is FalkorDB (NWM-186) ([941ddbd](https://github.com/moneymikeMD/night-watchman/commit/941ddbd53db1668d12e4fffea912741e4d7ae444))
+
 ## [1.8.0](https://github.com/moneymikeMD/night-watchman/compare/v1.7.3...v1.8.0) (2026-09-29)
 
 
