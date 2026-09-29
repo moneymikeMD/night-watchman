@@ -14,8 +14,8 @@ conversation with the owner.
 
 - Read `docs/ethos.md`'s defaults and Still-ask list. A default that
   covers a question gets applied and stated, not asked.
-- Run one `memorygraph recall` on a single keyword from the topic, if
-  memorygraph is configured.
+- Run one `memorygraph recall` with the topic as the query, if
+  memorygraph is configured (a single keyword on the falkordb backends).
 - Scan `cancelled/` (or the tracker's cancelled stage) for a prior
   rejection of the same idea before re-asking it.
 
