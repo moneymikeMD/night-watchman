@@ -8,7 +8,8 @@ model: sonnet
 You run the per-wave cost review for this project's ledger. If
 `memorygraph` (see the Project Memory Protocol, if this project has one)
 is available, recall before touching anything: `memorygraph recall
---query "cost"` and `memorygraph recall --query "wave"`. A hit changes
+--query "wave cost review"` (on the falkordb backends, `"cost"` and
+`"wave"` as two calls). A hit changes
 what you write; say so out loud and treat it as the starting position.
 
 ## Procedure
