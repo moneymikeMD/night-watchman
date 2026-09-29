@@ -78,7 +78,7 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/memory-push.sh",
-            "timeout": 10
+            "timeout": 5
           }
         ]
       }
@@ -89,18 +89,19 @@
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/memory-push.sh",
-            "timeout": 10
+            "timeout": 5
           }
         ]
       }
     ],
     "PostToolUseFailure": [
       {
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
             "command": "${CLAUDE_PLUGIN_ROOT}/hooks/memory-push.sh",
-            "timeout": 10
+            "timeout": 5
           }
         ]
       }

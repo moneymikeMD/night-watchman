@@ -1,50 +1,56 @@
 #!/bin/bash
 #
 # memory-push.sh — Claude Code SessionStart, UserPromptSubmit and
-# PostToolUseFailure hook. Pushes recalled memory into the session as
-# additionalContext, so a model that does not recall on its own still sees
-# what the store knows (homelab LAB-345/LAB-355; payload per LAB-361).
+# PostToolUseFailure (Bash only) hook. Pushes recalled memory into the
+# session as additionalContext, so a model that does not recall on its own
+# still sees what the store knows (homelab LAB-345/LAB-355; payload per
+# LAB-361). It fails open and silent within a 3 s budget; set
+# NW_MEMORY_PUSH=0 to turn it off.
 #
-# Query per event, raw case:
+# Query per event, raw case, at most 400 characters:
 #   SessionStart        the repo name (origin URL basename) and branch
-#   UserPromptSubmit    the prompt's first 1,000 characters
-#   PostToolUseFailure  the last 1,000 characters of the failed tool's
-#                       `error`, where Bash puts the failing line
-# 1,000 is memorygraph's own cap: a longer query fails with
-# "Validation error: Query exceeds 1000 characters".
+#   UserPromptSubmit    the prompt's head
+#   PostToolUseFailure  the error's tail, where Bash puts the failing line;
+#                       skipped for other tools and when is_interrupt is set
 #
-# It runs `memorygraph recall --query Q --limit 5 --json`, so any backend
-# works. The CLI's markdown output is parsed when --json is ignored (the
-# 0.14 fork does). The top 3 results come back as bodies, each cut at 1,250
-# characters and fetched with parallel `memorygraph get` calls because
-# recall prints only a ~150-character preview. Results 4 and 5 are titles.
+# It runs `memorygraph recall --query Q --limit 5 --json` with
+# MEMORY_EMBED_TIMEOUT_MS=1500 in that call's environment only, so any
+# backend works and a slow embedder falls back to full-text quickly. The
+# 0.14 fork ignores --json and prints markdown with ~150-character
+# previews, so the top 3 bodies come from parallel `memorygraph get` calls,
+# each cut at 1,250 characters. A preview is never shown as a body: an entry
+# whose get fails drops to the title list, and a push with no full body
+# injects nothing. The remaining results are listed as titles.
 #
-# Fail open and silent: no memorygraph or python3, a recall error, an empty
-# result, or the time budget running out all mean no injection and exit 0.
-# The budget covers recall and every get together: NW_MEMORY_PUSH_TIMEOUT
-# seconds, default 6, sized from a measured 0.9-5.3 s recall (median about
-# 2.3 s) against the Postgres backend over the LAN. plugin.json's 10 s
-# timeout is only the outer backstop.
+# Once per session: a memory injected as a body or a title is not injected
+# again, and a query already answered is not re-run. A push with nothing
+# new injects nothing. SessionStart with source compact
+# or clear starts the record afresh, since that context is gone; resume
+# keeps it, since the transcript still carries what was pushed.
 #
-# Repeats: a UserPromptSubmit or PostToolUseFailure query already pushed in
-# this session is not pushed again (a retry loop re-failing with the same
-# error). SessionStart always pushes, since startup, resume, clear and
-# compact each begin with context that lacks it. Memory ids are not
-# de-duplicated across events, matching the measured M3b arm (LAB-361).
+# Circuit breaker: a recall that errors or times out, or a push that runs
+# out of budget, skips every push on this machine for the next 5 minutes.
+# A store that silently drops packets therefore costs the budget once per
+# window, not on every prompt.
 #
 # With MEMORY_BACKEND unset and no <cwd>/.memorygraph/, memorygraph would
 # create an empty store in the project, so the hook skips instead.
 #
-# Env:
-#   NW_MEMORY_PUSH=0         disable the hook
-#   NW_MEMORY_PUSH_TIMEOUT   total seconds per push (default 6)
-#   NW_MEMORY_PUSH_STATE     repeat-tracking directory
-#                            (default $TMPDIR/night-watchman-memory-push)
-#   NW_MEMORY_PUSH_LOG       append one JSON line per push here (event,
-#                            ids, seconds, outcome, how many of the top 3
-#                            are full bodies; never the query text)
-#
 # Usage: fed the hook JSON on stdin, no arguments.
+#   NW_MEMORY_PUSH=0          disable the hook
+#   NW_MEMORY_PUSH_TIMEOUT    seconds per push, recall and gets together
+#                             (default 3; recall measured 0.55-1.83 s with
+#                             the 1.5 s embed cap, gets 0.3 s in parallel;
+#                             plugin.json's 5 s is the outer backstop)
+#   NW_MEMORY_PUSH_BREAKER    seconds to skip pushes after a failure
+#                             (default 300)
+#   NW_MEMORY_PUSH_STATE      state directory (default
+#                             $TMPDIR/night-watchman-memory-push)
+#   NW_MEMORY_PUSH_LOG        append one JSON line per push (event, ids,
+#                             seconds, outcome; never the query text)
+#   Off the LAN: a store that drops packets costs one budget (3 s) on the
+#   first event, a refused or unresolvable one well under a second, and
+#   either way nothing more until the breaker window ends.
 
 [ "${NW_MEMORY_PUSH:-1}" = "0" ] && exit 0
 command -v python3 >/dev/null 2>&1 || exit 0
