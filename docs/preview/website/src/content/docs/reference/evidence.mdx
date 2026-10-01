@@ -82,7 +82,7 @@ Two scripts, split on purpose — scan is optional, the ledger is not:
   message content.
 - `templates/claude-prices.tsv` — the $/million-token price table
   `claude-cost-scan.py` reads by default: one row per model, columns
-  `model`, `input_per_mtok`, `output_per_mtok`, `cache_write_per_mtok`,
+  `model`, `input_per_mtok`, `output_per_mtok`, `cache_write_per_mtok`, `cache_write_1h_per_mtok`,
   `cache_read_per_mtok`. A model missing from the table costs $0 with a
   one-time stderr warning, never a hard failure. ai-toolkit's
   `script-analytics.py` reads the same table and finds it by search:
