@@ -157,6 +157,28 @@ else
     bad "--repo did not resolve a path containing '_' (got: $OUT_U)"
 fi
 
+# ---- test 10 (NWM-181): cache writes are priced by TTL.
+# sess-4 holds a turn with only ephemeral_1h_input_tokens (1M tokens, sonnet:
+# 2x input = $4.00) and a turn with only the flat field (1M, 1.25x = $2.50).
+OUT_C=$(run --project-slug=-Users-fixture-repoC --format tsv)
+if printf '%s\n' "$OUT_C" | grep -q "^sess-4	claude-sonnet-5	2	2000000	6.5000"; then
+    ok "a 1h-only cache_creation breakdown prices at 2x, the flat field at 1.25x"
+else
+    bad "expected sess-4 cost 6.5000 (4.00 1h + 2.50 flat) (got: $OUT_C)"
+fi
+
+# A table without the 1h column must be refused, not priced at the 5m rate.
+OLD_PRICES="$WORK/old-prices.tsv"
+cut -f1-4,6 "$PRICES" >"$OLD_PRICES"
+if python3 "$SCAN" --projects-dir "$FIXTURES" --prices "$OLD_PRICES" \
+    --project-slug=-Users-fixture-repoC >/dev/null 2>"$WORK/err"; then
+    bad "a price table lacking cache_write_1h_per_mtok should have been refused"
+elif grep -q "cache_write_1h_per_mtok" "$WORK/err"; then
+    ok "a price table lacking the 1h column is refused, naming it"
+else
+    bad "refusal did not name cache_write_1h_per_mtok (got: $(cat "$WORK/err"))"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

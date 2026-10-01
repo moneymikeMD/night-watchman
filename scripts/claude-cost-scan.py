@@ -33,7 +33,8 @@ message id first and only the last line seen per id is kept.
 
 Cost is computed from a price table (--prices, default
 templates/claude-prices.tsv next to this script) of $/million-tokens by
-model and token class (input, output, cache write, cache read). A model
+model and token class (input, output, 5-minute cache write, 1-hour cache
+write, cache read). A table without the 1-hour column is refused. A model
 missing from the table is reported with tokens but zero cost, flagged
 once on stderr — never a hard failure, since a stale price table should
 not stop a report from printing.
@@ -86,7 +87,7 @@ class ValidationError(Exception):
     reported to stderr with exit 2 — never a traceback."""
 
 
-TOKEN_CLASSES = ("input", "output", "cache_write", "cache_read")
+TOKEN_CLASSES = ("input", "output", "cache_write", "cache_write_1h", "cache_read")
 PRICE_COLUMNS = ("model",) + tuple("%s_per_mtok" % c for c in TOKEN_CLASSES)
 
 
@@ -166,10 +167,21 @@ def parse_timestamp(text):
 
 
 def usage_tokens(usage):
+    """Split cache writes by TTL when usage.cache_creation carries the
+    breakdown; otherwise the flat cache_creation_input_tokens counts as
+    5-minute only."""
+    breakdown = usage.get("cache_creation")
+    if isinstance(breakdown, dict):
+        write_5m = breakdown.get("ephemeral_5m_input_tokens", 0) or 0
+        write_1h = breakdown.get("ephemeral_1h_input_tokens", 0) or 0
+    else:
+        write_5m = usage.get("cache_creation_input_tokens", 0) or 0
+        write_1h = 0
     return {
         "input": usage.get("input_tokens", 0) or 0,
         "output": usage.get("output_tokens", 0) or 0,
-        "cache_write": usage.get("cache_creation_input_tokens", 0) or 0,
+        "cache_write": write_5m,
+        "cache_write_1h": write_1h,
         "cache_read": usage.get("cache_read_input_tokens", 0) or 0,
     }
 
