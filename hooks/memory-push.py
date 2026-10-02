@@ -23,8 +23,20 @@ DEFAULT_BUDGET = 3.0
 DEFAULT_BREAKER = 300.0
 EMBED_TIMEOUT_MS = "1500"
 REAP_SECONDS = 0.5
+DEFAULT_SKIP_WORDS = 3
 
 HEADER = re.compile(r"^\*\*(\d+)\.\s+(.*)\*\*\s*\(ID:\s*([0-9A-Za-z_-]+)\)\s*$")
+WORD = re.compile(r"[^\W_]+")
+TICKET_KEY = re.compile(r"(?<![\w-])[A-Za-z][A-Za-z0-9]*-[0-9]+\b")
+# PostgreSQL's english.stop verbatim: the list the store's full-text recall drops.
+STOP_WORDS = frozenset("""
+i me my myself we our ours ourselves you your yours yourself yourselves he him his himself she her hers
+herself it its itself they them their theirs themselves what which who whom this that these those am is are
+was were be been being have has had having do does did doing a an the and but if or because as until while
+of at by for with about against between into through during before after above below to from up down in
+out on off over under again further then once here there when where why how all any both each few more
+most other some such no nor not only own same so than too very s t can will just don should now
+""".split())
 
 
 class Deadline:
@@ -40,6 +52,36 @@ def env_float(name, default):
         return float(os.environ.get(name) or default)
     except ValueError:
         return default
+
+
+def env_int(name, default):
+    try:
+        return int(os.environ.get(name) or default)
+    except ValueError:
+        return default
+
+
+def content_words(text):
+    """Count the distinct words left after English stop-word removal, unstemmed."""
+    return len({w for w in WORD.findall(text.lower()) if w not in STOP_WORDS})
+
+
+def prompt_head(data):
+    return (data.get("prompt") or "").strip()[:QUERY_CHARS].strip()
+
+
+def gate_record(event, data):
+    """Return the log record when the content-word gate skips this prompt, else None."""
+    limit = env_int("NW_MEMORY_PUSH_SKIP_WORDS", DEFAULT_SKIP_WORDS)
+    if event != "UserPromptSubmit" or limit <= 0:
+        return None
+    head = prompt_head(data)
+    if not head or TICKET_KEY.search(head):
+        return None
+    words = content_words(head)
+    if words > limit:
+        return None
+    return {"event": event, "outcome": "few-words", "content_words": words, "query_chars": len(head)}
 
 
 def run(argv, deadline, cwd=None, env=None):
@@ -236,7 +278,7 @@ def query_for(event, data, cwd, deadline):
     if event == "SessionStart":
         return session_query(cwd, deadline).strip()
     if event == "UserPromptSubmit":
-        return (data.get("prompt") or "").strip()[:QUERY_CHARS].strip()
+        return prompt_head(data)
     if event == "PostToolUseFailure":
         if data.get("is_interrupt") or data.get("tool_name") != "Bash":
             return ""
@@ -258,6 +300,10 @@ def main():
     state = State(data.get("session_id") or "")
     if event == "SessionStart" and data.get("source") in ("compact", "clear"):
         state.reset()
+    skipped = gate_record(event, data)
+    if skipped:
+        log(skipped)
+        return
     if state.breaker_open(env_float("NW_MEMORY_PUSH_BREAKER", DEFAULT_BREAKER)):
         log({"event": event, "outcome": "breaker"})
         return

@@ -28,6 +28,15 @@
 # or clear starts the record afresh, since that context is gone; resume
 # keeps it, since the transcript still carries what was pushed.
 #
+# Content-word gate (NWM-191): a UserPromptSubmit prompt with 3 or fewer
+# content words ("run the tests", "continue") is not sent to recall, since
+# some memory contains every such word and recall answers with a full page.
+# Content words are the distinct words left after removing PostgreSQL's
+# English stop words, the list the store's full-text recall drops; they are
+# counted in-process and unstemmed. A prompt that names a ticket key (LAB-201,
+# nwm-191) is never gated. The gate runs before the circuit breaker.
+# SessionStart and PostToolUseFailure pushes are not gated.
+#
 # Circuit breaker: a recall that errors or times out, or a push that runs
 # out of budget, skips every push on this machine for the next 5 minutes.
 # A store that silently drops packets therefore costs the budget once per
@@ -44,10 +53,20 @@
 #                             plugin.json's 5 s is the outer backstop)
 #   NW_MEMORY_PUSH_BREAKER    seconds to skip pushes after a failure
 #                             (default 300)
+#   NW_MEMORY_PUSH_SKIP_WORDS a prompt with this many content words or fewer
+#                             is not recalled (default 3; 0 turns the gate
+#                             off). A prompt naming a ticket key (LAB-201)
+#                             is always recalled. Limits: text in an
+#                             unsegmented script (Chinese) counts as one
+#                             word and is always skipped; "up" and "down"
+#                             are stop words, so "docker compose up fails"
+#                             counts 3 and is skipped.
 #   NW_MEMORY_PUSH_STATE      state directory (default
 #                             $TMPDIR/night-watchman-memory-push)
 #   NW_MEMORY_PUSH_LOG        append one JSON line per push (event, ids,
-#                             seconds, outcome; never the query text)
+#                             seconds, outcome; never the query text); a
+#                             gated prompt logs outcome few-words and its
+#                             content_words count
 #   Off the LAN: a store that drops packets costs one budget (3 s) on the
 #   first event, a refused or unresolvable one well under a second, and
 #   either way nothing more until the breaker window ends.
