@@ -27,6 +27,7 @@ DEFAULT_SKIP_WORDS = 3
 
 HEADER = re.compile(r"^\*\*(\d+)\.\s+(.*)\*\*\s*\(ID:\s*([0-9A-Za-z_-]+)\)\s*$")
 WORD = re.compile(r"[^\W_]+")
+TICKET_KEY = re.compile(r"(?<![\w-])[A-Za-z][A-Za-z0-9]*-[0-9]+\b")
 # PostgreSQL's english.stop verbatim: the list the store's full-text recall drops.
 STOP_WORDS = frozenset("""
 i me my myself we our ours ourselves you your yours yourself yourselves he him his himself she her hers
@@ -63,6 +64,24 @@ def env_int(name, default):
 def content_words(text):
     """Count the distinct words left after English stop-word removal, unstemmed."""
     return len({w for w in WORD.findall(text.lower()) if w not in STOP_WORDS})
+
+
+def prompt_head(data):
+    return (data.get("prompt") or "").strip()[:QUERY_CHARS].strip()
+
+
+def gate_record(event, data):
+    """Return the log record when the content-word gate skips this prompt, else None."""
+    limit = env_int("NW_MEMORY_PUSH_SKIP_WORDS", DEFAULT_SKIP_WORDS)
+    if event != "UserPromptSubmit" or limit <= 0:
+        return None
+    head = prompt_head(data)
+    if not head or TICKET_KEY.search(head):
+        return None
+    words = content_words(head)
+    if words > limit:
+        return None
+    return {"event": event, "outcome": "few-words", "content_words": words, "query_chars": len(head)}
 
 
 def run(argv, deadline, cwd=None, env=None):
@@ -259,7 +278,7 @@ def query_for(event, data, cwd, deadline):
     if event == "SessionStart":
         return session_query(cwd, deadline).strip()
     if event == "UserPromptSubmit":
-        return (data.get("prompt") or "").strip()[:QUERY_CHARS].strip()
+        return prompt_head(data)
     if event == "PostToolUseFailure":
         if data.get("is_interrupt") or data.get("tool_name") != "Bash":
             return ""
@@ -281,18 +300,16 @@ def main():
     state = State(data.get("session_id") or "")
     if event == "SessionStart" and data.get("source") in ("compact", "clear"):
         state.reset()
+    skipped = gate_record(event, data)
+    if skipped:
+        log(skipped)
+        return
     if state.breaker_open(env_float("NW_MEMORY_PUSH_BREAKER", DEFAULT_BREAKER)):
         log({"event": event, "outcome": "breaker"})
         return
     query = query_for(event, data, cwd, deadline)
     if not query:
         return
-    skip_words = env_int("NW_MEMORY_PUSH_SKIP_WORDS", DEFAULT_SKIP_WORDS)
-    if event == "UserPromptSubmit" and skip_words > 0:
-        words = content_words(query)
-        if words <= skip_words:
-            log({"event": event, "outcome": "few-words", "content_words": words, "query_chars": len(query)})
-            return
     digest = hashlib.sha256((event + ":" + query).encode("utf-8", "replace")).hexdigest()
     if event != "SessionStart" and digest in state.seen["q"]:
         log({"event": event, "outcome": "repeat"})

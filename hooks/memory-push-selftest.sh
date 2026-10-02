@@ -306,36 +306,83 @@ check "malformed stdin: no output" "$(cat "$OUT")" ""
 unset NW_MEMORY_PUSH_SKIP_WORDS
 GATE_LOG="$WORK/gate.log"
 run_hook json "$(prompt "run the tests" g1)" NW_MEMORY_PUSH_LOG="$GATE_LOG"
-check "content-word gate: 2 content words, no recall" "$(cat "$ARGV")" ""
-check "content-word gate: 2 content words, no output" "$(cat "$OUT")" ""
-check "content-word gate: the skip is logged with its count and no query text" "$(cat "$GATE_LOG")" \
+check "gate-row: 2 content words, no recall" "$(cat "$ARGV")" ""
+check "gate-row: 2 content words, no output" "$(cat "$OUT")" ""
+check "gate-row: the skip is logged with its count and no query text" "$(cat "$GATE_LOG")" \
     '{"event": "UserPromptSubmit", "outcome": "few-words", "content_words": 2, "query_chars": 13}'
 run_hook json "$(prompt "Commit this branch now, please" g2)"
-check "content-word gate: exactly 3 content words, no recall" "$(cat "$ARGV")" ""
+check "gate-row: exactly 3 content words, no recall" "$(cat "$ARGV")" ""
 run_hook json "$(prompt "test the test and then TEST the tests again" g3)"
-check "content-word gate: a repeated word counts once, no recall" "$(cat "$ARGV")" ""
+check "gate-row: a repeated word counts once, no recall" "$(cat "$ARGV")" ""
 run_hook json "$(prompt "is it the same as that one over there" g4)"
-check "content-word gate: 1 content word among stop words, no recall" "$(cat "$ARGV")" ""
+check "gate-row: 1 content word among stop words, no recall" "$(cat "$ARGV")" ""
 run_hook json "$(prompt "commit this branch then push everything" g5)"
-check "content-word gate: 4 content words, recall runs" "$(head -1 "$ARGV")" \
+check "gate-row: 4 content words, recall runs" "$(head -1 "$ARGV")" \
     "<recall><--query><commit this branch then push everything><--limit><5><--json>"
-check "content-word gate: 4 content words, pushed" "$CONTEXT" "$FULL"
+check "gate-row: 4 content words, pushed" "$CONTEXT" "$FULL"
 run_hook json "$(ss startup g6)" NW_MEMORY_PUSH_SKIP_WORDS=10
-check "content-word gate: SessionStart below the threshold still recalls" "$(head -1 "$ARGV")" \
+check "gate-row: SessionStart below the threshold still recalls" "$(head -1 "$ARGV")" \
     "<recall><--query><Fixture-Repo feat-x><--limit><5><--json>"
-check "content-word gate: SessionStart below the threshold still pushes" "$CONTEXT" "$FULL"
+check "gate-row: SessionStart below the threshold still pushes" "$CONTEXT" "$FULL"
 run_hook json "$(failure "fatal: x" Bash false g7)"
-check "content-word gate: Bash failure of 2 content words still recalls" "$(head -1 "$ARGV")" \
+check "gate-row: Bash failure of 2 content words still recalls" "$(head -1 "$ARGV")" \
     "<recall><--query><fatal: x><--limit><5><--json>"
-check "content-word gate: Bash failure of 2 content words still pushes" "$CONTEXT" "$FULL"
+check "gate-row: Bash failure of 2 content words still pushes" "$CONTEXT" "$FULL"
 run_hook json "$(prompt "run the tests" g8)" NW_MEMORY_PUSH_SKIP_WORDS=0
-check "content-word gate: threshold 0, a 2-word prompt recalls as before" "$(head -1 "$ARGV")" \
+check "gate-row: threshold 0, a 2-word prompt recalls as before" "$(head -1 "$ARGV")" \
     "<recall><--query><run the tests><--limit><5><--json>"
-check "content-word gate: threshold 0, pushed as before" "$CONTEXT" "$FULL"
+check "gate-row: threshold 0, pushed as before" "$CONTEXT" "$FULL"
 run_hook json "$(prompt "run the tests" g9)" NW_MEMORY_PUSH_SKIP_WORDS=1
-check "content-word gate: threshold 1, a 2-word prompt recalls" "$(grep -c '^<recall>' "$ARGV")" 1
+check "gate-row: threshold 1, a 2-word prompt recalls" "$(grep -c '^<recall>' "$ARGV")" 1
 run_hook json "$(prompt "run the tests" g10)" NW_MEMORY_PUSH_SKIP_WORDS=many
-check "content-word gate: an unparsable threshold falls back to 3" "$(cat "$ARGV")" ""
+check "gate-row: an unparsable threshold falls back to 3" "$(cat "$ARGV")" ""
+
+run_hook json "$(prompt "what was lab-239?" g11)"
+check "gate-row: a ticket key (lab-239) exempts a 2-word prompt, recall runs" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "what do I need to do for LAB-77?" g12)"
+check "gate-row: a ticket key (LAB-77) exempts a 3-word prompt, recall runs" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "status of NWM-191" g13)"
+check "gate-row: a ticket key in capitals exempts, recall runs" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "status of nwm 191" g14)"
+check "gate-row: the same prompt without the hyphen is gated, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "check mkey7" g15)"
+check "gate-row: a letters-and-digits word with no hyphen is no key, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "2-3 runs" g16)"
+check "gate-row: a digit-first hyphenated token is no key, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "well-known thing" g17)"
+check "gate-row: a hyphenated word with no digits is no key, no recall" "$(cat "$ARGV")" ""
+
+KEEP_BREAKER=1
+run_hook error "$(prompt "trip the breaker" g19)" NW_MEMORY_PUSH_SKIP_WORDS=0
+run_hook json "$(prompt "run tests" g20)" NW_MEMORY_PUSH_LOG="$GATE_LOG.order"
+check "gate-row: a short prompt in a breaker window logs few-words, not breaker" \
+    "$(tail -1 "$GATE_LOG.order" | jq -r .outcome)" few-words
+run_hook json "$(prompt "commit this branch then push everything" g21)" NW_MEMORY_PUSH_LOG="$GATE_LOG.order"
+check "gate-row: a long prompt in a breaker window still logs breaker" \
+    "$(tail -1 "$GATE_LOG.order" | jq -r .outcome)" breaker
+KEEP_BREAKER=0
+
+run_hook json "$(prompt "🙂" g22)" NW_MEMORY_PUSH_SKIP_WORDS=0
+check "gate-row: threshold 0, a prompt with no content words recalls" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "🙂" g23)"
+check "gate-row: threshold 3, a prompt with no content words is gated" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "The And Of To In With" g24)"
+check "gate-row: capitalised stop words are removed, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "x_the x_an x_of x_to" g25)"
+check "gate-row: underscore splits words (x counts once), no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "fix_the_broken_build_script" g26)"
+check "gate-row: snake_case counts as its parts (4), recall runs" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "42 17 99 3000" g27)"
+check "gate-row: digit words count, recall runs" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "привет мир как дела" g28)"
+check "gate-row: non-ASCII words count, recall runs" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "你好世界你好世界" g29)"
+check "gate-row: unsegmented script counts as one word, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "docker compose up fails" g30)"
+check "gate-row: up is a stop word, so this counts 3, no recall" "$(cat "$ARGV")" ""
+TAIL_PROMPT="$(python3 -c 'print("run the tests " + "the " * 120 + "alpha beta gamma delta")')"
+run_hook json "$(prompt "$TAIL_PROMPT" g31)"
+check "gate-row: only the first 400 characters are counted, no recall" "$(cat "$ARGV")" ""
 
 if [ "$FAIL" -eq 0 ]; then
     echo "OK: all $N assertions passed"

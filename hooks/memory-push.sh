@@ -33,8 +33,9 @@
 # some memory contains every such word and recall answers with a full page.
 # Content words are the distinct words left after removing PostgreSQL's
 # English stop words, the list the store's full-text recall drops; they are
-# counted in-process and unstemmed. SessionStart and PostToolUseFailure
-# pushes are not gated.
+# counted in-process and unstemmed. A prompt that names a ticket key (LAB-201,
+# nwm-191) is never gated. The gate runs before the circuit breaker.
+# SessionStart and PostToolUseFailure pushes are not gated.
 #
 # Circuit breaker: a recall that errors or times out, or a push that runs
 # out of budget, skips every push on this machine for the next 5 minutes.
@@ -54,7 +55,12 @@
 #                             (default 300)
 #   NW_MEMORY_PUSH_SKIP_WORDS a prompt with this many content words or fewer
 #                             is not recalled (default 3; 0 turns the gate
-#                             off)
+#                             off). A prompt naming a ticket key (LAB-201)
+#                             is always recalled. Limits: text in an
+#                             unsegmented script (Chinese) counts as one
+#                             word and is always skipped; "up" and "down"
+#                             are stop words, so "docker compose up fails"
+#                             counts 3 and is skipped.
 #   NW_MEMORY_PUSH_STATE      state directory (default
 #                             $TMPDIR/night-watchman-memory-push)
 #   NW_MEMORY_PUSH_LOG        append one JSON line per push (event, ids,
