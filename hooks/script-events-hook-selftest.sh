@@ -512,6 +512,7 @@ esac
 
 # A plugin root whose extractor is a same-named stranger: resolved by path,
 # but it lacks the sentinel line, so it must never be invoked.
+# Runs the orphan hook copy so no sibling ai-toolkit can be consulted.
 STRANGER_ROOT="$WORKDIR/stranger-plugin"
 mkdir -p "$STRANGER_ROOT/scripts"
 STRANGER_EXTRACTOR="$STRANGER_ROOT/scripts/script-analytics.py"
@@ -519,7 +520,7 @@ printf '#!/usr/bin/env python3\nprint("not the extractor")\n' > "$STRANGER_EXTRA
 
 ARGV="$WORKDIR/argv.19"; rm -f "$ARGV"
 OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
-  run_hook_resolve "$SCRIPT" "agent-19" "$CONSUMER_ROOT" "$STRANGER_ROOT" "")"
+  run_hook_resolve "$ORPHAN_ROOT/hooks/script-events-hook.sh" "agent-19" "$CONSUMER_ROOT" "$STRANGER_ROOT" "")"
 assert_rc "sentinel missing: hook fails open" "0" "$OUT"
 if [ -e "$ARGV" ]; then
   fail "sentinel missing: the stranger was invoked (argv: $(cat "$ARGV" | tr '\n' ' '))"
@@ -541,7 +542,7 @@ esac
 make_extractor "$STRANGER_EXTRACTOR"
 ARGV="$WORKDIR/argv.20"; rm -f "$ARGV"
 OUT="$(STUB_ARGV_FILE="$ARGV" STUB_OUT="# extract: 1 new, 0 already present" STUB_EXIT="0" \
-  run_hook_resolve "$SCRIPT" "agent-20" "$CONSUMER_ROOT" "$STRANGER_ROOT" "")"
+  run_hook_resolve "$ORPHAN_ROOT/hooks/script-events-hook.sh" "agent-20" "$CONSUMER_ROOT" "$STRANGER_ROOT" "")"
 assert_rc "sentinel present: hook exits 0" "0" "$OUT"
 if [ -e "$ARGV" ]; then
   pass "sentinel present: the same path is invoked once it carries the line"
