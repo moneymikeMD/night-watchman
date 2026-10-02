@@ -5,7 +5,8 @@
 # Structurally offline: a fixture `memorygraph` written into a throwaway
 # directory is put first on PATH, and MEMORY_BACKEND names a backend no
 # real memorygraph has, so neither the fixture nor a stray real CLI can
-# reach a store. Like the real 0.14 fork, the fixture prints its connection
+# reach a store. BASH_ENV is emptied for the hook, since a profile it names
+# would re-export the caller's MEMORY_* over the fixture's. Like the real 0.14 fork, the fixture prints its connection
 # preamble on stdout before every answer. FIXTURE_MODE picks its behaviour:
 #
 #   json        recall prints fixed JSON with full bodies (no get needed)
@@ -25,8 +26,10 @@
 # an error or garbage injects nothing and exits 0 inside the budget; the
 # circuit breaker; per-session de-duplication of bodies, titles and
 # queries, and its reset on compact; the preview-is-never-a-body guard;
-# the Bash-only and is_interrupt filters; the opt-out; and the skip when no
-# store is configured.
+# the Bash-only and is_interrupt filters; the opt-out; the skip when no
+# store is configured; and the content-word gate. Every row above the gate
+# section runs with NW_MEMORY_PUSH_SKIP_WORDS=0, so those rows also pin that
+# 0 restores the ungated behaviour.
 #
 # Usage: ./hooks/memory-push-selftest.sh
 # Exit 0 if every assertion passes, 1 otherwise.
@@ -134,6 +137,7 @@ git init -q -b feat-x "$REPO" 2>/dev/null || { git init -q "$REPO" && git -C "$R
 git -C "$REPO" remote add origin "git@github.com:example/Fixture-Repo.git"
 git -C "$REPO" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
 
+export NW_MEMORY_PUSH_SKIP_WORDS=0
 ARGV="$WORK/argv.log"
 OUT="$WORK/out.json"
 KEEP_BREAKER=0
@@ -147,7 +151,7 @@ run_hook() {
     : > "$ARGV.embed"
     [ "$KEEP_BREAKER" = 1 ] || rm -f "$WORK/state/breaker"
     local start=$SECONDS
-    env PATH="$WORK/bin:$PATH" MEMORY_BACKEND=fixture-nonexistent MEMORY_EMBED_TIMEOUT_MS=5000 \
+    env PATH="$WORK/bin:$PATH" BASH_ENV= MEMORY_BACKEND=fixture-nonexistent MEMORY_EMBED_TIMEOUT_MS=5000 \
         FIXTURE_MODE="$mode" FIXTURE_DIR="$WORK/fx" FIXTURE_ARGV="$ARGV" \
         NW_MEMORY_PUSH_STATE="$WORK/state" NW_MEMORY_PUSH_TIMEOUT=2 "$@" \
         bash "$HOOK" <<<"$stdin_json" > "$OUT" 2>"$WORK/err"
@@ -297,6 +301,41 @@ check "blank prompt: no recall" "$(cat "$ARGV")" ""
 run_hook json 'not json'
 check "malformed stdin: exit 0" "$RC" 0
 check "malformed stdin: no output" "$(cat "$OUT")" ""
+
+# content-word gate
+unset NW_MEMORY_PUSH_SKIP_WORDS
+GATE_LOG="$WORK/gate.log"
+run_hook json "$(prompt "run the tests" g1)" NW_MEMORY_PUSH_LOG="$GATE_LOG"
+check "content-word gate: 2 content words, no recall" "$(cat "$ARGV")" ""
+check "content-word gate: 2 content words, no output" "$(cat "$OUT")" ""
+check "content-word gate: the skip is logged with its count and no query text" "$(cat "$GATE_LOG")" \
+    '{"event": "UserPromptSubmit", "outcome": "few-words", "content_words": 2, "query_chars": 13}'
+run_hook json "$(prompt "Commit this branch now, please" g2)"
+check "content-word gate: exactly 3 content words, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "test the test and then TEST the tests again" g3)"
+check "content-word gate: a repeated word counts once, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "is it the same as that one over there" g4)"
+check "content-word gate: 1 content word among stop words, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "commit this branch then push everything" g5)"
+check "content-word gate: 4 content words, recall runs" "$(head -1 "$ARGV")" \
+    "<recall><--query><commit this branch then push everything><--limit><5><--json>"
+check "content-word gate: 4 content words, pushed" "$CONTEXT" "$FULL"
+run_hook json "$(ss startup g6)" NW_MEMORY_PUSH_SKIP_WORDS=10
+check "content-word gate: SessionStart below the threshold still recalls" "$(head -1 "$ARGV")" \
+    "<recall><--query><Fixture-Repo feat-x><--limit><5><--json>"
+check "content-word gate: SessionStart below the threshold still pushes" "$CONTEXT" "$FULL"
+run_hook json "$(failure "fatal: x" Bash false g7)"
+check "content-word gate: Bash failure of 2 content words still recalls" "$(head -1 "$ARGV")" \
+    "<recall><--query><fatal: x><--limit><5><--json>"
+check "content-word gate: Bash failure of 2 content words still pushes" "$CONTEXT" "$FULL"
+run_hook json "$(prompt "run the tests" g8)" NW_MEMORY_PUSH_SKIP_WORDS=0
+check "content-word gate: threshold 0, a 2-word prompt recalls as before" "$(head -1 "$ARGV")" \
+    "<recall><--query><run the tests><--limit><5><--json>"
+check "content-word gate: threshold 0, pushed as before" "$CONTEXT" "$FULL"
+run_hook json "$(prompt "run the tests" g9)" NW_MEMORY_PUSH_SKIP_WORDS=1
+check "content-word gate: threshold 1, a 2-word prompt recalls" "$(grep -c '^<recall>' "$ARGV")" 1
+run_hook json "$(prompt "run the tests" g10)" NW_MEMORY_PUSH_SKIP_WORDS=many
+check "content-word gate: an unparsable threshold falls back to 3" "$(cat "$ARGV")" ""
 
 if [ "$FAIL" -eq 0 ]; then
     echo "OK: all $N assertions passed"

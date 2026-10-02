@@ -23,8 +23,19 @@ DEFAULT_BUDGET = 3.0
 DEFAULT_BREAKER = 300.0
 EMBED_TIMEOUT_MS = "1500"
 REAP_SECONDS = 0.5
+DEFAULT_SKIP_WORDS = 3
 
 HEADER = re.compile(r"^\*\*(\d+)\.\s+(.*)\*\*\s*\(ID:\s*([0-9A-Za-z_-]+)\)\s*$")
+WORD = re.compile(r"[^\W_]+")
+# PostgreSQL's english.stop verbatim: the list the store's full-text recall drops.
+STOP_WORDS = frozenset("""
+i me my myself we our ours ourselves you your yours yourself yourselves he him his himself she her hers
+herself it its itself they them their theirs themselves what which who whom this that these those am is are
+was were be been being have has had having do does did doing a an the and but if or because as until while
+of at by for with about against between into through during before after above below to from up down in
+out on off over under again further then once here there when where why how all any both each few more
+most other some such no nor not only own same so than too very s t can will just don should now
+""".split())
 
 
 class Deadline:
@@ -40,6 +51,18 @@ def env_float(name, default):
         return float(os.environ.get(name) or default)
     except ValueError:
         return default
+
+
+def env_int(name, default):
+    try:
+        return int(os.environ.get(name) or default)
+    except ValueError:
+        return default
+
+
+def content_words(text):
+    """Count the distinct words left after English stop-word removal, unstemmed."""
+    return len({w for w in WORD.findall(text.lower()) if w not in STOP_WORDS})
 
 
 def run(argv, deadline, cwd=None, env=None):
@@ -264,6 +287,12 @@ def main():
     query = query_for(event, data, cwd, deadline)
     if not query:
         return
+    skip_words = env_int("NW_MEMORY_PUSH_SKIP_WORDS", DEFAULT_SKIP_WORDS)
+    if event == "UserPromptSubmit" and skip_words > 0:
+        words = content_words(query)
+        if words <= skip_words:
+            log({"event": event, "outcome": "few-words", "content_words": words, "query_chars": len(query)})
+            return
     digest = hashlib.sha256((event + ":" + query).encode("utf-8", "replace")).hexdigest()
     if event != "SessionStart" and digest in state.seen["q"]:
         log({"event": event, "outcome": "repeat"})

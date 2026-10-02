@@ -54,10 +54,15 @@ Usage: fed the hook JSON on stdin, no arguments.
                             plugin.json's 5 s is the outer backstop)
   NW_MEMORY_PUSH_BREAKER    seconds to skip pushes after a failure
                             (default 300)
+  NW_MEMORY_PUSH_SKIP_WORDS a prompt with this many content words or fewer
+                            is not recalled (default 3; 0 turns the gate
+                            off)
   NW_MEMORY_PUSH_STATE      state directory (default
                             $TMPDIR/night-watchman-memory-push)
   NW_MEMORY_PUSH_LOG        append one JSON line per push (event, ids,
-                            seconds, outcome; never the query text)
+                            seconds, outcome; never the query text); a
+                            gated prompt logs outcome few-words and its
+                            content_words count
   Off the LAN: a store that drops packets costs one budget (3 s) on the
   first event, a refused or unresolvable one well under a second, and
   either way nothing more until the breaker window ends.
