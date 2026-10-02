@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [1.9.0](https://github.com/moneymikeMD/night-watchman/compare/v1.8.1...v1.9.0) (2026-10-02)
+
+
+### Features
+
+* **hooks:** skip the memory push recall for prompts of 3 or fewer content words (NWM-191) ([#108](https://github.com/moneymikeMD/night-watchman/issues/108)) ([97e4703](https://github.com/moneymikeMD/night-watchman/commit/97e4703170f85effa989779eb76c22bbfe9870d3))
+
+
+### Bug Fixes
+
+* price 1-hour cache writes at the 1-hour rate in claude-cost-scan (NWM-181) ([#105](https://github.com/moneymikeMD/night-watchman/issues/105)) ([a318e77](https://github.com/moneymikeMD/night-watchman/commit/a318e77665eee8e49d9450cf8ccec43078048ca1))
+
 ## [1.8.1](https://github.com/moneymikeMD/night-watchman/compare/v1.8.0...v1.8.1) (2026-09-29)
 
 
