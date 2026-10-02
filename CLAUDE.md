@@ -125,14 +125,13 @@ with `git log --format='%h %p' -1 <sha>` rather than reading the ruleset and
 assuming it was enforced — a bypass actor makes a ruleset an intent, not an
 outcome.
 
-The ruleset's one-review/code-owner-review requirement binds a PR from
-anyone who is *not* a bypass actor — `CODEOWNERS` is `* @moneymikeMD`, with
+The ruleset requires no approving review (owner decision 2026-10-01): an
+owner-authored PR could never satisfy one, because GitHub blocks
+self-approval. A PR merges once the four required checks are green, and only
+accounts with write access can merge. `CODEOWNERS` (`* @moneymikeMD`, with
 `.github/workflows/`, `docs/preview/website/package.json` and
-`docs/preview/website/bun.lock` left unowned so Dependabot's auto-merge can
-work. An outside contributor's PR needs the owner's review, and GitHub's
-own self-approval block means the owner can't satisfy that on their own PR
-either, absent the bypass. It does not bind an owner-run `land-branch.sh`
-landing, which never opens a PR.
+`docs/preview/website/bun.lock` unowned) still auto-requests the owner's
+review on every PR.
 
 ## CI (`.github/workflows/ci.yml`)
 
