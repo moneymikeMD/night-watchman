@@ -177,6 +177,78 @@ else
     bad "preflight: unresolvable dependency exited $RC, want 2"
 fi
 
+# --- 4b. NWM-193: a repo-qualified glob and its bare spelling are one file.
+# The ticket dir sits outside any git checkout and is named night-watchman,
+# so its basename is the checkout being planned. ---
+
+# pair_dir NAME GLOB_A GLOB_B — write two startable tickets touching one glob each.
+pair_dir() {
+    local d="$WORK/$1/night-watchman/open"
+    mkdir -p "$d"
+    local n=1 g
+    for g in "$2" "$3"; do
+        cat > "$d/RQ-00$n-ticket.md" <<EOF
+---
+id: RQ-00$n
+title: repo-qualifier ticket $n
+created: 2026-01-01
+updated: 2026-01-01
+executor: agent
+touches:
+  - $g
+verify: |
+  true
+---
+EOF
+        n=$((n + 1))
+    done
+    PAIR="$WORK/$1/night-watchman/"
+}
+
+pair_dir own 'night-watchman:scripts/x.sh' 'scripts/x.sh'
+run python3 "$SUT" waves "$PAIR"
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Wave 2"* ]]; then
+    ok "waves: own-repo 'night-watchman:x' and bare 'x' land in separate waves"
+else
+    bad "waves: own-repo qualified and bare spelling shared a wave (rc=$RC): $OUT"
+fi
+run python3 "$SUT" preflight "$PAIR"
+if [ "$RC" -eq 1 ] && [[ "$OUT" == *"COLLISION"* ]]; then
+    ok "preflight: own-repo 'night-watchman:x' and bare 'x' are a COLLISION"
+else
+    bad "preflight: own-repo qualified and bare spelling not a collision (rc=$RC): $OUT"
+fi
+
+pair_dir ownslash 'night-watchman/scripts/x.sh' 'night-watchman:scripts/x.sh'
+run python3 "$SUT" preflight "$PAIR"
+if [ "$RC" -eq 1 ] && [[ "$OUT" == *"COLLISION"* ]]; then
+    ok "preflight: own-repo slash and colon spellings are a COLLISION"
+else
+    bad "preflight: own-repo slash and colon spellings not a collision (rc=$RC): $OUT"
+fi
+
+pair_dir other 'other:x' 'other/x'
+run python3 "$SUT" preflight "$PAIR"
+if [ "$RC" -eq 1 ] && [[ "$OUT" == *"COLLISION"* ]]; then
+    ok "preflight: another repo's 'other:x' and 'other/x' are a COLLISION"
+else
+    bad "preflight: 'other:x' and 'other/x' not a collision (rc=$RC): $OUT"
+fi
+
+pair_dir cross 'homelab:x' 'night-watchman:x'
+run python3 "$SUT" preflight "$PAIR"
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"0 collision(s)"* ]]; then
+    ok "preflight: 'homelab:x' and 'night-watchman:x' do not collide"
+else
+    bad "preflight: different repos' same path collided (rc=$RC): $OUT"
+fi
+run python3 "$SUT" waves "$PAIR"
+if [ "$RC" -eq 0 ] && [[ "$OUT" != *"Wave 2"* ]]; then
+    ok "waves: 'homelab:x' and 'night-watchman:x' share one wave"
+else
+    bad "waves: different repos' same path split into two waves (rc=$RC): $OUT"
+fi
+
 # --- 5. independence: strip waves/preflight/_plan_waves/_claims out of a
 # copy of the resolved issues.py and confirm waves.py's own output is
 # unchanged — proves this file does not call back into work-order's planner ---

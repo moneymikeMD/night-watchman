@@ -92,17 +92,61 @@ load_files = ISSUES.load_files
 load_jira = ISSUES.load_jira
 
 
-def _claims(t, landing):
+_COLON_FORM = re.compile(r"^([^:*?\[\]\s]{2,}):(?![/\\])(.+)$")
+
+
+def _ident(root):
+    """The names that identify the checkout being planned: the main worktree's
+    basename and its origin repo name, so a linked worktree (wt-nwm-193) still
+    reads as night-watchman. Falls back to the basename of `root` (or cwd)."""
+    here = os.path.abspath(root if root and os.path.isdir(root) else os.getcwd())
+    names = []
+    try:
+        common = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            capture_output=True, text=True, timeout=30, cwd=here,
+        )
+        if common.returncode == 0 and common.stdout.strip():
+            main_dir = os.path.dirname(common.stdout.strip().rstrip(os.sep))
+            names.append(os.path.basename(main_dir))
+            url = subprocess.run(
+                ["git", "-C", main_dir, "remote", "get-url", "origin"],
+                capture_output=True, text=True, timeout=30,
+            ).stdout.strip()
+            remote = re.split(r"[/:]", url)[-1] if url else ""
+            if remote.endswith(".git"):
+                remote = remote[:-4]
+            if remote and remote not in names:
+                names.append(remote)
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return names or [os.path.basename(here.rstrip(os.sep))]
+
+
+def _norm(glob, ident):
+    """One spelling per file for collision checks: a `repo:` or `repo/`
+    qualifier naming this checkout is dropped, and another repo's `repo:path`
+    becomes `repo/path`, so both spellings of one file overlap (NWM-193)."""
+    m = _COLON_FORM.match(glob)
+    if m:
+        return m.group(2) if m.group(1) in ident else f"{m.group(1)}/{m.group(2)}"
+    first, sep, rest = glob.partition("/")
+    if sep and rest and first in ident:
+        return rest
+    return glob
+
+
+def _claims(t, landing, ident=()):
     """The paths a ticket claims for a wave slot. Under `serial` landing only
     `touches` claims one; under `parallel` an `appends` path does too,
     because no lock serialises the merges that made appending safe."""
     paths = list(t.get("touches") or [])
     if landing == "parallel":
         paths += list(t.get("appends") or [])
-    return paths
+    return [_norm(p, ident) for p in paths]
 
 
-def _plan_waves(tickets, landing="serial"):
+def _plan_waves(tickets, landing="serial", ident=()):
     """Group the dispatchable tickets into waves, without printing anything.
     Returns {waves, stalled, unresolvable, no_progress, deferred_ids, by_id}.
     waves() renders this and preflight() counts it, so the two can never
@@ -146,7 +190,7 @@ def _plan_waves(tickets, landing="serial"):
         wave, deferred, claimed = [], [], []
         ready = sorted(ready, key=lambda t: _numeric_id(t["id"]))
         for t in ready:
-            paths = _claims(t, landing)
+            paths = _claims(t, landing, ident)
             if any(overlap(p, c) for p in paths for c in claimed):
                 deferred.append(t)
             else:
@@ -167,7 +211,7 @@ def _plan_waves(tickets, landing="serial"):
 
 def waves(tickets, root, landing="serial"):
     rollup = compute_epic_rollup(tickets)
-    plan = _plan_waves(tickets, landing)
+    plan = _plan_waves(tickets, landing, _ident(root))
     by_id, deferred_ids = plan["by_id"], plan["deferred_ids"]
 
     for wave_no, wave in enumerate(plan["waves"], 1):
@@ -242,13 +286,14 @@ def preflight(tickets, root, landing="serial"):
     the wave is dispatched. Returns 0 when nothing collides under `landing`,
     1 when something does, and 2 when no wave plan exists at all."""
     ready = startable_now(tickets)
+    ident = _ident(root)
 
     hotspots = {}
     for i, a in enumerate(ready):
         for b in ready[i + 1:]:
             for x, kx in _decl_paths(a):
                 for y, ky in _decl_paths(b):
-                    if not overlap(x, y):
+                    if not overlap(_norm(x, ident), _norm(y, ident)):
                         continue
                     h = hotspots.setdefault(
                         _hotspot_key(x, y),
@@ -260,7 +305,7 @@ def preflight(tickets, root, landing="serial"):
 
     plans = {}
     for mode in ("serial", "parallel"):
-        p = _plan_waves(tickets, mode)
+        p = _plan_waves(tickets, mode, ident)
         if p["unresolvable"] or p["no_progress"]:
             stuck = ", ".join(t["id"] for t in p["unresolvable"]) or "(no progress)"
             print(f"waves.py: no {mode} wave plan — cycle or unresolvable "
