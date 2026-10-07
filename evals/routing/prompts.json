@@ -29,6 +29,10 @@
       "skill": "night-watchman/session-start"
     },
     {
+      "prompt": "Start a wave with these tickets and their epics.",
+      "skill": "night-watchman/session-start"
+    },
+    {
       "prompt": "I am about to write a new script in scripts/. What are the bash conventions and the rules here?",
       "skill": "night-watchman/shell-scripting"
     },
@@ -73,6 +77,11 @@
       "prompt": "We are done for tonight. Write up where we left off for whoever picks this up next.",
       "skill": "night-watchman/session-start",
       "owner": "night-watchman/handoff-docs"
+    },
+    {
+      "prompt": "Start a wave with these tickets and their epics.",
+      "skill": "night-watchman/wave-trail",
+      "owner": "night-watchman/session-start"
     }
   ]
 }

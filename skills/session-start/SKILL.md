@@ -1,6 +1,6 @@
 ---
 name: session-start
-description: The opening move for a fresh session in a project running this plugin's unattended-operations model — orient from docs/, verify every awaiting-deployment ticket against reality, and fan startable work out to pinned-model subagents in parallel. Load when the user says "start on the next open tickets", "pick up where we left off", "what can be worked on", or opens a session with no specific task.
+description: The opening move for a fresh session in a project running this plugin's unattended-operations model — orient from docs/, verify every awaiting-deployment ticket against reality, and fan startable work out to pinned-model subagents in parallel. Load when the user says "start a wave", "run a wave", "start on the next open tickets", "pick up where we left off", "what can be worked on", or opens a session with no specific task — and before dispatching any wave, even one whose tickets the user has already named.
 ---
 
 # Session start
