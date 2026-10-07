@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.9.1](https://github.com/moneymikeMD/night-watchman/compare/v1.9.0...v1.9.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **hooks:** pass ranged Reads unshunted and stop misparsing redirections and glued assignments ([#109](https://github.com/moneymikeMD/night-watchman/issues/109)) ([bd94981](https://github.com/moneymikeMD/night-watchman/commit/bd94981a61af7b52f8bd6dbc008c13e204b58137))
+
 ## [1.9.0](https://github.com/moneymikeMD/night-watchman/compare/v1.8.1...v1.9.0) (2026-10-02)
 
 
