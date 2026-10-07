@@ -182,6 +182,34 @@ esac
 OUT="$(run_hook Read "$F401" "sess-401" "$STUBBIN" "")"
 assert_rc "escape hatch: second read of same file+session is unshunted" "0" "$OUT"
 
+run_ranged_read() {
+  # $1 = file_path, $2 = session_id, $3 = jq object fragment merged into tool_input
+  _payload="$(jq -n --arg sid "$2" --arg fp "$1" --arg cwd "$WORKDIR" --argjson extra "$3" \
+    '{tool_name: "Read", session_id: $sid, cwd: $cwd, tool_input: ({file_path: $fp} + $extra)}')"
+  echo "$_payload" | env PATH="$STUBBIN:$MINIMAL_PATH" READ_SHUNT_STATE_ROOT="$STATE_ROOT" "$SCRIPT" 2>"$WORKDIR/.last_stderr"
+  echo "RC=$?"
+}
+
+SENT="$WORKDIR/sentinel.ranged-both"; rm -f "$SENT"
+OUT="$(STUB_SENTINEL="$SENT" run_ranged_read "$F401" "sess-ranged" '{"offset": 136, "limit": 50}')"
+assert_rc "ranged Read (offset+limit) of a big file is not shunted" "0" "$OUT"
+if [ -e "$SENT" ]; then fail "ranged Read: summariser was invoked (should not be)"; else pass "ranged Read: summariser not invoked"; fi
+
+SENT="$WORKDIR/sentinel.ranged-offset"; rm -f "$SENT"
+OUT="$(STUB_SENTINEL="$SENT" run_ranged_read "$F401" "sess-ranged" '{"offset": 10}')"
+assert_rc "ranged Read (offset only) of a big file is not shunted" "0" "$OUT"
+if [ -e "$SENT" ]; then fail "offset-only Read: summariser was invoked (should not be)"; else pass "offset-only Read: summariser not invoked"; fi
+
+SENT="$WORKDIR/sentinel.ranged-limit"; rm -f "$SENT"
+OUT="$(STUB_SENTINEL="$SENT" run_ranged_read "$F401" "sess-ranged" '{"limit": 50}')"
+assert_rc "ranged Read (limit only) of a big file is not shunted" "0" "$OUT"
+if [ -e "$SENT" ]; then fail "limit-only Read: summariser was invoked (should not be)"; else pass "limit-only Read: summariser not invoked"; fi
+
+SENT="$WORKDIR/sentinel.ranged-after"; rm -f "$SENT"
+OUT="$(STUB_SENTINEL="$SENT" run_ranged_read "$F401" "sess-ranged" '{}')"
+assert_rc "unranged Read of the same file in the same session is still shunted (a ranged read leaves no marker)" "2" "$OUT"
+if [ -e "$SENT" ]; then pass "unranged Read after ranged ones: summariser was invoked"; else fail "unranged Read after ranged ones: summariser NOT invoked (should be)"; fi
+
 SENT="$WORKDIR/sentinel.401b"; rm -f "$SENT"
 OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F401" "sess-401-other" "$STUBBIN" "")"
 assert_rc "escape hatch is per-session: new session re-shunts" "2" "$OUT"
