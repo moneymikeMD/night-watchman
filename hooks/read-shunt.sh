@@ -13,7 +13,8 @@
 #      model as the tool's result rather than as an error
 #
 # What gets matched:
-#   - `.tool_name == "Read"`: the file at `.tool_input.file_path`.
+#   - `.tool_name == "Read"`: the file at `.tool_input.file_path`, unless
+#     the call carries `offset` or `limit` — a ranged Read is already bounded.
 #   - `.tool_name == "Bash"`: ONLY a bare `cat` of one file, with no pipes,
 #     redirects, substitutions or second argument. `cat a b`, `cat f | grep x`
 #     and `cat "$VAR"` are left alone. This is not a shell parser.
@@ -201,6 +202,8 @@ case "$TOOL_NAME" in
   Read)
     FILE_PATH="$(echo "$INPUT" | jq -r '.tool_input.file_path // empty' 2>/dev/null)"
     [ -n "$FILE_PATH" ] || fail_open "no .tool_input.file_path for Read"
+    RANGED="$(echo "$INPUT" | jq -r '(.tool_input.offset != null) or (.tool_input.limit != null)' 2>/dev/null)"
+    [ "$RANGED" = "true" ] && exit 0
     ;;
   Bash)
     CMD="$(echo "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)"

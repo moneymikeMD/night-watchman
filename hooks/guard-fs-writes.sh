@@ -266,19 +266,6 @@ strip_trailing_punct() {
   printf '%s' "$_stp_s"
 }
 
-# Strip trailing segment separators only (`;`, `&`, `|`), never quotes or
-# parens: a quoted assignment VALUE's own closing quote must survive this.
-strip_trailing_separators() {
-  _sts_s="$1"
-  while true; do
-    case "$_sts_s" in
-      *[\;\&\|]) _sts_s="${_sts_s%?}" ;;
-      *) break ;;
-    esac
-  done
-  printf '%s' "$_sts_s"
-}
-
 _AC_NAMES=()
 _AC_VALUES=()
 
@@ -366,14 +353,23 @@ collect_same_command_assignments() {
   _cca_i=0
   while [ "$_cca_i" -lt "$_cca_n" ]; do
     _cca_w="${_CCA_WORDS[$_cca_i]}"
+    while true; do
+      case "$_cca_w" in
+        \(*) _cca_w="${_cca_w#\(}" ;;
+        *) break ;;
+      esac
+    done
     case "$_cca_w" in
       [A-Za-z_]*=*)
         _cca_name="${_cca_w%%=*}"
-        # Separators first, then unwrap the quotes; strip_trailing_punct runs
-        # once more after, for any remaining stray punctuation.
+        # The value ends at its closing quote, or at the first unquoted
+        # separator: `p=/a;rm -r $p/x` tokenizes as one word, `p=/a;rm`.
         _cca_val="${_cca_w#*=}"
-        _cca_val="$(strip_trailing_separators "$_cca_val")"
-        _cca_val="$(strip_surrounding_quotes "$_cca_val")"
+        case "$_cca_val" in
+          \"*) _cca_val="${_cca_val#\"}"; _cca_val="${_cca_val%%\"*}" ;;
+          \'*) _cca_val="${_cca_val#\'}"; _cca_val="${_cca_val%%\'*}" ;;
+          *)   _cca_val="${_cca_val%%[\;\|\&]*}" ;;
+        esac
         _cca_val="$(strip_trailing_punct "$_cca_val")"
         case "$_cca_name" in
           *[!A-Za-z0-9_]*|"") ;;
@@ -529,6 +525,22 @@ check_and_block_target() {
       block "$_cabt_kind target outside worktree and scratchpad: $_cabt_raw"
     fi
   fi
+}
+
+# is_redirection_word: true for a redirection operator word (`2>&1`,
+# `>/dev/null`, `>>`, `<f`, `&>f`), which is never an rm/mv target. Sets
+# _IRW_TAKES_NEXT=1 when the operator is bare, so its target is the NEXT word.
+_IRW_TAKES_NEXT=0
+is_redirection_word() {
+  _IRW_TAKES_NEXT=0
+  case "$1" in
+    '>'*|'<'*|'&>'*|[0-9]'>'*|[0-9]'<'*) ;;
+    *) return 1 ;;
+  esac
+  case "$1" in
+    *'>'|*'<'|*'>|') _IRW_TAKES_NEXT=1 ;;
+  esac
+  return 0
 }
 
 # is_recursive_rm_flag: true if a word looks like an rm flag that includes
@@ -914,6 +926,10 @@ scan_segment() {
         if [ "$_ss_saw_recursive" -eq 1 ]; then
           _ss_k="$_ss_j"
           while [ "$_ss_k" -lt "$_ss_n" ]; do
+            if is_redirection_word "${_ss_words[$_ss_k]}"; then
+              _ss_k=$((_ss_k + 1 + _IRW_TAKES_NEXT))
+              continue
+            fi
             check_and_block_target "rm -r" "${_ss_words[$_ss_k]}"
             _ss_k=$((_ss_k + 1))
           done
@@ -923,6 +939,10 @@ scan_segment() {
         _ss_j=$((_ss_i + 1))
         while [ "$_ss_j" -lt "$_ss_n" ]; do
           _ss_tgt="${_ss_words[$_ss_j]}"
+          if is_redirection_word "$_ss_tgt"; then
+            _ss_j=$((_ss_j + 1 + _IRW_TAKES_NEXT))
+            continue
+          fi
           case "$_ss_tgt" in
             -*) ;;
             *) check_and_block_target "mv" "$_ss_tgt" ;;

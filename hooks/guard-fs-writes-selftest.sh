@@ -260,6 +260,57 @@ CMD_SAME_CMD_VAR_EMBEDDED="L=$FAKE_SCRATCHPAD; ./x.sh > \$L/land.log 2>&1"
 GOT="$(CLAUDE_SCRATCHPAD="$FAKE_SCRATCHPAD" run_guard "$FAKE_WORKTREE" "$CMD_SAME_CMD_VAR_EMBEDDED")"
 assert_exit "resolves a same-command variable EMBEDDED in a larger target ('\$L/land.log') (finding B addendum)" 0 "$GOT"
 
+# Redirection words after rm -r / mv are shell syntax, never targets.
+GOT="$(run_guard "$FAKE_WORKTREE" "rm -r $FAKE_WORKTREE/build 2>&1")"
+assert_exit "allows 'rm -r <inside> 2>&1' (the fd duplication is not an rm target)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "rm -rf $FAKE_WORKTREE/build >/dev/null 2>/dev/null")"
+assert_exit "allows 'rm -rf <inside> >/dev/null 2>/dev/null'" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "rm -r $FAKE_WORKTREE/build 2> /dev/null")"
+assert_exit "allows 'rm -r <inside> 2> /dev/null' (bare operator, target as the next word)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "mv $FAKE_WORKTREE/a $FAKE_WORKTREE/b 2>&1")"
+assert_exit "allows 'mv <inside> <inside> 2>&1'" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "rm -r $NOT_WORKTREE_NOT_SCRATCH/build 2>&1")"
+assert_exit "still blocks 'rm -r <outside> 2>&1' (redirection skip does not hide the real target)" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "rm -r $FAKE_WORKTREE/build 2>$NOT_WORKTREE_NOT_SCRATCH/err.log")"
+assert_exit "still blocks 'rm -r <inside> 2><outside>' (the redirect target itself is outside)" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "rm -r $FAKE_WORKTREE/build > $NOT_WORKTREE_NOT_SCRATCH/out.log")"
+assert_exit "still blocks 'rm -r <inside> > <outside>' (bare operator, outside target as the next word)" 2 "$GOT"
+
+# A same-command NAME=/literal assignment resolves even when the tokenizer
+# glues the separator or an opening paren onto the assignment word.
+GOT="$(run_guard "$FAKE_WORKTREE" "p=$FAKE_WORKTREE;rm -r \$p/x")"
+assert_exit "resolves 'p=/abs;rm -r \$p/x' (no space after the semicolon)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "p=\"$FAKE_WORKTREE\";rm -r \$p/x")"
+assert_exit "resolves 'p=\"/abs\";rm -r \$p/x' (quoted value, no space after the semicolon)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "(p=$FAKE_WORKTREE; rm -r \$p/x)")"
+assert_exit "resolves '(p=/abs; rm -r \$p/x)' (assignment glued to a subshell paren)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "p=$FAKE_WORKTREE; rm -r \$p/x 2>&1")"
+assert_exit "resolves 'p=/abs; rm -r \$p/x 2>&1' (both fixes on one line)" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "p=$FAKE_WORKTREE; foo > \$p/file")"
+assert_exit "resolves 'p=/abs; foo > \$p/file' to inside the worktree" 0 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "p=$NOT_WORKTREE_NOT_SCRATCH;rm -r \$p/x")"
+assert_exit "still blocks 'p=<outside>;rm -r \$p/x' (resolution does not launder an outside path)" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "(p=$NOT_WORKTREE_NOT_SCRATCH; rm -r \$p/x)")"
+assert_exit "still blocks '(p=<outside>; rm -r \$p/x)'" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "p=\$(pwd); rm -r \$p/x")"
+assert_exit "still blocks 'p=\$(pwd); rm -r \$p/x' (command substitution stays unresolvable)" 2 "$GOT"
+
+GOT="$(run_guard "$FAKE_WORKTREE" "p=$NOT_WORKTREE_NOT_SCRATCH; foo > \$p/file")"
+assert_exit "still blocks 'p=<outside>; foo > \$p/file'" 2 "$GOT"
+
 # shellcheck disable=SC2016 # deliberately literal, pre-expansion command text under test
 GOT_ERR="$(run_guard_stderr "$FAKE_WORKTREE" 'echo hi > "$Q"')"
 assert_contains "an unresolvable variable target's message says so, not the raw text (finding B)" "$GOT_ERR" "unresolvable variable"
