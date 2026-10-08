@@ -9,7 +9,8 @@
 # transcripts with `scripts/claude-cost-scan.py`, appends a row to the
 # project's cost ledger if one is configured, and writes
 # `.night-watchman/last-session-cost.txt` with the exact ledger line for a
-# ticket outcome comment.
+# ticket outcome comment. That file goes to the main worktree of the repo
+# containing cwd, else $CLAUDE_PROJECT_DIR, else nowhere.
 #
 # A SessionEnd hook must never stop a session from ending: every failure
 # path here — no scanner, no python3, no ledger, an unparsable transcript —
@@ -152,10 +153,14 @@ fi
 # State goes to the repo's MAIN worktree: a .night-watchman/ written inside a
 # dispatched worktree trips land-branch's dirty-tree preflight.
 ROOT=""
-if [ "$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$CWD" 2>/dev/null && pwd -P)" ]; then
-    ROOT="$(git -C "$CWD" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+TOP="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)"
+if [ -n "$TOP" ]; then
+    ROOT="$(git -C "$TOP" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
 fi
-[ -n "$ROOT" ] || ROOT="$CWD"
+if [ -z "$ROOT" ] && [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    ROOT="$CLAUDE_PROJECT_DIR"
+fi
+[ -n "$ROOT" ] || { warn "cwd $CWD is not in a git repo and CLAUDE_PROJECT_DIR is unset — skipping state file"; exit 0; }
 STATE_DIR="$ROOT/.night-watchman"
 mkdir -p "$STATE_DIR" 2>/dev/null || { warn "could not create $STATE_DIR — skipping state file"; exit 0; }
 {

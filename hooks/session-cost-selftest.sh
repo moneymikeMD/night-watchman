@@ -16,6 +16,8 @@
 #   - no session_id in stdin: exit 0, nothing written
 #   - empty stdin: exit 0, nothing written
 #   - scanner missing (SESSION_COST_SCANNER_MISSING): exit 0
+#   - cwd in a repo subdirectory: state file lands at the repo root
+#   - non-git cwd: state file goes to $CLAUDE_PROJECT_DIR, or nowhere
 #
 # Per this plugin's own name-the-oracle rule (see script-reviewer.md): a
 # deliberately broken copy of session-cost.sh (e.g. `exit 0` at the bottom
@@ -41,10 +43,12 @@ N=0
 pass() { N=$((N + 1)); echo "PASS $N: $1"; }
 fail() { N=$((N + 1)); echo "FAIL $N: $1" >&2; FAIL=1; }
 
-WORK="$HERE/.selftest-work.$$"
-rm -rf "$WORK"
-mkdir -p "$WORK/repo"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/session-cost-selftest.XXXXXX")" || { echo "mktemp failed" >&2; exit 1; }
+WORK="$(cd "$WORK" && pwd -P)"
 trap 'rm -rf "$WORK"' EXIT
+mkdir -p "$WORK/repo" "$WORK/nogit" "$WORK/proj"
+unset GIT_DIR GIT_WORK_TREE CLAUDE_PROJECT_DIR
+git -C "$WORK/repo" init -q || { echo "git init failed" >&2; exit 1; }
 
 run_hook() {
     local stdin_json="$1" ledger="${2:-}"
@@ -141,6 +145,39 @@ if echo "$OUT6" | grep -q "scanner not found"; then
     pass "test6: warns on stderr when the scanner is missing"
 else
     fail "test6: expected a 'scanner not found' warning (got: $OUT6)"
+fi
+
+mkdir -p "$WORK/repo/src/deep"
+rm -rf "$WORK/repo/.night-watchman"
+STDIN7="${FIXTURE_STDIN/\/Users\/fixture\/repoC/$WORK\/repo\/src\/deep}"
+run_hook "$STDIN7" "$LEDGER3" >/dev/null 2>&1
+if grep -q "^cost: \$0.0068, 3 turns$" "$STATE1" 2>/dev/null; then
+    pass "test7: a subdirectory cwd writes the state file at the repo root"
+else
+    fail "test7: expected $STATE1 from cwd=repo/src/deep"
+fi
+if [ ! -e "$WORK/repo/src/deep/.night-watchman" ]; then
+    pass "test7: no .night-watchman/ created inside the subdirectory"
+else
+    fail "test7: a stray .night-watchman/ was created under repo/src/deep"
+fi
+
+STDIN8="${FIXTURE_STDIN/\/Users\/fixture\/repoC/$WORK\/nogit}"
+run_hook "$STDIN8" "$LEDGER3" >/dev/null 2>&1
+STATUS8=$?
+if [ "$STATUS8" -eq 0 ]; then pass "test8: exit 0 for a non-git cwd"; else fail "test8: exit 0 for a non-git cwd (got $STATUS8)"; fi
+if [ ! -e "$WORK/nogit/.night-watchman" ]; then
+    pass "test8: no .night-watchman/ created in a non-git cwd without CLAUDE_PROJECT_DIR"
+else
+    fail "test8: a stray .night-watchman/ was created in the non-git cwd"
+fi
+
+CLAUDE_PROJECT_DIR="$WORK/proj" run_hook "$STDIN8" "$LEDGER3" >/dev/null 2>&1
+if grep -q "^cost: \$0.0068, 3 turns$" "$WORK/proj/.night-watchman/last-session-cost.txt" 2>/dev/null \
+    && [ ! -e "$WORK/nogit/.night-watchman" ]; then
+    pass "test9: a non-git cwd falls back to CLAUDE_PROJECT_DIR"
+else
+    fail "test9: expected the state file under CLAUDE_PROJECT_DIR, not the non-git cwd"
 fi
 
 echo
