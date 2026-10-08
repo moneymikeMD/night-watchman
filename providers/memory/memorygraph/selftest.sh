@@ -97,6 +97,14 @@ case "$1" in
                     block 1 "$ID_A" "Jira auth flow" solution 0.8 "jira,auth" "How jira auth works"
                     block 2 "$ID_D" "Standalone auth note" general 0.9 "auth" "Auth only, single hit"
                     ;;
+                widget | gotcha | "widget gotcha")
+                    echo "**Found 1 relevant memories:**"
+                    echo ""
+                    block 1 "$ID_D" "Widget gotcha" general 0.7 "widget" "Every word hits this one"
+                    ;;
+                floored)
+                    echo "No memories cleared the relevance floor (0.35)."
+                    ;;
                 *)
                     echo "No memories found matching your query"
                     ;;
@@ -226,6 +234,18 @@ for b in falkordblite FalkorDB; do
     "$RECALL_SH" "jira api auth" > /dev/null
     eq "$b: a three-word query still fans out to three calls" "3" "$(wc -l < "$WORK_LOG" | tr -d ' ')"
 done
+
+for b in postgres falkordblite; do
+    export MEMORY_BACKEND="$b"
+    OUT=$("$RECALL_SH" "widget gotcha" 2>&1)
+    eq "$b: every word hitting exits 0" "0" "$?"
+    contains "$b: the all-hit result is printed" "Widget gotcha" "$OUT"
+done
+
+export MEMORY_BACKEND=postgres
+OUT=$("$RECALL_SH" floored 2>&1)
+eq "a relevance-floor zero-result header exits 0" "0" "$?"
+contains "a relevance-floor zero-result header reports no hits" "0 unique memories" "$OUT"
 
 unset MEMORY_BACKEND
 reset_logs

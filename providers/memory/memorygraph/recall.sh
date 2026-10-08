@@ -151,10 +151,12 @@ open(my $fh, '<', $file) or die "cannot open $file: $!\n";
 my $text = <$fh>;
 close $fh;
 
+# Contract: a "**Found N" header must match its parsed count; any line
+# starting "No memories " is zero results, whatever reason follows it.
 my $expected;
 if ($text =~ /\*\*Found\s+(\d+)\s+relevant memories/) {
     $expected = $1;
-} elsif ($text =~ /No memories found matching your query/) {
+} elsif ($text =~ /^No memories\b/m) {
     $expected = 0;
 } else {
     $expected = -1;
@@ -210,7 +212,7 @@ for w in "${words[@]}"; do
     FOUND=$(printf '%s\n' "$HEADER_LINE" | cut -f3)
 
     if [ "$EXPECTED" = "-1" ]; then
-        die "recall.sh: memorygraph's output for '$w' did not match either known header shape ('**Found N relevant memories:**' or 'No memories found matching your query') -- the CLI's output format has likely changed and this parser needs updating. Raw output:
+        die "recall.sh: memorygraph's output for '$w' did not match either known header shape ('**Found N relevant memories:**' or a line starting 'No memories ') -- the CLI's output format has likely changed and this parser needs updating. Raw output:
 $(cat "$OUTF")"
     fi
     if [ "$EXPECTED" != "$FOUND" ]; then
@@ -278,4 +280,7 @@ if [ -n "$tokens_hit" ]; then
 else
     echo "hit:    (none)" >&2
 fi
-[ -n "$tokens_nohit" ] && echo "no hit: $tokens_nohit" >&2
+if [ -n "$tokens_nohit" ]; then
+    echo "no hit: $tokens_nohit" >&2
+fi
+exit 0
