@@ -384,6 +384,25 @@ TAIL_PROMPT="$(python3 -c 'print("run the tests " + "the " * 120 + "alpha beta g
 run_hook json "$(prompt "$TAIL_PROMPT" g31)"
 check "gate-row: only the first 400 characters are counted, no recall" "$(cat "$ARGV")" ""
 
+run_hook json "$(prompt "fix-LAB-201" g32)"
+check "gate-row: a key glued after a hyphen is no key, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "fix_LAB-201" g33)"
+check "gate-row: a key glued after a word character is no key, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "check LAB-201x" g34)"
+check "gate-row: a key followed by a word character is no key, no recall" "$(cat "$ARGV")" ""
+run_hook json "$(prompt "LAB-201_notes" g38)"
+check "gate-row: a key before an underscore is no key (owner decision 2026-10-07), no recall" "$(cat "$ARGV")" ""
+KEY_TAIL_PROMPT="$(python3 -c 'print("run tests " + "the " * 120 + "LAB-201")')"
+run_hook json "$(prompt "$KEY_TAIL_PROMPT" g35)"
+check "gate-row: a key past the first 400 characters does not exempt, no recall" "$(cat "$ARGV")" ""
+: > "$GATE_LOG.blank"
+run_hook json '{"hook_event_name":"UserPromptSubmit","prompt":"   ","session_id":"g36"}' \
+    NW_MEMORY_PUSH_LOG="$GATE_LOG.blank"
+check "gate-row: an empty prompt is not logged as few-words" "$(cat "$GATE_LOG.blank")" ""
+mkdir -p "$WORK/state-gate"
+run_hook json "$(prompt "run the tests" g37)" NW_MEMORY_PUSH_STATE="$WORK/state-gate"
+check "gate-row: a gated prompt leaves the state dir untouched" "$(ls -A "$WORK/state-gate")" ""
+
 if [ "$FAIL" -eq 0 ]; then
     echo "OK: all $N assertions passed"
     exit 0
