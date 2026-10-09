@@ -151,7 +151,7 @@ assert_eq "--uninstall removes the plugin" "" "$(installed_path)"
 assert_eq "--uninstall removes the dev marketplace entry" "no" \
   "$( [ -f "$MKT/.claude-plugin/marketplace.json" ] && echo yes || echo no )"
 assert_eq "the checkout is still a git repository afterwards" "yes" \
-  "$( [ -d "$REPO/.git" ] && echo yes || echo no )"
+  "$( [ -e "$REPO/.git" ] && echo yes || echo no )"
 
 # --- the real configuration was never touched --------------------------------
 assert_eq "the operator's real marketplace list is unchanged (cksum)" \
