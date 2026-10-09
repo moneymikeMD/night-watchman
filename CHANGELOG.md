@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented here.
 
+## [1.10.0](https://github.com/moneymikeMD/night-watchman/compare/v1.9.1...v1.10.0) (2026-10-09)
+
+
+### Features
+
+* **skills:** trigger session-start on "start a wave" and before any wave dispatch ([#113](https://github.com/moneymikeMD/night-watchman/issues/113)) ([4537b4a](https://github.com/moneymikeMD/night-watchman/commit/4537b4ac6c20c361af59bbdb316c24a049c8a3e1))
+
+
+### Bug Fixes
+
+* add claude-haiku-5-5 to the price template ([#119](https://github.com/moneymikeMD/night-watchman/issues/119)) ([1870128](https://github.com/moneymikeMD/night-watchman/commit/1870128de81cf8d87080917238188b1a2ccefca5))
+* **hooks:** stop guard-fs-writes refusing quoted '&gt;', for-loop targets and post-cd relative paths ([#118](https://github.com/moneymikeMD/night-watchman/issues/118)) ([1b4e827](https://github.com/moneymikeMD/night-watchman/commit/1b4e827fdbc21c00188dfa646643638a64c7adea))
+* **hooks:** write session-cost state at the repo root, never a subdirectory or non-git cwd (NWM-184) ([#112](https://github.com/moneymikeMD/night-watchman/issues/112)) ([308e568](https://github.com/moneymikeMD/night-watchman/commit/308e568d80db83387dda86e858ce866c744462f1))
+* make every selftest pass on Linux and gate it in CI ([#123](https://github.com/moneymikeMD/night-watchman/issues/123)) ([1b612c6](https://github.com/moneymikeMD/night-watchman/commit/1b612c63814201da4000fabb3714a8d156db39ad))
+* **memory:** exit 0 when every recall word hits and accept any 'No memories' zero-result header (NWM-190) ([#111](https://github.com/moneymikeMD/night-watchman/issues/111)) ([e90fe5e](https://github.com/moneymikeMD/night-watchman/commit/e90fe5eda2d72d34e4c88e3fb85216df72779d0a))
+* **waves:** treat repo-qualified and bare spellings of one file as a collision (NWM-193) ([#114](https://github.com/moneymikeMD/night-watchman/issues/114)) ([c4d6991](https://github.com/moneymikeMD/night-watchman/commit/c4d69917cfeee28e162a855950f2d0fa6c69a178))
+
 ## [1.9.1](https://github.com/moneymikeMD/night-watchman/compare/v1.9.0...v1.9.1) (2026-10-07)
 
 
