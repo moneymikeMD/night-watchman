@@ -135,9 +135,12 @@ review on every PR.
 
 ## CI (`.github/workflows/ci.yml`)
 
-Six jobs. `selftests` runs on **`macos-latest`**, not Ubuntu — this repo
-targets bash 3.2, the `/bin/bash` macOS ships, and a Linux runner's newer
-bash would hide a regression. Its steps, in order:
+Six jobs. `selftests` is a matrix of two legs. The **`macos-latest`** leg is
+the target — this repo targets bash 3.2, the `/bin/bash` macOS ships — and
+keeps the bare check name `selftests` the ruleset requires. The
+`ubuntu-latest` leg reports as `selftests (linux)`, is not ruleset-required,
+and catches bash 5 and GNU coreutils regressions (`stat -f` is filesystem
+status on GNU; `cd ""` is an error in bash 5). Its steps, in order:
 
 - **work-order dependency** — resolves work-order's newest `v1.*` tag *live*
   with `git ls-remote`, clones it, and requires

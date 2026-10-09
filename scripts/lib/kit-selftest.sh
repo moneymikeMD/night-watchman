@@ -82,7 +82,8 @@ set -uo pipefail
 . "$KIT"
 f=$(tmpfile)
 echo "SECRET-MARKER" > "$f"
-stat -f '%Lp' "$f" > "$RESULT"
+m=$(stat -c '%a' "$f" 2>/dev/null) || m=$(stat -f '%Lp' "$f" 2>/dev/null) || m=""
+echo "$m" > "$RESULT"
 printf '%s\n' "$f" >> "$RESULT"
 STUB
   run_stub "$KIT"
@@ -105,7 +106,8 @@ set -uo pipefail
 for i in 1 2 3; do
   f=$(tmpfile)
   echo "body $i" > "$f"
-  stat -f '%Lp' "$f" >> "$RESULT"
+  m=$(stat -c '%a' "$f" 2>/dev/null) || m=$(stat -f '%Lp' "$f" 2>/dev/null) || m=""
+  echo "$m" >> "$RESULT"
 done
 STUB
   run_stub "$KIT"

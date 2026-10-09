@@ -416,7 +416,7 @@ EOF
         || lc_fail 1 "could not find 'outcome:' inside $TICKET_FILE's frontmatter — merge reverted, nothing pushed"
     [ -s "$new_ticket" ] || lc_fail 1 "rewriting $TICKET_FILE produced an empty file — merge reverted, nothing pushed"
 
-    orig_mode=$(stat -f '%Lp' "$TICKET_FILE" 2>/dev/null) || orig_mode=$(stat -c '%a' "$TICKET_FILE" 2>/dev/null) || orig_mode=""
+    orig_mode=$(stat -c '%a' "$TICKET_FILE" 2>/dev/null) || orig_mode=$(stat -f '%Lp' "$TICKET_FILE" 2>/dev/null) || orig_mode=""
     mv "$new_ticket" "$TICKET_FILE" || lc_fail 1 "could not overwrite $TICKET_FILE — merge reverted, nothing pushed"
     [ -n "$orig_mode" ] && { chmod "$orig_mode" "$TICKET_FILE" 2>/dev/null || true; }
 

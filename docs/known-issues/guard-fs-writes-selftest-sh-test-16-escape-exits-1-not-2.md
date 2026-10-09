@@ -2,9 +2,10 @@
 title: "guard-fs-writes-selftest.sh: test 16 (~/../.. escape) exits 1 not 2"
 heading_raw: "guard-fs-writes-selftest.sh: test 16 (~/../.. escape) exits 1 not 2 — LOW"
 severity: LOW
-status: open
+status: resolved
+resolved: 2026-10-09
 qualifiers: []
-note: "Linux bash 5 only; macOS bash 3.2 passes; current Linux status UNVERIFIED"
+note: "Linux only: the test cd'd into /private/tmp, which Linux lacks"
 tickets: []
 slug: guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2
 ---
@@ -18,3 +19,9 @@ rather than choosing allow (0) or block (2); `bash -x` against the exact
 command in assertion 16 (`rm -rf ~/../../../private/tmp/some-outside-target`
 from cwd `/private/tmp`) is where to look. Whether it still reproduces on
 the current guard is UNVERIFIED: no Linux host was available to re-run it.
+
+Root cause (2026-10-09, mike-desktop-l): not the guard. The selftest ran
+the guard from `cd /private/tmp`, a macOS-only directory, so on Linux the
+subshell's `cd` failed and returned 1 before the guard ever ran. The test
+now uses `/private/tmp` when it exists and `/tmp` otherwise, as homelab's
+copy already did; the escape target follows the same root.

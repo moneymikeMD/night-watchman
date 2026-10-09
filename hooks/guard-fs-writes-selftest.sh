@@ -181,9 +181,10 @@ assert_exit "allows 'find <inside-worktree> -delete' (finding 2, no false positi
 GOT="$(run_guard "$FAKE_WORKTREE" "echo $SCRATCH/not-worktree-not-scratch | xargs rm -rf")"
 assert_exit "blocks 'echo <outside> | xargs rm -rf' (finding 2: xargs' real targets are stdin-sourced and unverifiable, so xargs rm/mv is blocked unconditionally)" 2 "$GOT"
 
-# shellcheck disable=SC2016 # literal, pre-expansion command text under test
-CMD_TILDE_ESCAPE='rm -rf ~/../../../private/tmp/some-outside-target'
-GOT="$(run_guard_payload /private/tmp "$(jq -cn --arg cmd "$CMD_TILDE_ESCAPE" '{tool_input:{command:$cmd}}')")"
+SYSROOT=/private/tmp
+[ -d "$SYSROOT" ] || SYSROOT=/tmp
+CMD_TILDE_ESCAPE="rm -rf ~/../../..$SYSROOT/some-outside-target"
+GOT="$(run_guard_payload "$SYSROOT" "$(jq -cn --arg cmd "$CMD_TILDE_ESCAPE" '{tool_input:{command:$cmd}}')")"
 assert_exit "blocks a ~/../.. escape run from a bare system root (finding 3)" 2 "$GOT"
 
 HEREDOC_CMD="$(printf "cat <<'EOF'\nsome doc text mentions 1 > /etc/passwd as prose, not a real redirect\nEOF\n")"
@@ -790,6 +791,15 @@ if [ -n "$RM_ABS" ]; then
   assert_allow "allows that same shim removing a path INSIDE the worktree (NWM-123, resolution must not widen the policy)" \
     "$FAKE_WORKTREE" "$SHIM_DIR/zap -rf $FAKE_WORKTREE/leftover"
 fi
+
+# Ubuntu 26.04 links /usr/bin/rm to gnurm: a shim chain must match at the rm hop.
+mkdir -p "$SHIM_DIR/impl"
+printf '#!/bin/sh\n' > "$SHIM_DIR/impl/gnurm"
+chmod +x "$SHIM_DIR/impl/gnurm"
+ln -sf gnurm "$SHIM_DIR/impl/rm"
+ln -sf "$SHIM_DIR/impl/rm" "$SHIM_DIR/zap2"
+assert_block "blocks a shim chain zap2 -> rm -> gnurm, matching at the rm hop" \
+  "$FAKE_WORKTREE" "$SHIM_DIR/zap2 -rf $NOT_WORKTREE_NOT_SCRATCH/victim" "$RM_DIAG"
 
 # A non-command word that happens to name an executable must stay an argument.
 assert_allow "allows 'echo git status' — a head-name word in argument position is not a command head (NWM-123)" \

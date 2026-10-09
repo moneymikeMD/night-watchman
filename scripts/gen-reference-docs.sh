@@ -40,6 +40,8 @@
 # Frontmatter is parsed with awk/sed only — no python, no yq.
 
 set -euo pipefail
+# Byte order: en_US collation ignores - and ., so page order would vary by host.
+export LC_ALL=C
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib/kit.sh

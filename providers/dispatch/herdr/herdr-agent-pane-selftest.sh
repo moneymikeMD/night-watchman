@@ -247,6 +247,8 @@ scenario_B4() {
     local repo out rc=0
     repo=$(make_repo) || { echo "FAIL: B4 setup (make_repo)" >&2; FAIL=1; return; }
     install_stub_herdr "$repo"
+    # bash 5 refuses the `cd ""` a missing dirname leaves; bash 3.2 ignores it.
+    ln -s "$(command -v dirname)" "$repo/bin/dirname"
 
     out=$(cd "$repo" && HERDR_ENV=1 PATH="$repo/bin" ./herdr-agent-pane.sh --dir "$repo/work" 2>&1) && rc=0 || rc=$?
 
