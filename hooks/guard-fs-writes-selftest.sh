@@ -848,6 +848,59 @@ assert_block "still blocks a write into an UNRELATED repo's worktree from this r
 assert_block "still blocks appending into a sibling worktree when cwd is NOT a git repo at all (WO-023 fix 2, the no-repo fallback is unchanged, not widened)" \
   "$NOT_WORKTREE_NOT_SCRATCH" "echo x >> $FAKE_LINKED_WORKTREE/wo023.log" "target outside worktree and scratchpad"
 
+# Retro 2026-10-08: three false positives from one Mac session, each paired
+# with the nearest real write that must still block.
+SP="$FAKE_SCRATCHPAD"
+OUTSIDE="$NOT_WORKTREE_NOT_SCRATCH"
+
+# shellcheck disable=SC2016 # literal: raw pre-expansion command text
+CLAUDE_SCRATCHPAD="$SP" assert_allow "retro FP1: a '>' inside a quoted jq program is not a redirect (Mac command, was 'unresolvable variable: ]+>\"')" \
+  "$FAKE_WORKTREE" 'curl -s x | jq -r '"'"'"=== LAB-'"'"'$k'"'"' ===", (.renderedFields.description | gsub("<[^>]+>";"") )'"'"' > '"$SP/tickets.txt"
+# shellcheck disable=SC2016 # literal: raw pre-expansion command text
+assert_allow "retro FP1: a quoted '>' later in a word that starts unquoted (RE='<[^>]+>') is not a redirect" \
+  "$FAKE_WORKTREE" 'RE='"'"'<[^>]+>'"'"'; sed -E "s/$RE//g" in.html'
+assert_allow "retro FP1: a quoted '>' in an --opt=\"...\" word is not a redirect" \
+  "$FAKE_WORKTREE" 'jq --arg="<[^>]+>" . f.json'
+# shellcheck disable=SC2016 # literal: raw pre-expansion command text
+assert_allow "retro FP1: quoted conflict-marker alternation is not a redirect (Mac command)" \
+  "$FAKE_WORKTREE" "W=$FAKE_WORKTREE; grep -n -E '^(<<<<<<<|=======|>>>>>>>)' \$W/docs/monitoring.md"
+assert_block "retro FP1 mutation guard: an unquoted '>' after a quoted span in the same word still blocks" \
+  "$FAKE_WORKTREE" "echo 'a > b'>$OUTSIDE/x" "redirect target outside worktree and scratchpad"
+# shellcheck disable=SC2016 # literal: raw pre-expansion command text
+assert_block "retro FP1 mutation guard: \"\$x\">/outside still blocks" \
+  "$FAKE_WORKTREE" 'echo "$x">'"$OUTSIDE/x" "redirect target outside worktree and scratchpad"
+
+CLAUDE_SCRATCHPAD="$SP" assert_allow "retro FP2: a literal for-loop variable in the basename resolves per value (Mac command)" \
+  "$FAKE_WORKTREE" "S=$SP; for k in 445 446; do ./scripts/api/jira-api.sh raw x > \$S/lab-\$k.json; done"
+CLAUDE_SCRATCHPAD="$SP" assert_allow "retro FP2: \${k} braces resolve the same way" \
+  "$FAKE_WORKTREE" "S=$SP; for k in 445 446; do echo > \"\${S}/lab-\${k}.json\"; done"
+CLAUDE_SCRATCHPAD="$SP" assert_block "retro FP2 mutation guard: a loop value carrying '..' that escapes still blocks" \
+  "$FAKE_WORKTREE" "S=$SP; for k in 445 ../../x; do echo > \$S/\$k; done" "redirect target outside worktree and scratchpad"
+assert_block "retro FP2 mutation guard: a loop variable whose value is an outside directory still blocks" \
+  "$FAKE_WORKTREE" "for d in $FAKE_WORKTREE $OUTSIDE; do echo > \$d/x; done" "redirect target outside worktree and scratchpad"
+CLAUDE_SCRATCHPAD="$SP" assert_block "retro FP2 mutation guard: a non-literal loop list stays unresolvable" \
+  "$FAKE_WORKTREE" "S=$SP; for k in \$(ls); do echo > \$S/\$k; done" "unresolvable variable"
+CLAUDE_SCRATCHPAD="$SP" assert_block "retro FP2 mutation guard: a second, non-literal loop over the same name poisons it" \
+  "$FAKE_WORKTREE" "S=$SP; for k in a; do :; done; for k in \$(ls); do echo > \$S/\$k; done" "unresolvable variable"
+CLAUDE_SCRATCHPAD="$SP" assert_block "retro FP2 mutation guard: an unknown variable in the basename alone is still unresolvable" \
+  "$FAKE_WORKTREE" "S=$SP; echo > \$S/lab-\$nope.json" "unresolvable variable"
+
+mkdir -p "$SP/lab-460"
+CLAUDE_SCRATCHPAD="$SP" assert_allow "retro FP3: a relative target after 'cd <abs> &&' resolves against that directory (Mac command)" \
+  "$FAKE_WORKTREE" "cd $SP/lab-460 && ./scripts/dev/bounded.sh 280 ./scripts/lint.sh > ../lint-460.log 2>&1"
+CLAUDE_SCRATCHPAD="$SP" assert_allow "retro FP3: 'cd <abs>;' sets the base the same way" \
+  "$FAKE_WORKTREE" "cd $SP/lab-460; echo x > ../lint-460.log"
+assert_block "retro FP3 mutation guard: 'cd <outside> && echo > ./y' blocks (was allowed against the session cwd)" \
+  "$FAKE_WORKTREE" "cd $OUTSIDE && echo x > ./y" "redirect target outside worktree and scratchpad"
+assert_block "retro FP3 mutation guard: 'cd <outside> && find . -delete' blocks" \
+  "$FAKE_WORKTREE" "cd $OUTSIDE && find . -delete" "find target outside worktree and scratchpad"
+assert_block "retro FP3 mutation guard: a cd inside 'bash -c' moves the nested base" \
+  "$FAKE_WORKTREE" "bash -c \"cd $OUTSIDE && rm -rf ./x\"" "rm -r target outside worktree and scratchpad"
+assert_allow "retro FP3: 'cd <outside> || cmd' leaves the base, since cmd runs only when cd failed" \
+  "$FAKE_WORKTREE" "cd $OUTSIDE || echo x > ./y"
+assert_allow "retro FP3: a piped cd runs in a subshell and leaves the base" \
+  "$FAKE_WORKTREE" "cd $OUTSIDE | true; echo x > ./y"
+
 # NWM-122 re-entrancy oracle. The three mutually recursive scanners keep their
 # per-call state in bash `local`, whose DYNAMIC scope is the whole reason
 # re-entry is safe. These assertions are the only thing checking that, and they
