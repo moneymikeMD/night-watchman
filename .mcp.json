@@ -1,9 +1,5 @@
 {
   "mcpServers": {
-    "memory": {
-      "command": "node",
-      "args": ["${HOME}/.claude/mcp/memory/server.js"]
-    },
     "release": {
       "command": "node",
       "args": ["${HOME}/.claude/mcp/release/server.js"],
