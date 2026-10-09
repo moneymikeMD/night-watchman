@@ -7,8 +7,15 @@ on:
 
 jobs:
   selftests:
-    # macOS, not ubuntu: this repo targets bash 3.2, the /bin/bash macOS ships.
-    runs-on: macos-latest
+    # macOS is the target (bash 3.2, the /bin/bash macOS ships); the ubuntu leg
+    # catches bash 5 and GNU coreutils regressions. The macOS leg keeps the
+    # bare name because the ruleset requires a check named `selftests`.
+    name: ${{ matrix.os == 'macos-latest' && 'selftests' || 'selftests (linux)' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
 
@@ -16,6 +23,7 @@ jobs:
         run: /bin/bash --version | head -1
 
       - name: install shellcheck
+        if: runner.os == 'macOS'
         run: brew install shellcheck
 
       - name: install PyYAML
