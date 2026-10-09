@@ -798,9 +798,9 @@ _RCH_MEMO=""
 _RCH_OUT=""
 
 # resolve_command_head: sets $_RCH_OUT to the basename of the binary $1 really
-# names, symlinks followed, or to $1 unchanged when nothing resolves. Callers
-# must only ask about a word in command position — an argument sharing a shim's
-# name is not that shim. Fork-free: it runs on every Bash call in the session.
+# names, symlinks followed until a guarded name, or to $1 unchanged when nothing
+# resolves. Callers must only ask about a word in command position — an argument
+# sharing a shim's name is not that shim. Fork-free: it runs on every Bash call.
 resolve_command_head() {
   _rch_w="$1"
   _RCH_OUT="$_rch_w"
@@ -835,6 +835,10 @@ resolve_command_head() {
   if [ -n "$_rch_p" ] && [ -e "$_rch_p" ]; then
     _rch_hops=0
     while [ -L "$_rch_p" ] && [ "$_rch_hops" -lt 40 ]; do
+      # Stop at a guarded name: Ubuntu links rm to gnurm and sh to dash.
+      case "${_rch_p##*/}" in
+        ssh|scp|rsync|mosh|rm|mv|find|xargs|bash|sh|eval|git) break ;;
+      esac
       _rch_t="$(readlink "$_rch_p" 2>/dev/null)"
       [ -n "$_rch_t" ] || break
       case "$_rch_t" in
