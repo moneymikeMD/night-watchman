@@ -23,8 +23,15 @@ jobs:
         run: /bin/bash --version | head -1
 
       - name: install shellcheck
-        if: runner.os == 'macOS'
-        run: brew install shellcheck
+        # Brew on both legs: ubuntu's apt shellcheck is older and flags more.
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = Linux ]; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+            echo "$HOMEBREW_PREFIX/bin" >> "$GITHUB_PATH"
+          fi
+          brew install shellcheck
+          shellcheck --version | sed -n 2p
 
       - name: install PyYAML
         run: python3 -m pip install --break-system-packages --quiet pyyaml
