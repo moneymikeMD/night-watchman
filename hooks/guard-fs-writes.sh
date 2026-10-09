@@ -38,12 +38,20 @@
 #     list, not a `/dev/*` glob, so `/dev/disk0` still blocks.
 #
 # Quoting, in one paragraph: a word STARTING with `'` or `"` is data and is
-# never rescanned — except a `$( ... )` body inside a DOUBLE-quoted word,
-# which really does execute. The only quoted text still scanned as commands
-# is what a shell re-executes: `bash -c`, `sh -c`, `eval`, xargs's target,
-# `find ... -exec`. ssh/scp/rsync/mosh are the opposite — once one is a
-# segment's own command word its argv is opaque, though an unquoted trailing
-# LOCAL redirect on that line is still checked.
+# never rescanned as a command — except a `$( ... )` body inside a DOUBLE-
+# quoted word, which really does execute. The only quoted text still scanned
+# as commands is what a shell re-executes: `bash -c`, `sh -c`, `eval`, xargs's
+# target, `find ... -exec`. ssh/scp/rsync/mosh are the opposite — once one is
+# a segment's own command word its argv is opaque, though an unquoted trailing
+# LOCAL redirect on that line is still checked. In any word, quoted or not, a
+# `>` is a redirect only where it stands outside quotes.
+#
+# Resolving a target: a same-command `NAME=value` substitutes. A `for NAME in
+# w1 w2 ...` variable resolves only when every listed word is a literal, and
+# then the path each value produces is checked; a target whose directory part
+# alone resolves stays unresolvable, since a value can carry `/` or `..`. A
+# segment that is exactly `cd DIR`, ended by `;`, `&&` or a newline, makes DIR
+# the base for later relative targets; a DIR that does not resolve leaves it.
 #
 # Own tree: with a git repo at cwd, EVERY worktree of that repo (`git
 # worktree list`) counts as "my own tree", not just the one cwd itself sits
@@ -60,20 +68,16 @@
 # and if the target repo's git-dir cannot be determined the stash/reset/
 # clean/checkout-`--` block stays in force.
 #
-# Command heads are matched by typed name (`rm`, and `*/rm` so an absolute or
-# relative path still matches) against every word. A word in COMMAND position
-# that matches no such name is then resolved on disk and matched by the
-# basename it resolves to, so a shim named anything is caught as what it runs.
+# Command heads are matched by typed name (`rm`, `*/rm`) against every word;
+# a COMMAND-position word matching none is resolved on disk and matched by
+# the basename it resolves to, so a shim named anything is caught.
 #
-# This is a text scanner, not a shell parser, and a guard against the
-# honest-mistake case, not a sandbox. Segment splitting on `;`/`&&`/`||`/`|`
-# is quote-aware: a separator inside a single- or double-quoted span is data,
-# never a boundary. The named bypasses it does not chase, and the reasoning
-# behind every rule above, are in memory-graph (tag guard-fs-writes) and
-# docs/known-issues/.
+# A text scanner, not a shell parser; a guard against the honest mistake, not
+# a sandbox. Splitting on `;`/`&&`/`||`/`|` is quote-aware. The bypasses it
+# does not chase, and the reasoning behind every rule above, are in
+# memory-graph (tag guard-fs-writes) and docs/known-issues/.
 #
-# Dependencies: bash 3.2, jq, git. Nothing else — this runs on every Bash
-# call in the session, so it stays small and it stays fast.
+# Dependencies: bash 3.2, jq, git. It runs on every Bash call; keep it small.
 
 set -u
 
@@ -166,7 +170,7 @@ normalize_path() {
   [ -n "$_np_in" ] || { printf '/'; return 0; }
   case "$_np_in" in
     /*) : ;;
-    *) _np_in="$PWD_PHYS/$_np_in" ;;
+    *) _np_in="${_sct_base:-$PWD_PHYS}/$_np_in" ;;
   esac
   _np_out=""
   _np_save_ifs="$IFS"
@@ -411,6 +415,125 @@ substitute_same_command_vars() {
   printf '%s' "$_sscv_s"
 }
 
+_FL_NAMES=()
+_FL_VALUES=()
+_FL_UNSAFE=" "
+
+# collect_for_loop_lists: records `for NAME in w1 w2 ...` into _FL_NAMES and
+# space-joined _FL_VALUES when every listed word is a plain literal. A NAME
+# with any other loop goes in _FL_UNSAFE and is never expanded.
+collect_for_loop_lists() {
+  case "$1" in
+    *for*) ;;
+    *) return 0 ;;
+  esac
+  tokenize_quoted_cca "$1"
+  _cfl_n="${#_CCA_WORDS[@]}"
+  _cfl_i=0
+  while [ "$((_cfl_i + 2))" -lt "$_cfl_n" ]; do
+    if [ "${_CCA_WORDS[$_cfl_i]}" != for ] || [ "${_CCA_WORDS[$((_cfl_i + 2))]}" != in ]; then
+      _cfl_i=$((_cfl_i + 1))
+      continue
+    fi
+    _cfl_name="${_CCA_WORDS[$((_cfl_i + 1))]}"
+    _cfl_vals=""
+    _cfl_ok=1
+    _cfl_done=0
+    _cfl_count=0
+    _cfl_j=$((_cfl_i + 3))
+    while [ "$_cfl_j" -lt "$_cfl_n" ]; do
+      _cfl_w="${_CCA_WORDS[$_cfl_j]}"
+      _cfl_j=$((_cfl_j + 1))
+      [ "$_cfl_w" = "do" ] && { _cfl_done=1; break; }
+      case "$_cfl_w" in
+        *';') _cfl_w="${_cfl_w%;}"; _cfl_done=1 ;;
+      esac
+      if [ -n "$_cfl_w" ]; then
+        case "$_cfl_w" in
+          *[!A-Za-z0-9._,:@%+=/-]*) _cfl_ok=0 ;;
+        esac
+        _cfl_vals="$_cfl_vals $_cfl_w"
+        _cfl_count=$((_cfl_count + 1))
+      fi
+      [ "$_cfl_done" -eq 1 ] && break
+    done
+    case "$_cfl_name" in
+      ''|[0-9]*|*[!A-Za-z0-9_]*) _cfl_ok=0 ;;
+    esac
+    if [ "$_cfl_ok" -eq 1 ] && [ "$_cfl_done" -eq 1 ] && [ "$_cfl_count" -gt 0 ] && [ "$_cfl_count" -le 64 ]; then
+      _cfl_k=0
+      _cfl_found=0
+      while [ "$_cfl_k" -lt "${#_FL_NAMES[@]}" ]; do
+        if [ "${_FL_NAMES[$_cfl_k]}" = "$_cfl_name" ]; then
+          _FL_VALUES[_cfl_k]="${_FL_VALUES[$_cfl_k]}$_cfl_vals"
+          _cfl_found=1
+        fi
+        _cfl_k=$((_cfl_k + 1))
+      done
+      if [ "$_cfl_found" -eq 0 ]; then
+        _FL_NAMES+=("$_cfl_name")
+        _FL_VALUES+=("$_cfl_vals")
+      fi
+    else
+      _FL_UNSAFE="$_FL_UNSAFE$_cfl_name "
+    fi
+    _cfl_i="$_cfl_j"
+  done
+  return 0
+}
+
+# subst_var_bounded: replaces ${NAME}, and $NAME where no name character
+# follows it, in $1 with $3.
+subst_var_bounded() {
+  _svb_s="$1"; _svb_name="$2"; _svb_val="$3"; _svb_out=""
+  _svb_s="${_svb_s//\$\{$_svb_name\}/$_svb_val}"
+  while true; do
+    case "$_svb_s" in
+      *"\$$_svb_name"*) ;;
+      *) break ;;
+    esac
+    _svb_pre="${_svb_s%%"\$$_svb_name"*}"
+    _svb_s="${_svb_s#*"\$$_svb_name"}"
+    case "$_svb_s" in
+      [A-Za-z0-9_]*) _svb_out="$_svb_out$_svb_pre\$$_svb_name" ;;
+      *) _svb_out="$_svb_out$_svb_pre$_svb_val" ;;
+    esac
+  done
+  printf '%s' "$_svb_out$_svb_s"
+}
+
+# expand_loop_vars: fills _ELV_OUT with every concrete spelling of $1 the
+# recorded for-loop values produce. Past 256 spellings it stops expanding,
+# so the target keeps a `$` and stays unresolvable.
+_ELV_OUT=()
+expand_loop_vars() {
+  _ELV_OUT=("$1")
+  _elv_n="${#_FL_NAMES[@]}"
+  _elv_i=0
+  while [ "$_elv_i" -lt "$_elv_n" ]; do
+    _elv_name="${_FL_NAMES[$_elv_i]}"
+    _elv_i=$((_elv_i + 1))
+    case "$_FL_UNSAFE" in
+      *" $_elv_name "*) continue ;;
+    esac
+    read -r -a _elv_vals <<<"${_FL_VALUES[$((_elv_i - 1))]}"
+    _elv_next=()
+    for _elv_c in "${_ELV_OUT[@]}"; do
+      case "$_elv_c" in
+        *"\$$_elv_name"*|*"\${$_elv_name}"*)
+          for _elv_v in "${_elv_vals[@]}"; do
+            _elv_next+=("$(subst_var_bounded "$_elv_c" "$_elv_name" "$_elv_v")")
+          done
+          ;;
+        *) _elv_next+=("$_elv_c") ;;
+      esac
+    done
+    [ "${#_elv_next[@]}" -gt 256 ] && return 0
+    _ELV_OUT=("${_elv_next[@]}")
+  done
+  return 0
+}
+
 # Expand a bare $NAME / ${NAME} in a candidate target using this process's
 # own environment. Refuses (returns the input unchanged, with a marker) if
 # the string carries anything that could turn expansion into execution.
@@ -455,6 +578,19 @@ target_is_outside() {
   # Trim again: a same-command variable VALUE can carry whitespace that was
   # legitimately inside its own quotes, and substitution is purely textual.
   _tio_s="$(trim_whitespace "$_tio_s")"
+
+  expand_loop_vars "$_tio_s"
+  for _tio_cand in "${_ELV_OUT[@]}"; do
+    candidate_is_outside "$_tio_cand" && return 0
+  done
+  return 1
+}
+
+# candidate_is_outside: target_is_outside for one fully substituted spelling.
+candidate_is_outside() {
+  _tio_s="$1"
+  _TIO_LAST_REASON=""
+  _TIO_LAST_RESOLVED=""
 
   _tio_tilde="$(expand_tilde "$_tio_s")" || {
     _TIO_LAST_REASON="unresolvable"
@@ -525,6 +661,73 @@ check_and_block_target() {
       block "$_cabt_kind target outside worktree and scratchpad: $_cabt_raw"
     fi
   fi
+}
+
+# unquoted_redirect_after: true when $1 holds a `>` outside quotes and not
+# backslash-escaped; _URA_AFTER is the text after it, one doubled `>` dropped.
+_URA_AFTER=""
+unquoted_redirect_after() {
+  _ura_w="$1"
+  _URA_AFTER=""
+  case "$_ura_w" in
+    *'>'*) ;;
+    *) return 1 ;;
+  esac
+  _ura_len=${#_ura_w}
+  _ura_i=0
+  _ura_q=""
+  while [ "$_ura_i" -lt "$_ura_len" ]; do
+    _ura_c="${_ura_w:$_ura_i:1}"
+    if [ "$_ura_q" = "'" ]; then
+      [ "$_ura_c" = "'" ] && _ura_q=""
+    elif [ "$_ura_q" = '"' ]; then
+      case "$_ura_c" in
+        \\) _ura_i=$((_ura_i + 1)) ;;
+        '"') _ura_q="" ;;
+      esac
+    else
+      case "$_ura_c" in
+        \\) _ura_i=$((_ura_i + 1)) ;;
+        "'"|'"') _ura_q="$_ura_c" ;;
+        '>')
+          _URA_AFTER="${_ura_w:$((_ura_i + 1))}"
+          _URA_AFTER="${_URA_AFTER#>}"
+          return 0
+          ;;
+      esac
+    fi
+    _ura_i=$((_ura_i + 1))
+  done
+  return 1
+}
+
+# segment_cd_dir: when $1 is exactly `cd [-L|-P|-e|-@] [--] DIR` and DIR
+# resolves, prints DIR normalized against the current base; else returns 1.
+segment_cd_dir() {
+  tokenize_quoted_cca "$1"
+  _scd_n="${#_CCA_WORDS[@]}"
+  [ "$_scd_n" -ge 2 ] || return 1
+  [ "${_CCA_WORDS[0]}" = cd ] || return 1
+  _scd_i=1
+  while [ "$_scd_i" -lt "$_scd_n" ]; do
+    case "${_CCA_WORDS[$_scd_i]}" in
+      -L|-P|-e|-@) _scd_i=$((_scd_i + 1)) ;;
+      --) _scd_i=$((_scd_i + 1)); break ;;
+      *) break ;;
+    esac
+  done
+  [ "$((_scd_i + 1))" -eq "$_scd_n" ] || return 1
+  _scd_arg="$(strip_surrounding_quotes "${_CCA_WORDS[$_scd_i]}")"
+  _scd_arg="$(substitute_same_command_vars "$_scd_arg")"
+  case "$_scd_arg" in
+    ''|-|*[*?[]*) return 1 ;;
+  esac
+  _scd_arg="$(expand_tilde "$_scd_arg")" || return 1
+  _scd_arg="$(safe_expand "$_scd_arg")" || return 1
+  case "$_scd_arg" in
+    ''|*'$'*) return 1 ;;
+  esac
+  normalize_path "$_scd_arg"
 }
 
 # is_redirection_word: true for a redirection operator word (`2>&1`,
@@ -759,13 +962,14 @@ tokenize_quoted() {
   return 0
 }
 
-# split_unquoted_segments: quote-aware replacement for the old raw-text
-# split on ; && || | — a separator inside a quoted span is data, never a
-# boundary (the fixed false positive). `\;` (find's -exec terminator) stays
-# literal outside quotes; a literal newline splits too, as it did before.
+# split_unquoted_segments: quote-aware split on ; && || | and newline into
+# _sct_seglist, with each segment's terminating separator in _sct_seplist
+# (`;` for a newline). A separator inside quotes is data; `\;` (find's -exec
+# terminator) stays literal.
 split_unquoted_segments() {
   _sus_text="$1"
   _sct_seglist=()
+  _sct_seplist=()
   _sus_cur=""
   _sus_len=${#_sus_text}
   _sus_i=0
@@ -807,6 +1011,7 @@ split_unquoted_segments() {
         ;;
       ';'|$'\n')
         _sct_seglist+=("$_sus_cur")
+        _sct_seplist+=(';')
         _sus_cur=""
         _sus_i=$((_sus_i + 1))
         ;;
@@ -816,6 +1021,7 @@ split_unquoted_segments() {
           _sus_c2="${_sus_text:$((_sus_i + 1)):1}"
         fi
         _sct_seglist+=("$_sus_cur")
+        _sct_seplist+=("|$_sus_c2")
         _sus_cur=""
         if [ "$_sus_c2" = '|' ]; then
           _sus_i=$((_sus_i + 2))
@@ -830,6 +1036,7 @@ split_unquoted_segments() {
         fi
         if [ "$_sus_c2" = '&' ]; then
           _sct_seglist+=("$_sus_cur")
+          _sct_seplist+=('&&')
           _sus_cur=""
           _sus_i=$((_sus_i + 2))
         else
@@ -844,6 +1051,7 @@ split_unquoted_segments() {
     esac
   done
   _sct_seglist+=("$_sus_cur")
+  _sct_seplist+=('')
   return 0
 }
 
@@ -886,11 +1094,7 @@ scan_segment() {
       case "$_ss_word" in
         \"*) scan_dollar_parens_in_word "$_ss_word" ;;
       esac
-      _ss_i=$((_ss_i + 1))
-      continue
-    fi
-
-    if [ "$_ss_opaque" -eq 0 ]; then
+    elif [ "$_ss_opaque" -eq 0 ]; then
     # Typed-name patterns are tried against EVERY word (they cover /bin/rm and
     # /usr/bin/git by path suffix). On-disk resolution is not: it runs only at
     # this segment's own command-word index, or an argument that merely shares
@@ -1175,27 +1379,24 @@ scan_segment() {
 
     # Redirection, with the target attached or as the next word. An fd
     # duplication/close is not a filesystem target and is not resolved as one.
-    case "$_ss_word" in
-      *'>'*)
-        _ss_after="${_ss_word#*>}"
-        _ss_after="${_ss_after#>}"
-        if [ -n "$_ss_after" ]; then
-          case "$_ss_after" in
+    if unquoted_redirect_after "$_ss_word"; then
+      _ss_after="$_URA_AFTER"
+      if [ -n "$_ss_after" ]; then
+        case "$_ss_after" in
+          '&'[0-9]*|'&-') ;;
+          *) check_and_block_target "redirect" "$_ss_after" ;;
+        esac
+      else
+        _ss_next_i=$((_ss_i + 1))
+        if [ "$_ss_next_i" -lt "$_ss_n" ]; then
+          _ss_tgt="${_ss_words[$_ss_next_i]}"
+          case "$_ss_tgt" in
             '&'[0-9]*|'&-') ;;
-            *) check_and_block_target "redirect" "$_ss_after" ;;
+            *) check_and_block_target "redirect" "$_ss_tgt" ;;
           esac
-        else
-          _ss_next_i=$((_ss_i + 1))
-          if [ "$_ss_next_i" -lt "$_ss_n" ]; then
-            _ss_tgt="${_ss_words[$_ss_next_i]}"
-            case "$_ss_tgt" in
-              '&'[0-9]*|'&-') ;;
-              *) check_and_block_target "redirect" "$_ss_tgt" ;;
-            esac
-          fi
         fi
-        ;;
-    esac
+      fi
+    fi
 
     _ss_i=$((_ss_i + 1))
   done
@@ -1268,21 +1469,33 @@ strip_heredocs() {
 }
 
 # scan_command_text: the shared entry point for the top-level command and every
-# nested re-execution context. A literal `\;` is protected from the `;`-split
-# first: it is find's own escaped -exec terminator, not a command separator.
+# nested re-execution context. _sct_base, the directory relative targets
+# resolve against, starts as the caller's and moves with each `cd` segment.
 scan_command_text() {
-  local _sct_seglist=()
+  local _sct_seglist=() _sct_seplist=()
+  local _sct_parent_base="${_sct_base:-$PWD_PHYS}"
+  local _sct_base="" _sct_cd="" _sct_i=0
   local _sct_n=0 _sct_no_heredoc="" _sct_seg="" _sct_text=""
+  _sct_base="$_sct_parent_base"
   _sct_text="$1"
   _sct_no_heredoc="$(strip_heredocs "$_sct_text")"
   collect_same_command_assignments "$_sct_no_heredoc"
+  collect_for_loop_lists "$_sct_no_heredoc"
   split_unquoted_segments "$_sct_no_heredoc"
   _sct_n="${#_sct_seglist[@]}"
-  if [ "$_sct_n" -gt 0 ]; then
-    for _sct_seg in "${_sct_seglist[@]}"; do
-      scan_segment "$_sct_seg"
-    done
-  fi
+  _sct_i=0
+  while [ "$_sct_i" -lt "$_sct_n" ]; do
+    _sct_seg="${_sct_seglist[$_sct_i]}"
+    scan_segment "$_sct_seg"
+    case "${_sct_seplist[$_sct_i]}:$_sct_seg" in
+      ';:'*cd*|'&&:'*cd*)
+        if _sct_cd="$(segment_cd_dir "$_sct_seg")"; then
+          _sct_base="$_sct_cd"
+        fi
+        ;;
+    esac
+    _sct_i=$((_sct_i + 1))
+  done
   return 0
 }
 
