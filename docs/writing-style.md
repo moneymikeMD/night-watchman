@@ -1,29 +1,20 @@
 # docs/ writing style
 
-This section applies to committed `docs/` prose. Skill and agent prose
-(`skills/`, `agents/`, `CLAUDE.md`) follows the separate rules below —
-caveman mode shapes chat output only, not committed files.
+This section applies to committed `docs/` prose. Skill and agent prose (`skills/`, `agents/`, `CLAUDE.md`) follows the separate rules below — caveman mode shapes chat output only, not committed files.
 
-Declare the world as it is. A doc states the current fact, never the path
-it took to get there: no correction notes, dated ledgers, "used to say" or
-strikethrough. The history is in git. A question that is genuinely open
-is written as a question.
+Declare the world as it is. A doc states the current fact, never the path it took to get there: no correction notes, dated ledgers, "used to say" or strikethrough. The history is in git. A question
+that is genuinely open is written as a question.
 
 ## Diátaxis compass, mapped to this repo
 
 One file, one mode.
 
-- **Tutorial** (learning by doing) — none yet; `docs/adopting.md`'s numbered
-  runbook is the closest fit if one is added.
+- **Tutorial** (learning by doing) — none yet; `docs/adopting.md`'s numbered runbook is the closest fit if one is added.
 - **How-to** (steps to a goal) — `docs/adopting.md`.
-- **Reference** (facts for lookup, no opinion) — the topic files:
-  `ethos.md`, `known-issues.md`, `cost.md`, `scripts.md`,
-  `testing-philosophy.md`.
-- **Explanation** (why, opinion allowed) — `docs/decisions.md`,
-  `docs/faq.md`, `docs/evidence.md`.
+- **Reference** (facts for lookup, no opinion) — the topic files: `ethos.md`, `known-issues.md`, `cost.md`, `scripts.md`, `testing-philosophy.md`.
+- **Explanation** (why, opinion allowed) — `docs/decisions.md`, `docs/faq.md`, `docs/evidence.md`.
 
-Don't mix modes in one file: no reference tables inside a how-to, no
-arguing inside reference. Split and link instead.
+Don't mix modes in one file: no reference tables inside a how-to, no arguing inside reference. Split and link instead.
 
 ## Review checklist
 
@@ -38,51 +29,30 @@ arguing inside reference. Split and link instead.
 
 ## Style summary
 
-Google developer style: write to "you", present tense, active voice,
-condition before instruction. STE: one instruction per sentence, split
-past ~20-25 words. Global English: keep "only"/"not" next to what they
-modify, one name per thing, no slashes.
+Google developer style: write to "you", present tense, active voice, condition before instruction. STE: one instruction per sentence, split past ~20-25 words. Global English: keep "only"/"not" next to
+what they modify, one name per thing, no slashes.
 
 ## Em-dash rule
 
-Existing docs keep their em dashes as written — no rewrite pass. A new
-doc prefers a full stop or comma instead of an em dash, but an em dash
-in new prose is not a review finding. Is that the rule the owner wants,
-or should new prose ban the em dash outright?
+Existing docs keep their em dashes as written — no rewrite pass. A new doc prefers a full stop or comma instead of an em dash, but an em dash in new prose is not a review finding. Is that the rule the
+owner wants, or should new prose ban the em dash outright?
 
 ## Skill and agent prose
 
-Applies to `skills/*/SKILL.md`, `agents/*.md`, and `CLAUDE.md` — anything
-an agent reads as steering, not anything a human reads as reference.
+Applies to `skills/*/SKILL.md`, `agents/*.md`, and `CLAUDE.md` — anything an agent reads as steering, not anything a human reads as reference.
 
-- **A description is an always-loaded pointer.** A skill or agent
-  description sits in context every turn whether or not it fires. Lead
-  with the trigger word. Give one trigger per distinct branch — synonyms
-  for the same branch are one trigger written twice, so collapse them.
-  Don't restate identity the body already carries.
-- **No-op test.** Before adding a line, ask: does this change behavior
-  versus the model's default? If not, cut it — whole sentences, not
-  trimmed words. Two people disagreeing about a no-op are disagreeing
-  about the default; settle it by running the document, not by debate.
-- **Steer positively.** A prohibition drags the banned behavior into
-  context and makes it more available, not less. State the target
-  behavior instead of the thing to avoid. Keep a prohibition only as a
-  hard guardrail you cannot phrase positively, and even then pair it with
-  the positive target.
-- **Completion criteria.** Every step ends on a condition the agent can
-  check itself against — done or not done, no judgment call. A demanding
-  criterion ("every ticket accounted for") drives more thorough work than
-  a soft one ("produce a change list").
-- **Disclose by branch.** Material only some runs need goes to
-  `references/` (or a sibling doc) behind a pointer, not inline in the
-  main file. Inline what every branch needs; push behind a pointer what
-  only some branches reach.
-- **Single source of truth.** A rule stated in two skills is a drift bug
-  waiting to happen — the two will diverge the next time one is edited
-  and the other is missed. Point at the other skill/doc instead of
-  restating its rule.
+- **A description is an always-loaded pointer.** A skill or agent description sits in context every turn whether or not it fires. Lead with the trigger word. Give one trigger per distinct branch —
+  synonyms for the same branch are one trigger written twice, so collapse them. Don't restate identity the body already carries.
+- **No-op test.** Before adding a line, ask: does this change behavior versus the model's default? If not, cut it — whole sentences, not trimmed words. Two people disagreeing about a no-op are
+  disagreeing about the default; settle it by running the document, not by debate.
+- **Steer positively.** A prohibition drags the banned behavior into context and makes it more available, not less. State the target behavior instead of the thing to avoid. Keep a prohibition only as
+  a hard guardrail you cannot phrase positively, and even then pair it with the positive target.
+- **Completion criteria.** Every step ends on a condition the agent can check itself against — done or not done, no judgment call. A demanding criterion ("every ticket accounted for") drives more
+  thorough work than a soft one ("produce a change list").
+- **Disclose by branch.** Material only some runs need goes to `references/` (or a sibling doc) behind a pointer, not inline in the main file. Inline what every branch needs; push behind a pointer
+  what only some branches reach.
+- **Single source of truth.** A rule stated in two skills is a drift bug waiting to happen — the two will diverge the next time one is edited and the other is missed. Point at the other skill/doc
+  instead of restating its rule.
 
-This is doc, not lint: a linter can check line count or attribution
-format, but cannot judge whether a sentence is a no-op. Treat this
-section itself under its own rules — if a future edit here doesn't change
-what an agent does, cut it.
+This is doc, not lint: a linter can check line count or attribution format, but cannot judge whether a sentence is a no-op. Treat this section itself under its own rules — if a future edit here
+doesn't change what an agent does, cut it.

@@ -1,26 +1,15 @@
 # Ethos — how this repo decides
 
-Prune before adding: this table is capped at 10 rows. Before adding a new
-row, check whether an existing row already covers it (fix that row's
-evidence instead) or whether a row has gone stale and can be cut. A row
-with no repo evidence does not belong here. The table below holds 11 rows:
-which one goes, or does the cap move?
+Prune before adding: this table is capped at 10 rows. Before adding a new row, check whether an existing row already covers it (fix that row's evidence instead) or whether a row has gone stale and can
+be cut. A row with no repo evidence does not belong here. The table below holds 11 rows: which one goes, or does the cap move?
 
-A profile of this project's decision preferences, built only from what has
-actually happened in this repo's own history. The point is to ask fewer
-questions over time: before asking a question this table plausibly already
-answers, check here; if a default below covers the decision, apply it, say
-which default you applied, and move on without asking.
+A profile of this project's decision preferences, built only from what has actually happened in this repo's own history. The point is to ask fewer questions over time: before asking a question this
+table plausibly already answers, check here; if a default below covers the decision, apply it, say which default you applied, and move on without asking.
 
-Every entry cites the commit, ticket, or fixture it was inferred from. When
-a new answer contradicts an existing default, the default is wrong — fix
-it in place, don't bolt an exception onto it.
+Every entry cites the commit, ticket, or fixture it was inferred from. When a new answer contradicts an existing default, the default is wrong — fix it in place, don't bolt an exception onto it.
 
-Before asking a "which approach" or "what should this do" question,
-classify it first: if the answer is a fact you could observe by running
-something (behavior, timing, output, whether an eval separates), it is not
-the owner's to answer — go observe it instead of asking. Reserve questions
-for a genuine preference or product call no experiment can settle.
+Before asking a "which approach" or "what should this do" question, classify it first: if the answer is a fact you could observe by running something (behavior, timing, output, whether an eval
+separates), it is not the owner's to answer — go observe it instead of asking. Reserve questions for a genuine preference or product call no experiment can settle.
 
 ## Defaults that can be assumed
 
@@ -44,8 +33,5 @@ Categories that stay a question regardless of how many defaults exist:
 
 - Anything that deletes data with no backup or undo path.
 - Spending money, or opening an account with an external provider.
-- Rotating a credential the owner/user manages by hand, where the system
-  doing the rotating can't also update the place that credential is used.
-- Changing what a system is fundamentally *for* — repurposing a host,
-  moving a service's role, anything that changes the answer to "what is
-  this thing" rather than "how does this thing work."
+- Rotating a credential the owner/user manages by hand, where the system doing the rotating can't also update the place that credential is used.
+- Changing what a system is fundamentally *for* — repurposing a host, moving a service's role, anything that changes the answer to "what is this thing" rather than "how does this thing work."
