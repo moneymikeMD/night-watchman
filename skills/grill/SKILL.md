@@ -63,10 +63,49 @@ first, "I don't know" allowed as an answer) and file an `executor: human`
 ticket that blocks the decisions downstream of it. Keep grilling the rest
 of the frontier in the meantime.
 
+## Adversarial review
+
+The first time the frontier empties, run this before asking the owner to
+confirm. An empty frontier proves only that the questions you thought of
+are answered.
+
+1. Write the settled plan to a scratch file as plain statements under
+   four headings: decisions, constraints the owner fixed, assumptions
+   applied without asking, known unknowns.
+2. In one message, start the checks that apply, so they run together:
+   - A fresh reviewer agent given only that file and the repo path — a
+     reviewer handed your suspicion returns it confirmed. Its brief: the
+     plan shipped and a month later the owner is annoyed; find what went
+     wrong. It walks every time and boundary case concretely, every race
+     between the plan and what already runs, every dependency one piece
+     assumes of another, and every outcome nobody could prove. Read-only.
+     Findings ranked, each with a concrete scenario, each marked checked
+     or reasoned.
+   - `researcher`, when the plan makes any claim about an external
+     interface (payload, attribute name, limit, version): given each
+     claim and told to refute it from a primary source.
+   - Your own read-only commands against each live system the plan
+     touches: whether the file, entity or endpoint it assumes exists, and
+     whether anything already there collides with it.
+3. Give every finding exactly one label:
+   - **Fact** — correct the plan and state the correction; no question.
+   - **Consequence of an owner decision** — show the owner the concrete
+     scenario and ask whether the decision stands.
+   - **New decision** — a frontier question.
+   - **Rejected** — one line saying why.
+4. Ask the second and third kinds as one more round, in round format.
+
+Done when every finding carries a label and that round is answered. Run
+the review again only when the answers added a component or an external
+interface the first review never saw. `to-issues` red-teams the ticket
+set afterwards; this review attacks the decisions, so a hole changes an
+answer instead of a ticket.
+
 ## Stop condition
 
-The frontier is empty and the owner confirms shared understanding. Do not
-start implementation inside this skill.
+The frontier is empty, the adversarial review's round is answered, and
+the owner confirms shared understanding. Do not start implementation
+inside this skill.
 
 ## Record as you go
 
@@ -80,8 +119,8 @@ start implementation inside this skill.
 
 ## Hand-off
 
-Once the frontier is empty, call the Skill tool with `to-issues` so the
-settled decisions become independently-workable tickets before this
+Once the stop condition holds, call the Skill tool with `to-issues` so
+the settled decisions become independently-workable tickets before this
 session's context is gone.
 
 Adapted from mattpocock/skills grilling, grill-me, grill-with-docs,
