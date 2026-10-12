@@ -5,12 +5,13 @@
 # ticket's brief. Optional layer: this plugin does not ship or require Herdr.
 #
 # Usage:
-#   herdr-ticket-start.sh <ticket-id> --jira-progress-status ID [--model sonnet|opus|haiku] [--timebox TEXT] [--forbidden TEXT]... [--wait|--no-wait] [--dry-run]
+#   herdr-ticket-start.sh <ticket-id> --jira-progress-status ID [--model sonnet|opus|haiku] [--timebox TEXT] [--forbidden TEXT]... [--orchestrator ID] [--wait|--no-wait] [--dry-run]
 #   herdr-ticket-start.sh --help
 #
 # <ticket-id> is matched case-insensitively. The title and executor always
-# come from the tracker, never a local file. The branch, the herdr worktree
-# label and the herdr agent name are all the LOWERCASED id (e.g. proj-123).
+# come from the tracker, never a local file. The branch and the herdr agent
+# name are the LOWERCASED id (e.g. proj-123); the worktree label is
+# "<orchestrator id> · <TICKET> <title>", or "<TICKET> <title>" with no id.
 #
 # Flags:
 #   --model                 sonnet (default), opus or haiku. Anything else is
@@ -21,6 +22,10 @@
 #                           exists: every tracker's workflow ids differ.
 #   --timebox TEXT          the brief's TIMEBOX line.
 #   --forbidden TEXT        the brief's FORBIDDEN lines; repeatable.
+#   --orchestrator ID       herdr workspace id of the dispatching orchestrator,
+#                           shown first in the worker's label. Defaults to
+#                           $HERDR_WORKSPACE_ID; absent when neither is set.
+#                           Refused unless it looks like a workspace id (w57).
 #   --wait                  block until the agent settles (up to an hour).
 #   --no-wait               hand off and return with no confirmation.
 #   (default)               bounded: --wait --until working --timeout 60000.
@@ -42,7 +47,8 @@
 # Already In Progress is a no-op.
 #
 # Refusals, checked in this order, before anything is created:
-#   1. bad --model, or --jira-progress-status missing or not numeric
+#   1. bad --model, or --jira-progress-status missing or not numeric, or an
+#      orchestrator id that is not a herdr workspace id
 #   2. HERDR_ENV is not "1"
 #   3. the issue's executor field is `human` (`mixed` dispatches like `agent`)
 #   4. the branch already exists, as a herdr worktree or a bare local branch
@@ -70,6 +76,7 @@
 #                     JIRA_HOST=127.0.0.1 for any test — never point a test
 #                     wrapper at a live host.
 #   HERDR_ENV         must be "1".
+#   HERDR_WORKSPACE_ID   the orchestrator id when --orchestrator is not given.
 #   HERDR_JIRA_PROGRESS_STATUS   --jira-progress-status wins over it.
 #   HERDR_BRIEF_TEMPLATE         overrides the brief template path.
 #   NW_DRY_RUN        "1" behaves as --dry-run.
@@ -97,6 +104,7 @@ PROGRESS_STATUS="${HERDR_JIRA_PROGRESS_STATUS:-}"
 BRIEF_TEMPLATE="${HERDR_BRIEF_TEMPLATE:-$HERE/../../../templates/dispatch-brief.md}"
 TIMEBOX=""
 FORBIDDEN=""
+ORCHESTRATOR=""
 
 TICKET_ARG=""
 MODEL="sonnet"
@@ -132,6 +140,11 @@ while [ $# -gt 0 ]; do
             FORBIDDEN="${FORBIDDEN:+$FORBIDDEN$'\n'}- $2"
             shift 2
             ;;
+        --orchestrator)
+            [ $# -ge 2 ] || die "--orchestrator needs a herdr workspace id, e.g. w1N"
+            ORCHESTRATOR="$2"
+            shift 2
+            ;;
         --dry-run) DRY_RUN=1; shift ;;
         --wait) WAIT_MODE="full"; shift ;;
         --no-wait) WAIT_MODE="none"; shift ;;
@@ -153,6 +166,16 @@ esac
 [ -n "$PROGRESS_STATUS" ] || die "--jira-progress-status is required (or \$HERDR_JIRA_PROGRESS_STATUS) — the STATUS id of In Progress (e.g. 3), not a transition id (e.g. 21); no default exists across trackers"
 case "$PROGRESS_STATUS" in
     *[!0-9]*) die "--jira-progress-status must be numeric (got '$PROGRESS_STATUS')" ;;
+esac
+
+ORCH_SOURCE="--orchestrator"
+if [ -z "$ORCHESTRATOR" ] && [ -n "${HERDR_WORKSPACE_ID:-}" ]; then
+    ORCHESTRATOR="$HERDR_WORKSPACE_ID"
+    ORCH_SOURCE="\$HERDR_WORKSPACE_ID"
+fi
+case "$ORCHESTRATOR" in
+    '') ;;
+    *[!A-Za-z0-9]* | [!w]* | w) die "$ORCH_SOURCE '$ORCHESTRATOR' does not look like a herdr workspace id (expected w followed by letters or digits, e.g. w1N)" ;;
 esac
 
 [ "${HERDR_ENV:-}" = "1" ] || die "HERDR_ENV is not 1 — this must run inside a Herdr-managed session"
@@ -322,7 +345,7 @@ $(cat "$JIRA_ERR" 2>/dev/null)"
     esac
 fi
 
-LABEL="$TICKET_UPPER $TITLE"
+LABEL="${ORCHESTRATOR:+$ORCHESTRATOR · }$TICKET_UPPER $TITLE"
 
 PROMPT_ARGS=()
 case "$WAIT_MODE" in

@@ -324,6 +324,11 @@ run_sut() {
     [ "${RUN_SUT_NO_BRIEF:-0}" = 1 ] && brief_flags=()
     set -- ${brief_flags[@]+"${brief_flags[@]}"} "$@"
     unset NW_CONFIG NW_ROOT
+    if [ -n "${RUN_SUT_WORKSPACE_ID:-}" ]; then
+        export HERDR_WORKSPACE_ID="$RUN_SUT_WORKSPACE_ID"
+    else
+        unset HERDR_WORKSPACE_ID
+    fi
     if [ "${RUN_SUT_NO_PROGRESS:-0}" = 1 ]; then
         ( cd "$repo/$SUT_REL" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
             STUB_JIRA_LOG="${STUB_JIRA_LOG:-$repo/jira.log}" \
@@ -1068,6 +1073,56 @@ scenario_brief_dry_run() {
     assert_eq "B0 prompt calls" "0" "$(call_count "$repo/herdr.log" "agent prompt")"
 }
 
+# O0..O5 — the worktree label names the orchestrator that dispatched it:
+# flag, env var, flag over env var, neither, a malformed id, and the real
+# (non --dry-run) create call. Branch and agent name stay the ticket id.
+scenario_label_orchestrator() {
+    local repo out rc log
+    repo=$(make_repo) || { echo "FAIL: O setup" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10020 "Scratch label ticket"
+    install_stub_herdr "$repo"
+    log="$repo/herdr.log"; : > "$log"
+
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" \
+        run_sut "$repo" PROJ-950 1 --orchestrator wQQ --dry-run) && rc=0 || rc=$?
+    assert_eq "O0 flag exit code" "0" "$rc"
+    assert_contains "O0 flag label" "$out" '--label "wQQ · PROJ-950 Scratch label ticket"'
+    assert_contains "O0 branch stays the ticket id" "$out" '--branch "proj-950"'
+
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_WORKSPACE_ID=wZZ \
+        run_sut "$repo" PROJ-950 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "O1 env exit code" "0" "$rc"
+    assert_contains "O1 env label" "$out" '--label "wZZ · PROJ-950 Scratch label ticket"'
+
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_WORKSPACE_ID=wZZ \
+        run_sut "$repo" PROJ-950 1 --orchestrator wQQ --dry-run) && rc=0 || rc=$?
+    assert_eq "O2 flag-over-env exit code" "0" "$rc"
+    assert_contains "O2 flag wins over env" "$out" '--label "wQQ · PROJ-950 Scratch label ticket"'
+    assert_not_contains "O2 env id absent" "$out" "wZZ"
+
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" \
+        run_sut "$repo" PROJ-950 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "O3 neither exit code" "0" "$rc"
+    assert_contains "O3 label is ticket and title only" "$out" '--label "PROJ-950 Scratch label ticket"'
+    assert_not_contains "O3 no separator" "$out" " · "
+
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" \
+        run_sut "$repo" PROJ-950 1 --orchestrator "w1S:p1" --dry-run) && rc=0 || rc=$?
+    assert_nonzero "O4 pane id refused" "$rc"
+    assert_contains "O4 refusal names the id" "$out" "does not look like a herdr workspace id"
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_WORKSPACE_ID="not-a-workspace" \
+        run_sut "$repo" PROJ-950 1 --dry-run) && rc=0 || rc=$?
+    assert_nonzero "O4 malformed env refused" "$rc"
+    assert_eq "O4 nothing created" "0" "$(call_count "$log" "worktree create")"
+
+    out=$(STUB_HERDR_LOG="$log" STUB_LIST_JSON="$EMPTY_LIST" STUB_CREATE_JSON="$CREATE_FIXTURE_JSON" \
+        run_sut "$repo" PROJ-950 1 --orchestrator wQQ) && rc=0 || rc=$?
+    assert_eq "O5 real start exit code" "0" "$rc"
+    assert_contains "O5 create carries the label" "$(grep '^worktree create' "$log" || true)" "--label wQQ · PROJ-950 Scratch label ticket"
+    assert_contains "O5 create branch is the ticket id" "$(grep '^worktree create' "$log" || true)" "--branch proj-950"
+    assert_contains "O5 agent start name is the ticket id" "$(grep '^agent start' "$log" || true)" "agent start proj-950 "
+}
+
 # B1 — the real prompt carries the rendered brief with no unfilled placeholder.
 scenario_brief_sent() {
     local repo log out rc
@@ -1175,6 +1230,7 @@ scenario_lifecycle_readback_stuck
 scenario_lifecycle_missing_status_flag
 scenario_lifecycle_no_matching_transition
 scenario_brief_dry_run
+scenario_label_orchestrator
 scenario_brief_sent
 scenario_brief_missing_field
 scenario_brief_status_hint
