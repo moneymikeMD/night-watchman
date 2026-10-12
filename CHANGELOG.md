@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.12.0](https://github.com/moneymikeMD/night-watchman/compare/v1.11.0...v1.12.0) (2026-10-12)
+
+
+### Features
+
+* **skills:** session-start says when to run a self-referencing verify and what a spec-review verdict covers ([#131](https://github.com/moneymikeMD/night-watchman/issues/131)) ([2cebe21](https://github.com/moneymikeMD/night-watchman/commit/2cebe210a7c66019b8805323ba73c1d0f2ea22c9))
+
 ## [1.11.0](https://github.com/moneymikeMD/night-watchman/compare/v1.10.0...v1.11.0) (2026-10-12)
 
 
