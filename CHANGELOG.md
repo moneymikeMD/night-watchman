@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here.
 
+## [1.11.0](https://github.com/moneymikeMD/night-watchman/compare/v1.10.0...v1.11.0) (2026-10-12)
+
+
+### Features
+
+* grill runs an adversarial review before the owner confirms ([#125](https://github.com/moneymikeMD/night-watchman/issues/125)) ([5a9b702](https://github.com/moneymikeMD/night-watchman/commit/5a9b7028488e7c5979709b4b46b8418e64ebea4d))
+* herdr-ticket-start.sh labels a worker with its orchestrator's workspace id ([#127](https://github.com/moneymikeMD/night-watchman/issues/127)) ([025bc4c](https://github.com/moneymikeMD/night-watchman/commit/025bc4c84b23b13961916166087d1efe617c672d))
+
 ## [1.10.0](https://github.com/moneymikeMD/night-watchman/compare/v1.9.1...v1.10.0) (2026-10-09)
 
 
