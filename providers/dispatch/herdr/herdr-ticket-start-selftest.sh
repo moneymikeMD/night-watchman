@@ -751,7 +751,7 @@ scenario_herdr_missing() {
     local repo rc
     repo=$(make_repo) || { echo "FAIL: F0 setup (make_repo)" >&2; FAIL=1; return; }
 
-    ( cd "$repo/$SUT_REL" && HERDR_ENV=1 PATH="/usr/bin:/bin" ./herdr-ticket-start.sh PROJ-950 --jira-api "$repo/bin/jira-api-stub.sh" --jira-progress-status 3 ) \
+    ( cd "$repo/$SUT_REL" && unset HERDR_WORKSPACE_ID && HERDR_ENV=1 PATH="/usr/bin:/bin" ./herdr-ticket-start.sh PROJ-950 --jira-api "$repo/bin/jira-api-stub.sh" --jira-progress-status 3 ) \
         >/dev/null 2>&1 && rc=0 || rc=$?
 
     assert_eq "F0 exit code is 2 (could not evaluate)" "2" "$rc"
