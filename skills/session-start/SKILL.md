@@ -145,6 +145,10 @@ When the reports come back:
 - On any agent-executed ticket, run `spec-reviewer` against the ticket and
   its branch before landing. LAND AFTER FIXES or DO NOT LAND stops
   land-branch until the branch's own worker addresses the findings.
+- **A verdict covers the commit the reviewer was given**, which its verdict
+  line names as `reviewed head <sha>`. A commit added after it gets a
+  re-review before landing, or the landing note records both: `reviewed
+  <sha>; <sha2> checked by diff and CI`.
 - **A spec-review brief carries the ticket-specific concerns only.** The
   repo's required checks are assumed, not listed: `spec-reviewer` discovers
   and runs them itself before any verdict, so enumerating them in the brief
@@ -163,13 +167,23 @@ When the reports come back:
   the tracker. `land-branch.sh <branch> <ticket> --already-merged` runs that
   half alone: it proves the work is on the target first, then transitions,
   writes the closing state and cleans up, merging and pushing nothing.
+- **A verify that runs the dispatch script on the ticket's own id passes
+  only once the worker's workspace is gone.** While that workspace is open
+  the script exits at its idempotency check, before it builds a plan. Land
+  with `land-branch.sh <branch> <ticket> --no-complete` (plus
+  `--already-merged` for a PR squash): that removes the workspace and the
+  branch and leaves the ticket at Awaiting Deployment. Run the verify from
+  the main checkout, post its output as a comment, then move the ticket to
+  Completed. A verify run against another ticket's id names that id in the
+  comment.
 - **The ticket lifecycle is the rule, and the scripts drive it** (see
   `tickets-protocol`): In Progress at dispatch
   (`${CLAUDE_PLUGIN_ROOT}/providers/dispatch/herdr/herdr-ticket-start.sh`,
   via `dispatch start`), Awaiting Deployment before landing and Completed
   after (`land-branch.sh`, with or without `--already-merged`). The
-  orchestrator never moves a ticket by hand except to repair a step a script
-  missed, and says so in a dated note on the ticket.
+  orchestrator moves a ticket by hand only to repair a step a script missed
+  or to complete one landed with `--no-complete`, and says so in a dated
+  note on the ticket.
 - Ticket verify fully MET → `librarian` completes it.
 - PARTIAL → post a dated note saying exactly which human steps remain;
   touch the ticket body only if the acceptance criteria moved; it stays put.

@@ -67,7 +67,8 @@ Then one row per finding, quoting the ticket line it checks against:
 A failed required check is its own row, with the check's name in the Finding
 cell and the first lines of its output quoted.
 
-End with a verdict, on its own line:
+End with a verdict, on its own line, followed by the commit it covers, as
+`reviewed head <full SHA>`:
 
 - **LAND** — every Solution item done, no UNDECLARED paths, no hollow verify,
   and no required check failed.
