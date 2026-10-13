@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.13.0](https://github.com/moneymikeMD/night-watchman/compare/v1.12.0...v1.13.0) (2026-10-13)
+
+
+### Features
+
+* **agents:** script-reviewer ends its report with a FINDINGS tally line (NWM-199) ([#133](https://github.com/moneymikeMD/night-watchman/issues/133)) ([c0852b7](https://github.com/moneymikeMD/night-watchman/commit/c0852b7c9abbe47fc50762f034e47079926f8c6b))
+
 ## [1.12.0](https://github.com/moneymikeMD/night-watchman/compare/v1.11.0...v1.12.0) (2026-10-12)
 
 
