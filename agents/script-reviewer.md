@@ -165,6 +165,11 @@ it. (Ported from pstack interrogate lead-judgment, 2026-09-14.)
 End with a verdict: SHIP, SHIP WITH FIXES (list which are blocking), or DO NOT
 RUN AGAINST A LIVE SYSTEM.
 
+Make the report's last line a tally, counting each finding once at its final
+severity, in exactly this form:
+`FINDINGS: CRITICAL=<n> HIGH=<n> MEDIUM=<n> LOW=<n>`. The ledger reads its
+counts from that line, so write all four numbers.
+
 **Report failures, not fixes.** Your deliverable is the failing case and its
 evidence: what input, what happened, what should have happened. If you propose
 code, label it `UNTESTED HYPOTHESIS` and keep it to one line; the author owns
