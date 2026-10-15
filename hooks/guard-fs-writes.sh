@@ -53,12 +53,6 @@
 # segment that is exactly `cd DIR`, ended by `;`, `&&` or a newline, makes DIR
 # the base for later relative targets; a DIR that does not resolve leaves it.
 #
-# GUARD_FS_WRITES_ALLOW_PREFIXES: colon-separated absolute path prefixes; a
-# target strictly UNDER one (symlinks resolved, so /tmp covers /private/tmp)
-# is exempt like the scratchpad. The prefix itself is never exempt. Relative
-# or too-broad entries (/, /Users, /home, /var, /private, /private/var, $HOME)
-# are ignored with a stderr note. Unset or empty changes nothing.
-#
 # Own tree: with a git repo at cwd, EVERY worktree of that repo (`git
 # worktree list`) counts as "my own tree", not just the one cwd itself sits
 # in — a call whose cwd drifted to a sibling worktree, or to the main one,
@@ -84,6 +78,7 @@
 # memory-graph (tag guard-fs-writes) and docs/known-issues/.
 #
 # Dependencies: bash 3.2, jq, git. It runs on every Bash call; keep it small.
+# Env: GUARD_FS_WRITES_ALLOW_PREFIXES, colon-separated; see parse_allow_prefixes.
 
 set -u
 
@@ -579,8 +574,10 @@ phys_path() {
   printf '%s%s' "$_pp_d" "$_pp_tail"
 }
 
-# ALLOW_PREFIXES: physical forms of the valid GUARD_FS_WRITES_ALLOW_PREFIXES
-# entries. Invalid entries are dropped with a stderr note, never widened.
+# GUARD_FS_WRITES_ALLOW_PREFIXES: absolute prefixes; targets strictly under one
+# (symlinks resolved) are exempt like the scratchpad, the prefix itself is not.
+# Relative or too-broad entries (/, /Users, /home, /var, /private, $HOME) are
+# dropped with a stderr note, never widened. Unset or empty changes nothing.
 ALLOW_PREFIXES=()
 parse_allow_prefixes() {
   [ -n "${GUARD_FS_WRITES_ALLOW_PREFIXES:-}" ] || return 0
