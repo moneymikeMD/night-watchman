@@ -78,6 +78,7 @@
 # memory-graph (tag guard-fs-writes) and docs/known-issues/.
 #
 # Dependencies: bash 3.2, jq, git. It runs on every Bash call; keep it small.
+# Env: GUARD_FS_WRITES_ALLOW_PREFIXES, colon-separated; see parse_allow_prefixes.
 
 set -u
 
@@ -558,6 +559,60 @@ is_under() {
   esac
 }
 
+# phys_path: symlink-resolved form of $1 without requiring it to exist — the
+# deepest existing ancestor goes through `pwd -P`, the missing tail is kept.
+phys_path() {
+  _pp_p="$1"
+  _pp_tail=""
+  while [ -n "$_pp_p" ] && [ "$_pp_p" != "/" ] && [ ! -d "$_pp_p" ]; do
+    _pp_tail="/${_pp_p##*/}$_pp_tail"
+    _pp_p="${_pp_p%/*}"
+  done
+  [ -n "$_pp_p" ] || _pp_p="/"
+  _pp_d="$(cd "$_pp_p" 2>/dev/null && pwd -P)" || { printf '%s' "$1"; return 0; }
+  [ "$_pp_d" = "/" ] && _pp_d=""
+  printf '%s%s' "$_pp_d" "$_pp_tail"
+}
+
+# GUARD_FS_WRITES_ALLOW_PREFIXES: absolute prefixes; targets strictly under one
+# (symlinks resolved) are exempt like the scratchpad, the prefix itself is not.
+# Relative or too-broad entries (/, /Users, /home, /var, /private, $HOME) are
+# dropped with a stderr note, never widened. Unset or empty changes nothing.
+ALLOW_PREFIXES=()
+parse_allow_prefixes() {
+  [ -n "${GUARD_FS_WRITES_ALLOW_PREFIXES:-}" ] || return 0
+  _ap_rest="$GUARD_FS_WRITES_ALLOW_PREFIXES:"
+  while [ -n "$_ap_rest" ]; do
+    _ap_e="${_ap_rest%%:*}"
+    _ap_rest="${_ap_rest#*:}"
+    [ -n "$_ap_e" ] || continue
+    case "$_ap_e" in
+      /*) ;;
+      *)
+        echo "guard-fs-writes.sh: GUARD_FS_WRITES_ALLOW_PREFIXES entry '$_ap_e' is not absolute — ignored" >&2
+        continue
+        ;;
+    esac
+    _ap_norm="$(normalize_path "$_ap_e")"
+    _ap_phys="$(phys_path "$_ap_norm")"
+    _ap_bad=0
+    for _ap_c in "$_ap_norm" "$_ap_phys"; do
+      case "$_ap_c" in
+        "/"|"/Users"|"/home"|"/var"|"/private"|"/private/var") _ap_bad=1 ;;
+      esac
+      if [ -n "${HOME:-}" ] && [ "$_ap_c" = "$HOME" ]; then
+        _ap_bad=1
+      fi
+    done
+    if [ "$_ap_bad" -eq 1 ]; then
+      echo "guard-fs-writes.sh: GUARD_FS_WRITES_ALLOW_PREFIXES entry '$_ap_e' is too broad — ignored" >&2
+      continue
+    fi
+    ALLOW_PREFIXES+=("$_ap_phys")
+  done
+}
+parse_allow_prefixes
+
 # _TIO_LAST_REASON says WHY target_is_outside returned "outside";
 # _TIO_LAST_RESOLVED carries the resolved path, so a block message can name
 # what was actually checked rather than the raw token.
@@ -641,6 +696,15 @@ candidate_is_outside() {
       /private/tmp/claude-*/*) return 1 ;;
       /tmp/claude-*/*) return 1 ;;
     esac
+  fi
+
+  if [ "${#ALLOW_PREFIXES[@]}" -gt 0 ]; then
+    _tio_phys="$(phys_path "$_tio_norm")"
+    for _tio_ap in "${ALLOW_PREFIXES[@]}"; do
+      case "$_tio_phys" in
+        "$_tio_ap"/*) return 1 ;;
+      esac
+    done
   fi
 
   _TIO_LAST_REASON="outside"
