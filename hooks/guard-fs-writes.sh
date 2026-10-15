@@ -53,6 +53,12 @@
 # segment that is exactly `cd DIR`, ended by `;`, `&&` or a newline, makes DIR
 # the base for later relative targets; a DIR that does not resolve leaves it.
 #
+# GUARD_FS_WRITES_ALLOW_PREFIXES: colon-separated absolute path prefixes; a
+# target strictly UNDER one (symlinks resolved, so /tmp covers /private/tmp)
+# is exempt like the scratchpad. The prefix itself is never exempt. Relative
+# or too-broad entries (/, /Users, /home, /var, /private, /private/var, $HOME)
+# are ignored with a stderr note. Unset or empty changes nothing.
+#
 # Own tree: with a git repo at cwd, EVERY worktree of that repo (`git
 # worktree list`) counts as "my own tree", not just the one cwd itself sits
 # in — a call whose cwd drifted to a sibling worktree, or to the main one,
@@ -558,6 +564,58 @@ is_under() {
   esac
 }
 
+# phys_path: symlink-resolved form of $1 without requiring it to exist — the
+# deepest existing ancestor goes through `pwd -P`, the missing tail is kept.
+phys_path() {
+  _pp_p="$1"
+  _pp_tail=""
+  while [ -n "$_pp_p" ] && [ "$_pp_p" != "/" ] && [ ! -d "$_pp_p" ]; do
+    _pp_tail="/${_pp_p##*/}$_pp_tail"
+    _pp_p="${_pp_p%/*}"
+  done
+  [ -n "$_pp_p" ] || _pp_p="/"
+  _pp_d="$(cd "$_pp_p" 2>/dev/null && pwd -P)" || { printf '%s' "$1"; return 0; }
+  [ "$_pp_d" = "/" ] && _pp_d=""
+  printf '%s%s' "$_pp_d" "$_pp_tail"
+}
+
+# ALLOW_PREFIXES: physical forms of the valid GUARD_FS_WRITES_ALLOW_PREFIXES
+# entries. Invalid entries are dropped with a stderr note, never widened.
+ALLOW_PREFIXES=()
+parse_allow_prefixes() {
+  [ -n "${GUARD_FS_WRITES_ALLOW_PREFIXES:-}" ] || return 0
+  _ap_rest="$GUARD_FS_WRITES_ALLOW_PREFIXES:"
+  while [ -n "$_ap_rest" ]; do
+    _ap_e="${_ap_rest%%:*}"
+    _ap_rest="${_ap_rest#*:}"
+    [ -n "$_ap_e" ] || continue
+    case "$_ap_e" in
+      /*) ;;
+      *)
+        echo "guard-fs-writes.sh: GUARD_FS_WRITES_ALLOW_PREFIXES entry '$_ap_e' is not absolute — ignored" >&2
+        continue
+        ;;
+    esac
+    _ap_norm="$(normalize_path "$_ap_e")"
+    _ap_phys="$(phys_path "$_ap_norm")"
+    _ap_bad=0
+    for _ap_c in "$_ap_norm" "$_ap_phys"; do
+      case "$_ap_c" in
+        "/"|"/Users"|"/home"|"/var"|"/private"|"/private/var") _ap_bad=1 ;;
+      esac
+      if [ -n "${HOME:-}" ] && [ "$_ap_c" = "$HOME" ]; then
+        _ap_bad=1
+      fi
+    done
+    if [ "$_ap_bad" -eq 1 ]; then
+      echo "guard-fs-writes.sh: GUARD_FS_WRITES_ALLOW_PREFIXES entry '$_ap_e' is too broad — ignored" >&2
+      continue
+    fi
+    ALLOW_PREFIXES+=("$_ap_phys")
+  done
+}
+parse_allow_prefixes
+
 # _TIO_LAST_REASON says WHY target_is_outside returned "outside";
 # _TIO_LAST_RESOLVED carries the resolved path, so a block message can name
 # what was actually checked rather than the raw token.
@@ -641,6 +699,15 @@ candidate_is_outside() {
       /private/tmp/claude-*/*) return 1 ;;
       /tmp/claude-*/*) return 1 ;;
     esac
+  fi
+
+  if [ "${#ALLOW_PREFIXES[@]}" -gt 0 ]; then
+    _tio_phys="$(phys_path "$_tio_norm")"
+    for _tio_ap in "${ALLOW_PREFIXES[@]}"; do
+      case "$_tio_phys" in
+        "$_tio_ap"/*) return 1 ;;
+      esac
+    done
   fi
 
   _TIO_LAST_REASON="outside"

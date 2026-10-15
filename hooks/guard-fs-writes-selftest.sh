@@ -911,6 +911,57 @@ assert_allow "retro FP3: 'cd <outside> || cmd' leaves the base, since cmd runs o
 assert_allow "retro FP3: a piped cd runs in a subshell and leaves the base" \
   "$FAKE_WORKTREE" "cd $OUTSIDE | true; echo x > ./y"
 
+# GUARD_FS_WRITES_ALLOW_PREFIXES: an env allowlist of writable prefixes.
+AL_ROOT="$SCRATCH/allow-root"
+AL_ALIAS="$SCRATCH/allow-alias"
+mkdir -p "$AL_ROOT/sub"
+ln -s "$AL_ROOT" "$AL_ALIAS"
+ln -s "$NOT_WORKTREE_NOT_SCRATCH" "$AL_ROOT/escape"
+AL_DIAG='target outside worktree and scratchpad'
+
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_allow "allowlist: rm -rf under a listed prefix is allowed" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/sub/x"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_allow "allowlist: mv into a listed prefix is allowed" \
+  "$FAKE_WORKTREE" "mv a $AL_ROOT/sub/b"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_allow "allowlist: a > redirect into a listed prefix is allowed" \
+  "$FAKE_WORKTREE" "echo hi > $AL_ROOT/sub/out.txt"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_allow "allowlist: find -delete under a listed prefix is allowed" \
+  "$FAKE_WORKTREE" "find $AL_ROOT/sub -name x -delete"
+GUARD_FS_WRITES_ALLOW_PREFIXES="/nope-not-here:$AL_ROOT" assert_allow "allowlist: a later entry in a colon list applies" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/sub/x"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ALIAS" assert_allow "allowlist: a symlinked prefix covers its real path (/tmp vs /private/tmp)" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/sub/x"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_allow "allowlist: a target spelled through a symlink to the prefix is allowed" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ALIAS/sub/x"
+
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_block "allowlist: the prefix itself is never a valid target" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT" "$AL_DIAG"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_block "allowlist: the prefix with a trailing slash is still the prefix" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/" "$AL_DIAG"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_block "allowlist: .. cannot escape a prefix" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/sub/../../outside-x" "$AL_DIAG"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_block "allowlist: a symlink inside a prefix cannot lead out of it" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/escape/x" "$AL_DIAG"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_block "allowlist: a sibling sharing the prefix string is not under it" \
+  "$FAKE_WORKTREE" "rm -rf ${AL_ROOT}-evil/x" "$AL_DIAG"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_block "allowlist: a path outside every prefix still blocks" \
+  "$FAKE_WORKTREE" "rm -rf $NOT_WORKTREE_NOT_SCRATCH/x" "$AL_DIAG"
+GUARD_FS_WRITES_ALLOW_PREFIXES="" assert_block "allowlist: empty value is today's behaviour" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/sub/x" "$AL_DIAG"
+GUARD_FS_WRITES_ALLOW_PREFIXES="relative/dir" assert_block "allowlist: a relative entry is ignored and widens nothing" \
+  "$FAKE_WORKTREE" "rm -rf $FAKE_WORKTREE/../allow-root/sub/x" "ALLOW_PREFIXES entry 'relative/dir' is not absolute"
+GUARD_FS_WRITES_ALLOW_PREFIXES="/" assert_block "allowlist: / is refused as a prefix" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/sub/x" "entry '/' is too broad"
+for _al_bad in /Users /home /var /private/var; do
+  GUARD_FS_WRITES_ALLOW_PREFIXES="$_al_bad" assert_block "allowlist: $_al_bad is refused as a prefix" \
+    "$FAKE_WORKTREE" "rm -rf $_al_bad/guard-selftest-x" "entry '$_al_bad' is too broad"
+done
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT/../allow-root/" assert_allow "allowlist: a prefix is normalized before use" \
+  "$FAKE_WORKTREE" "rm -rf $AL_ROOT/sub/x"
+GUARD_FS_WRITES_ALLOW_PREFIXES="$AL_ROOT" assert_block "allowlist: a git stash on the main worktree stays blocked" \
+  "$FAKE_WORKTREE" "git stash" "git stash"
+
+
 # NWM-122 re-entrancy oracle. The three mutually recursive scanners keep their
 # per-call state in bash `local`, whose DYNAMIC scope is the whole reason
 # re-entry is safe. These assertions are the only thing checking that, and they
