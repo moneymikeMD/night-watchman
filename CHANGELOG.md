@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.14.0](https://github.com/moneymikeMD/night-watchman/compare/v1.13.0...v1.14.0) (2026-10-15)
+
+
+### Features
+
+* **hooks:** guard-fs-writes honours GUARD_FS_WRITES_ALLOW_PREFIXES ([#135](https://github.com/moneymikeMD/night-watchman/issues/135)) ([73a3d29](https://github.com/moneymikeMD/night-watchman/commit/73a3d2977961daf11baeb84e9664a3136eff443f))
+
 ## [1.13.0](https://github.com/moneymikeMD/night-watchman/compare/v1.12.0...v1.13.0) (2026-10-13)
 
 
