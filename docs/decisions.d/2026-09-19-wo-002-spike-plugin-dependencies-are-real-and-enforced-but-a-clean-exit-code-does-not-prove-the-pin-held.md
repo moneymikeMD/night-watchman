@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 3
-slug: 2026-09-19-wo-002-spike-plugin-dependencies-are-real-and-enforced-but-a-clean-exit-code-does-not-prove-the-pin-held
+slug: wo-002-spike-plugin-dependencies-are-real-and-enforced-but-a-clean-exit-code-does-not-prove-the-pin-held
 title: "WO-002 spike: plugin dependencies are real and enforced, but a clean exit code does not prove the pin held"
+migrated: true
 ---
+
+# WO-002 spike: plugin dependencies are real and enforced, but a clean exit code does not prove the pin held
+
+## Decision
 
 Measured first-hand on the Mac against Claude Code 2.1.278, using two
 throwaway local-folder marketplaces and four scratch plugins; no real
@@ -65,3 +69,11 @@ Not measured: whether a plugin carrying a dependency error fails to load in
 a live session, and dependency resolution from a real remote GitHub
 marketplace. Local-folder marketplaces resolve tags only when the folder is
 a git repository.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

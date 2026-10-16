@@ -1,9 +1,13 @@
 ---
 date: 2026-09-18
-level: 3
-slug: 2026-09-18-known-issues-is-one-file-per-entry-with-a-generated-index
+slug: known-issues-is-one-file-per-entry-with-a-generated-index
 title: "known-issues is one file per entry with a GENERATED index"
+migrated: true
 ---
+
+# known-issues is one file per entry with a GENERATED index
+
+## Decision
 
 `docs/known-issues/` holds one markdown file per finding, and
 `docs/known-issues.md` is an index rendered from their frontmatter by
@@ -21,3 +25,11 @@ becomes invisible in the table with no error and nothing to notice it by.
 A generated index cannot lose an entry: `reindex` either lists every entry
 file or does not run at all, and `lint` fails when `docs/known-issues.md` is
 not byte-identical to what `reindex` would produce right now.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

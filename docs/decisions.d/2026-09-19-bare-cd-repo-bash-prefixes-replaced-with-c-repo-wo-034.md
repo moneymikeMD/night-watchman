@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 2
-slug: 2026-09-19-bare-cd-repo-bash-prefixes-replaced-with-c-repo-wo-034
+slug: bare-cd-repo-bash-prefixes-replaced-with-c-repo-wo-034
 title: "Bare `cd <repo> &&`/`;` Bash prefixes replaced with `-C`/`--repo` (WO-034)"
+migrated: true
 ---
+
+# Bare `cd <repo> &&`/`;` Bash prefixes replaced with `-C`/`--repo` (WO-034)
+
+## Decision
 
 Baseline measured over the full transcript corpus on 2026-09-19 (WO-033,
 memory `c3a3f04e`): 3,561 Bash calls carried a leading `cd` that no tool
@@ -26,3 +30,11 @@ every Bash command, and a rewriter on that seam has already produced guard
 false positives. A second rewriter there is something to earn with evidence
 from a re-run of the WO-033 report against this baseline, not assume up
 front.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

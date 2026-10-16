@@ -1,9 +1,13 @@
 ---
 date: 2026-09-18
-level: 2
-slug: 2026-09-18-github-repo-hardening-ci-on-macos-release-please-a-ruleset-that-points-at-a-branch-that-exists
+slug: github-repo-hardening-ci-on-macos-release-please-a-ruleset-that-points-at-a-branch-that-exists
 title: "GitHub repo hardening: CI on macOS, release-please, a ruleset that points at a branch that exists"
+migrated: true
 ---
+
+# GitHub repo hardening: CI on macOS, release-please, a ruleset that points at a branch that exists
+
+## Decision
 
 Both branch rulesets target `~DEFAULT_BRANCH`, never a literal branch name,
 so a default-branch rename cannot silently unprotect `main`.
@@ -34,3 +38,11 @@ needs a one-time Actions permission grant from the owner's own terminal
 ("Read and write permissions" plus "Allow GitHub Actions to create and
 approve pull requests"); without it the action creates its release branch
 and then fails to open the PR.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

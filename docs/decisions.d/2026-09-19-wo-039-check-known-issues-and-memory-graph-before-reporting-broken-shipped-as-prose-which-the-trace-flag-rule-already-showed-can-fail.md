@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 3
-slug: 2026-09-19-wo-039-check-known-issues-and-memory-graph-before-reporting-broken-shipped-as-prose-which-the-trace-flag-rule-already-showed-can-fail
+slug: wo-039-check-known-issues-and-memory-graph-before-reporting-broken-shipped-as-prose-which-the-trace-flag-rule-already-showed-can-fail
 title: "WO-039: check known-issues and memory-graph before reporting broken — shipped as prose, which the trace-flag rule already showed can fail"
+migrated: true
 ---
+
+# WO-039: check known-issues and memory-graph before reporting broken — shipped as prose, which the trace-flag rule already showed can fail
+
+## Decision
 
 An agent reporting something as broken, denied, or unexplained when the
 answer is already on disk — a `docs/known-issues/` entry, or a merge status
@@ -38,3 +42,11 @@ redirect-target signal the guard checks; building that detector well enough
 to avoid false positives is its own piece of work. Revisit this, including
 possibly reverting the prose version, if recurrence shows prose does not
 hold here either.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 2
-slug: 2026-09-19-wo-026-the-workflow-tool-becomes-the-default-dispatch-implementation-herdr-becomes-the-fallback
+slug: wo-026-the-workflow-tool-becomes-the-default-dispatch-implementation-herdr-becomes-the-fallback
 title: "WO-026: the Workflow tool becomes the default `dispatch` implementation, herdr becomes the fallback"
+migrated: true
 ---
+
+# WO-026: the Workflow tool becomes the default `dispatch` implementation, herdr becomes the fallback
+
+## Decision
 
 `providers/dispatch/` was a provider-neutral contract with exactly one
 implementation, herdr, which made the seam an argument rather than a tested
@@ -51,3 +55,11 @@ refuses before reading anything.
 kind equals the built-in default. This repo's own
 `.night-watchman/config.toml` and the owner's `~/.config/night-watchman/nwm.toml`
 select `workflow`.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

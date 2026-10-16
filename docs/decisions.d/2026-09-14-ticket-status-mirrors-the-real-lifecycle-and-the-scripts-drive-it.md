@@ -1,9 +1,13 @@
 ---
 date: 2026-09-14
-level: 3
-slug: 2026-09-14-ticket-status-mirrors-the-real-lifecycle-and-the-scripts-drive-it
+slug: ticket-status-mirrors-the-real-lifecycle-and-the-scripts-drive-it
 title: "Ticket status mirrors the real lifecycle, and the scripts drive it"
+migrated: true
 ---
+
+# Ticket status mirrors the real lifecycle, and the scripts drive it
+
+## Decision
 
 Owner rule: a ticket is In Progress from the moment it is dispatched (or a
 workspace/pane is created for it), Awaiting Deployment before landing, and
@@ -16,3 +20,11 @@ Deployment is the state "merged but not yet proven", and land-branch's push
 is the deploy, so it is a mandatory stop even for tickets with nothing else
 to deploy. Dispatch start and land-branch drive the three transitions
 through the tracker seam, resolved by target status.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

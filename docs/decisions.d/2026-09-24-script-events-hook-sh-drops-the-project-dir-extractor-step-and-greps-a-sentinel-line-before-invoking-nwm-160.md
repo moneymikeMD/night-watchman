@@ -1,9 +1,13 @@
 ---
 date: 2026-09-24
-level: 3
-slug: 2026-09-24-script-events-hook-sh-drops-the-project-dir-extractor-step-and-greps-a-sentinel-line-before-invoking-nwm-160
+slug: script-events-hook-sh-drops-the-project-dir-extractor-step-and-greps-a-sentinel-line-before-invoking-nwm-160
 title: "script-events-hook.sh drops the project-dir extractor step and greps a sentinel line before invoking (NWM-160)"
+migrated: true
 ---
+
+# script-events-hook.sh drops the project-dir extractor step and greps a sentinel line before invoking (NWM-160)
+
+## Decision
 
 Owner decision. The consuming project's own `scripts/script-analytics.py`
 is not a candidate in `hooks/script-events-hook.sh`'s chain: this hook is
@@ -16,3 +20,11 @@ rather than "`--help` prints a marker", because executing an unknown file to
 ask whether it is the extractor is the hazard the check exists to close.
 Neither this checkout nor the installed plugin carries an extractor, so the
 chain ends at ai-toolkit's for everyone.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

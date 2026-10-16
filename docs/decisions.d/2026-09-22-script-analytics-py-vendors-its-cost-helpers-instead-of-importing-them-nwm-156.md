@@ -1,9 +1,13 @@
 ---
 date: 2026-09-22
-level: 3
-slug: 2026-09-22-script-analytics-py-vendors-its-cost-helpers-instead-of-importing-them-nwm-156
+slug: script-analytics-py-vendors-its-cost-helpers-instead-of-importing-them-nwm-156
 title: "script-analytics.py vendors its cost helpers instead of importing them (NWM-156)"
+migrated: true
 ---
+
+# script-analytics.py vendors its cost helpers instead of importing them (NWM-156)
+
+## Decision
 
 The 85 lines script-analytics.py needs from claude-cost.py and
 claude-cost-scan.py are copies inside it, not `importlib` loads of two
@@ -31,3 +35,11 @@ The general lesson: a migration must count `$PROJECT_DIR` paths as a
 consumer surface alongside `${CLAUDE_PLUGIN_ROOT}` ones, and the
 `$PROJECT_DIR` kind is worse, because it fails for consumers rather than
 installers and a fail-open hook leaves no error behind.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

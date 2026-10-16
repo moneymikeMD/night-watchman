@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 3
-slug: 2026-09-19-nwm-123-was-undispatchable-because-its-contract-lived-in-prose-not-in-fields
+slug: nwm-123-was-undispatchable-because-its-contract-lived-in-prose-not-in-fields
 title: "NWM-123 was undispatchable because its contract lived in prose, not in fields"
+migrated: true
 ---
+
+# NWM-123 was undispatchable because its contract lived in prose, not in fields
+
+## Decision
 
 A ticket whose `verify:` and `executor:` are written as prose in the body
 while the structured fields are empty is permanently undispatchable and
@@ -18,3 +22,11 @@ The rule that follows: a ticket captured from a conversation carries its
 contract as fields, not sentences, and a verify clause asserts stderr as
 well as exit codes and includes a case the fix could not pass by refusing
 everything — the failure mode a guard fix is most likely to have.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

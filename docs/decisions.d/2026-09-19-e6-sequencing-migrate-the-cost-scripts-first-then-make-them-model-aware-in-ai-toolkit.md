@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 2
-slug: 2026-09-19-e6-sequencing-migrate-the-cost-scripts-first-then-make-them-model-aware-in-ai-toolkit
+slug: e6-sequencing-migrate-the-cost-scripts-first-then-make-them-model-aware-in-ai-toolkit
 title: "E6 sequencing: migrate the cost scripts first, then make them model-aware in ai-toolkit"
+migrated: true
 ---
+
+# E6 sequencing: migrate the cost scripts first, then make them model-aware in ai-toolkit
+
+## Decision
 
 NWM-119 (record the orchestrator's model and effort per wave, so the ledger
 shows what Fable costs against Opus-at-high-effort) and NWM-129 (move
@@ -21,3 +25,11 @@ into a private repo and then moving it a ticket later, the same mistake
 NWM-126 corrected for `comment-lint.py`. What stays here is the product
 half: the ledger file, `docs/cost.md`'s prose, and the `cost-reviewer`
 agent.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

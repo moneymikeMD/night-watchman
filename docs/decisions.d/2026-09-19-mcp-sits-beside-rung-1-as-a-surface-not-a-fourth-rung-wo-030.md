@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 3
-slug: 2026-09-19-mcp-sits-beside-rung-1-as-a-surface-not-a-fourth-rung-wo-030
+slug: mcp-sits-beside-rung-1-as-a-surface-not-a-fourth-rung-wo-030
 title: "MCP sits beside rung 1 as a surface, not a fourth rung (WO-030)"
+migrated: true
 ---
+
+# MCP sits beside rung 1 as a surface, not a fourth rung (WO-030)
+
+## Decision
 
 `skills/capability-ladder/SKILL.md`: a script can carry a typed, callable
 MCP surface without becoming a new rung. Placed beside rung 1, not above or
@@ -34,3 +38,11 @@ that already works standalone, so exposing it stays reversible. The
 laundering hazard is named in the skill itself: a tool that reaches an
 action its script can't, or carries a flag bypassing a check the script
 enforces, is a permission bypass wearing an interface.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

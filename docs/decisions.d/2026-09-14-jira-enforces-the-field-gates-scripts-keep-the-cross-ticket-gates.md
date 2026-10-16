@@ -1,9 +1,13 @@
 ---
 date: 2026-09-14
-level: 3
-slug: 2026-09-14-jira-enforces-the-field-gates-scripts-keep-the-cross-ticket-gates
+slug: jira-enforces-the-field-gates-scripts-keep-the-cross-ticket-gates
 title: "Jira enforces the field gates; scripts keep the cross-ticket gates"
+migrated: true
 ---
+
+# Jira enforces the field gates; scripts keep the cross-ticket gates
+
+## Decision
 
 Owner decision: adopt four Jira-native rules — `system:validate-field-value`
 for a non-empty `verify` on To Do→In Progress and on every transition into
@@ -28,3 +32,11 @@ UNVERIFIED.
 Implementation: the rules live in the Universal Managed workflows that
 work-order provisions (`plugins/work-order-jira/universal-apply.sh`, with
 `universal-switch.sh` moving a project onto them). The Automation rule is a UI step.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

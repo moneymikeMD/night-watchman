@@ -1,9 +1,13 @@
 ---
 date: 2026-09-20
-level: 3
-slug: 2026-09-20-wo-010-night-watchman-depends-on-work-order-v1-3-0-and-deletes-its-own-ticket-contract-copies
+slug: wo-010-night-watchman-depends-on-work-order-v1-3-0-and-deletes-its-own-ticket-contract-copies
 title: "WO-010: night-watchman depends on work-order v1.3.0 and deletes its own ticket-contract copies"
+migrated: true
 ---
+
+# WO-010: night-watchman depends on work-order v1.3.0 and deletes its own ticket-contract copies
+
+## Decision
 
 night-watchman does not carry the ticket contract. `.claude-plugin/plugin.json`
 declares `work-order ^1.3.0` from the `moneymike-plugins` marketplace, and
@@ -32,3 +36,11 @@ Not deleted: `skills/to-issues/assets/ticket-template.md`. work-order ships
 `SPEC.md`, `bindings/file/BINDING.md` and example tickets, but no bare
 template, so deleting it would remove something the dependency does not
 replace. It stays until work-order carries an equivalent.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

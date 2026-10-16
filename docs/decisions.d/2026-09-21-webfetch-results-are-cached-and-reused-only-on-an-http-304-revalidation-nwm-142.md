@@ -1,9 +1,13 @@
 ---
 date: 2026-09-21
-level: 3
-slug: 2026-09-21-webfetch-results-are-cached-and-reused-only-on-an-http-304-revalidation-nwm-142
+slug: webfetch-results-are-cached-and-reused-only-on-an-http-304-revalidation-nwm-142
 title: "WebFetch results are cached and reused only on an HTTP 304 revalidation (NWM-142)"
+migrated: true
 ---
+
+# WebFetch results are cached and reused only on an HTTP 304 revalidation (NWM-142)
+
+## Decision
 
 The mechanism, adopted from `addyosmani/agent-skills` (`hooks/sdd-cache-pre.sh`
 and `sdd-cache-post.sh`, audited 2026-09-20): a PreToolUse hook matching
@@ -61,3 +65,11 @@ correctness bug. The credentialed-URL match is over-broad on purpose — the
 substrings are looked for anywhere in the query string, so `author=` and
 `session_type=` also opt a URL out — because a false positive costs one refetch
 and a false negative puts a credential on disk.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

@@ -1,9 +1,13 @@
 ---
 date: 2026-09-23
-level: 3
-slug: 2026-09-23-land-branch-sh-becomes-a-wrapper-over-ai-toolkit-s-land-core-sh-and-is-its-own-hook-nwm-131
+slug: land-branch-sh-becomes-a-wrapper-over-ai-toolkit-s-land-core-sh-and-is-its-own-hook-nwm-131
 title: "land-branch.sh becomes a wrapper over ai-toolkit's land-core.sh, and is its own hook (NWM-131)"
+migrated: true
 ---
+
+# land-branch.sh becomes a wrapper over ai-toolkit's land-core.sh, and is its own hook (NWM-131)
+
+## Decision
 
 `scripts/land-branch.sh` stays here, at the same plugin-root path, as a
 wrapper: its preflight (argument checks, ticket resolution, tracker status,
@@ -40,3 +44,11 @@ through `--allow-untracked PATH` (an exact `?? PATH` porcelain line; a
 staged or modified copy, or any other untracked file, still refuses), and
 land-branch.sh passes `--allow-untracked .night-watchman/closing-state.md`
 because the worker brief requires that file to exist uncommitted (NWM-147).
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

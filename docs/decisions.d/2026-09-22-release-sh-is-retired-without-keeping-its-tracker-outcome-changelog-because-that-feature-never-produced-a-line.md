@@ -1,9 +1,13 @@
 ---
 date: 2026-09-22
-level: 3
-slug: 2026-09-22-release-sh-is-retired-without-keeping-its-tracker-outcome-changelog-because-that-feature-never-produced-a-line
+slug: release-sh-is-retired-without-keeping-its-tracker-outcome-changelog-because-that-feature-never-produced-a-line
 title: "release.sh is retired without keeping its tracker-outcome changelog, because that feature never produced a line"
+migrated: true
 ---
+
+# release.sh is retired without keeping its tracker-outcome changelog, because that feature never produced a line
+
+## Decision
 
 NWM-124 asked, before deleting `scripts/release.sh`, whether the one thing
 release-please cannot do — generating a CHANGELOG section from TRACKER
@@ -36,3 +40,11 @@ already link each entry to its ticket and its commit.
 So: no replacement tool, no release-notes fragment generator, nothing kept.
 If ticket-outcome prose is wanted later it should be built against a
 tracker verb that exists.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

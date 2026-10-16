@@ -1,9 +1,13 @@
 ---
 date: 2026-09-19
-level: 2
-slug: 2026-09-19-land-branch-sh-splits-a-git-merge-and-push-core-moves-to-ai-toolkit-the-lifecycle-stays-as-a-night-watchman-wrapper
+slug: land-branch-sh-splits-a-git-merge-and-push-core-moves-to-ai-toolkit-the-lifecycle-stays-as-a-night-watchman-wrapper
 title: "land-branch.sh splits: a git merge-and-push core moves to ai-toolkit, the lifecycle stays as a night-watchman wrapper"
+migrated: true
 ---
+
+# land-branch.sh splits: a git merge-and-push core moves to ai-toolkit, the lifecycle stays as a night-watchman wrapper
+
+## Decision
 
 NWM-127 asked whether `scripts/land-branch.sh` is generic enough to move to
 `ai-toolkit`. Outcome: **split**. A generic core (integration worktree,
@@ -39,3 +43,11 @@ script has exactly four points where tracker or dispatch code runs (before
 the merge, after the merge, before the push, after the push), and the
 failure semantics at each are already different and well defined (nothing
 to revert; revert the merge; landing stands, report exit 1).
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

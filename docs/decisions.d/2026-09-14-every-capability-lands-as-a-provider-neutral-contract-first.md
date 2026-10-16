@@ -1,9 +1,13 @@
 ---
 date: 2026-09-14
-level: 3
-slug: 2026-09-14-every-capability-lands-as-a-provider-neutral-contract-first
+slug: every-capability-lands-as-a-provider-neutral-contract-first
 title: "Every capability lands as a provider-neutral contract first"
+migrated: true
 ---
+
+# Every capability lands as a provider-neutral contract first
+
+## Decision
 
 Owner directive: "do everything homelab can do, but written in a generic
 way so other tools can implement the interface." homelab, the project this
@@ -24,3 +28,11 @@ DIR` runs it as a fourth pass, with `templates/parity-allowlist.txt` naming
 the SOURCE-SPECIFIC lab-infra capabilities (host/media/network ops, TrueNAS,
 Proxmox, Grafana, Caddy) this plugin does not generalise. Porting any gap the
 sweep finds is its own ticket.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded
