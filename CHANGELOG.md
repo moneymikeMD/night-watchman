@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.15.0](https://github.com/moneymikeMD/night-watchman/compare/v1.14.0...v1.15.0) (2026-10-16)
+
+
+### Features
+
+* drop the in-plugin decisions tool for ai-toolkit's decisions.sh (NWM-203) ([#139](https://github.com/moneymikeMD/night-watchman/issues/139)) ([e2a13aa](https://github.com/moneymikeMD/night-watchman/commit/e2a13aab09b70f56b9e8e01e382f8cb9bf12f5bf))
+
 ## [1.14.0](https://github.com/moneymikeMD/night-watchman/compare/v1.13.0...v1.14.0) (2026-10-15)
 
 
