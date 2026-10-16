@@ -8,7 +8,7 @@
 # A reference matching a pattern here is an expected gap, not an audit
 # finding — it stays out of templates/parity-map.tsv, which is the
 # classification store for capabilities that *were* considered for
-# porting. See docs/decisions.md for the directive this
+# porting. See docs/decisions.d/2026-09-22-parity-map-tsv-rows-are-marked-diverged-never-deleted-nwm-158.md for the directive this
 # implements and providers/README.md for the provider-neutral contract
 # these patterns are exempt from.
 #

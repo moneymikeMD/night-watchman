@@ -1,5 +1,4 @@
 ---
-seq: 22
 date: 2026-09-21
 level: 3
 slug: 2026-09-21-webfetch-results-are-cached-and-reused-only-on-an-http-304-revalidation-nwm-142

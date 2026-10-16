@@ -1,5 +1,4 @@
 ---
-seq: 9
 date: 2026-09-19
 level: 2
 slug: 2026-09-19-land-branch-sh-splits-a-git-merge-and-push-core-moves-to-ai-toolkit-the-lifecycle-stays-as-a-night-watchman-wrapper

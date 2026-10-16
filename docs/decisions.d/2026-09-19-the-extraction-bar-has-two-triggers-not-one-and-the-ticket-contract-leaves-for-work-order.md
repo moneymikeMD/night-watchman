@@ -1,5 +1,4 @@
 ---
-seq: 12
 date: 2026-09-19
 level: 3
 slug: 2026-09-19-the-extraction-bar-has-two-triggers-not-one-and-the-ticket-contract-leaves-for-work-order

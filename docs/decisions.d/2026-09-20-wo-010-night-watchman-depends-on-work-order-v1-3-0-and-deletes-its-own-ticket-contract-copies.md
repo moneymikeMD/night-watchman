@@ -1,5 +1,4 @@
 ---
-seq: 21
 date: 2026-09-20
 level: 3
 slug: 2026-09-20-wo-010-night-watchman-depends-on-work-order-v1-3-0-and-deletes-its-own-ticket-contract-copies

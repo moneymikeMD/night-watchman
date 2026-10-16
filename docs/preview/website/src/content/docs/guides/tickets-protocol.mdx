@@ -19,7 +19,7 @@ Authoritative sources for the tickets themselves: whatever `to-issues` created
 | --- | --- |
 | A rule to follow | `CLAUDE.md` |
 | A fact about the project | matching `docs/` topic file, updated **in place** |
-| A "why" | dated append to `docs/decisions.md` — never rewrite; supersede with a new entry referencing the old. Template: `templates/decisions.md` |
+| A "why" | one file in `docs/decisions.d/`, written with ai-toolkit's `decisions.sh add --root <repo>` (title, decision, Why and Cost all required) — never rewrite; supersede with a new entry via `--supersedes`. Cite it as a relative link into `docs/decisions.d/` |
 | A guess | `docs/open-questions.md`, marked `UNVERIFIED` — never a topic file |
 | A problem found, not fixed | `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" add` to create an entry under `docs/known-issues/` with severity (HIGH/MEDIUM/LOW/COSMETIC) by blast radius, not effort. **Never hand-edit the generated index** — it must never drift from the entries it indexes. Template: `templates/known-issues.md` |
 | A script doc claim, checked against reality | dated row in `docs/scripts-claims.md`, updated in place on re-check. Template: `templates/scripts-claims.md` |

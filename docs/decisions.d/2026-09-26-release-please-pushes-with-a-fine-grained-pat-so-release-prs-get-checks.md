@@ -1,5 +1,4 @@
 ---
-seq: 30
 date: 2026-09-26
 level: 3
 slug: 2026-09-26-release-please-pushes-with-a-fine-grained-pat-so-release-prs-get-checks

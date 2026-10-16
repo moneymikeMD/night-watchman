@@ -15,7 +15,7 @@ Authoritative sources for the tickets themselves: whatever `to-issues` created
 | --- | --- |
 | A rule to follow | `CLAUDE.md` |
 | A fact about the project | matching `docs/` topic file, updated **in place** |
-| A "why" | one entry in the project's decisions log (`scripts/decisions.sh add` here; `docs/decisions.md` is its generated index). Only when all three gates hold: costly to reverse, surprising without it, real alternatives weighed. Template: `templates/decisions.md` |
+| A "why" | one file in `docs/decisions.d/`, written with `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --decisions)" add --root <repo> --title T --decision D --why W --cost C` (all four required). Only when all three gates hold: costly to reverse, surprising without it, real alternatives weighed. Cite it as a relative link into `docs/decisions.d/`. A repo not yet migrated still files new decisions there; its migration ticket folds the old log in. |
 | A guess | `docs/open-questions.md`, marked `UNVERIFIED` — never a topic file |
 | A problem found, not fixed | `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" add` to create an entry under `docs/known-issues/` with severity (HIGH/MEDIUM/LOW/COSMETIC) by blast radius, not effort. **Never hand-edit the generated index** — it must never drift from the entries it indexes. Template: `templates/known-issues.md` |
 | A script doc claim, checked against reality | dated row in `docs/scripts-claims.md`, updated in place on re-check. Template: `templates/scripts-claims.md` |
@@ -37,8 +37,8 @@ Rate a claim before routing it, five tiers, reusing the UNVERIFIED marker (Porte
 
 | Tier | Routes to |
 | --- | --- |
-| Direct | topic file or `decisions.md`, citation adjacent |
-| Supported | topic file or `decisions.md`, citation adjacent |
+| Direct | topic file or a `docs/decisions.d/` record, citation adjacent |
+| Supported | topic file or a `docs/decisions.d/` record, citation adjacent |
 | Inferred | `open-questions.md`, UNVERIFIED, inference chain stated |
 | Speculative | `open-questions.md`, UNVERIFIED, inference chain stated |
 | Unknown | a named gap listing what was searched |

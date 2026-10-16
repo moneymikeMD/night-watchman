@@ -1,5 +1,4 @@
 ---
-seq: 4
 date: 2026-09-15
 level: 3
 slug: 2026-09-15-commit-attribution-is-the-owner-s-alone-ai-attribution-trailers-are-opt-in-not-required

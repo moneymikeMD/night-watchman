@@ -1,5 +1,4 @@
 ---
-seq: 31
 date: 2026-10-09
 level: 3
 slug: 2026-10-09-selftests-gains-an-ubuntu-latest-leg-beside-macos

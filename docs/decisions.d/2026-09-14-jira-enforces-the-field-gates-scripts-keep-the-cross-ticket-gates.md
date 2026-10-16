@@ -1,5 +1,4 @@
 ---
-seq: 2
 date: 2026-09-14
 level: 3
 slug: 2026-09-14-jira-enforces-the-field-gates-scripts-keep-the-cross-ticket-gates

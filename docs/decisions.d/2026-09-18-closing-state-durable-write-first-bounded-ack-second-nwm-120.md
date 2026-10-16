@@ -1,5 +1,4 @@
 ---
-seq: 11
 date: 2026-09-18
 level: 3
 slug: 2026-09-18-closing-state-durable-write-first-bounded-ack-second-nwm-120

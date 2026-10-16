@@ -1,5 +1,4 @@
 ---
-seq: 8
 date: 2026-09-19
 level: 3
 slug: 2026-09-19-nwm-123-was-undispatchable-because-its-contract-lived-in-prose-not-in-fields

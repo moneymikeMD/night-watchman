@@ -1,5 +1,4 @@
 ---
-seq: 14
 date: 2026-09-19
 level: 2
 slug: 2026-09-19-wo-026-the-workflow-tool-becomes-the-default-dispatch-implementation-herdr-becomes-the-fallback

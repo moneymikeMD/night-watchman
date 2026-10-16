@@ -1,5 +1,4 @@
 ---
-seq: 29
 date: 2026-09-24
 level: 3
 slug: 2026-09-24-script-events-hook-sh-drops-the-project-dir-extractor-step-and-greps-a-sentinel-line-before-invoking-nwm-160

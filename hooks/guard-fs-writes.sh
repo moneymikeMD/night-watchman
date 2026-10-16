@@ -289,7 +289,7 @@ _ss_opaque_pop() {
 
 # Re-entrancy: the three mutually recursive scanners declare their per-call
 # state `local`, which bash scopes DYNAMICALLY — a callee writes the
-# declaring frame's copy, and a re-entry gets its own. See docs/decisions.md.
+# declaring frame's copy, and a re-entry gets its own. See docs/decisions.d/2026-09-21-nwm-122-bash-local-replaces-the-hand-rolled-frame-stack-in-guard-fs-writes-sh.md.
 
 # tokenize_quoted_cca: tokenize_quoted's logic writing to its OWN _CCA_WORDS —
 # reusing _ss_words would clobber an outer scan_segment loop mid-iteration.

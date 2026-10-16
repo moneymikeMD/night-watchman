@@ -1,5 +1,4 @@
 ---
-seq: 6
 date: 2026-09-18
 level: 3
 slug: 2026-09-18-known-issues-is-one-file-per-entry-with-a-generated-index

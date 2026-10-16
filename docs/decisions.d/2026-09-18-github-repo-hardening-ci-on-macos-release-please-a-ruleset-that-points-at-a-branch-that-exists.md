@@ -1,5 +1,4 @@
 ---
-seq: 5
 date: 2026-09-18
 level: 2
 slug: 2026-09-18-github-repo-hardening-ci-on-macos-release-please-a-ruleset-that-points-at-a-branch-that-exists

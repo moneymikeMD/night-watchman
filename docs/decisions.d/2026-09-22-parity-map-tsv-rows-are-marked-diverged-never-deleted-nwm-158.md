@@ -1,5 +1,4 @@
 ---
-seq: 25
 date: 2026-09-22
 level: 3
 slug: 2026-09-22-parity-map-tsv-rows-are-marked-diverged-never-deleted-nwm-158

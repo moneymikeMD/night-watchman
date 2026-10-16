@@ -1,5 +1,4 @@
 ---
-seq: 28
 date: 2026-09-23
 level: 3
 slug: 2026-09-23-land-branch-sh-becomes-a-wrapper-over-ai-toolkit-s-land-core-sh-and-is-its-own-hook-nwm-131

@@ -1,5 +1,4 @@
 ---
-seq: 19
 date: 2026-09-19
 level: 3
 slug: 2026-09-19-wo-039-check-known-issues-and-memory-graph-before-reporting-broken-shipped-as-prose-which-the-trace-flag-rule-already-showed-can-fail

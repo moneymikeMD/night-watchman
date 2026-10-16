@@ -1,5 +1,4 @@
 ---
-seq: 3
 date: 2026-09-14
 level: 3
 slug: 2026-09-14-ticket-status-mirrors-the-real-lifecycle-and-the-scripts-drive-it

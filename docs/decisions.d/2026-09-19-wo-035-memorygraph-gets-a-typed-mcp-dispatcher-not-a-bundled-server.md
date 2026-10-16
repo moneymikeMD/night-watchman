@@ -1,5 +1,4 @@
 ---
-seq: 16
 date: 2026-09-19
 level: 3
 slug: 2026-09-19-wo-035-memorygraph-gets-a-typed-mcp-dispatcher-not-a-bundled-server

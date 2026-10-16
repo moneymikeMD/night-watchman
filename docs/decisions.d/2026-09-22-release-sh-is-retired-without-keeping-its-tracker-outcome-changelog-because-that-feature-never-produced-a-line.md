@@ -1,5 +1,4 @@
 ---
-seq: 27
 date: 2026-09-22
 level: 3
 slug: 2026-09-22-release-sh-is-retired-without-keeping-its-tracker-outcome-changelog-because-that-feature-never-produced-a-line

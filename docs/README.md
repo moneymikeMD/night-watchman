@@ -5,7 +5,7 @@
 - `ethos.md` — capped defaults the owner has already decided; check before asking.
 - `adopting.md` — the runbook for wiring an existing repo up as an adopter.
 - `known-issues.md` — generated index of `known-issues/` (use ai-toolkit's `known-issue.sh`, resolved by `scripts/ai-toolkit-root.sh --known-issue`).
-- `decisions.md` — generated index of `decisions.d/`, one dated entry per decision and why (`scripts/decisions.sh add`).
+- `decisions.d/` — one dated file per decision and why, written with ai-toolkit's `decisions.sh` (resolved by `scripts/ai-toolkit-root.sh --decisions`). Lookup is grep.
 - `cost.md` — cost ledger schema, the session-cost and script-events hooks, and the cost-reviewer agent.
 - `scripts.md` — where `script-retire.sh` records a retired script.
 - `open-questions.md` — guesses marked `UNVERIFIED` until checked live.

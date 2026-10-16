@@ -1,5 +1,4 @@
 ---
-seq: 23
 date: 2026-09-21
 level: 3
 slug: 2026-09-21-nwm-122-bash-local-replaces-the-hand-rolled-frame-stack-in-guard-fs-writes-sh

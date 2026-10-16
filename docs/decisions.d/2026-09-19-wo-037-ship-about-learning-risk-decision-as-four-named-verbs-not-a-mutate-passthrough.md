@@ -1,5 +1,4 @@
 ---
-seq: 18
 date: 2026-09-19
 level: 3
 slug: 2026-09-19-wo-037-ship-about-learning-risk-decision-as-four-named-verbs-not-a-mutate-passthrough

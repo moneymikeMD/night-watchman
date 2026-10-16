@@ -1,5 +1,4 @@
 ---
-seq: 26
 date: 2026-09-22
 level: 3
 slug: 2026-09-22-script-analytics-py-and-script-retire-sh-left-for-ai-toolkit-the-hook-resolves-them-and-pins-its-own-price-table-nwm-130

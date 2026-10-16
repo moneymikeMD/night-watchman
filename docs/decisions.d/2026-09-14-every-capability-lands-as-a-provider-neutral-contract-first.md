@@ -1,5 +1,4 @@
 ---
-seq: 1
 date: 2026-09-14
 level: 3
 slug: 2026-09-14-every-capability-lands-as-a-provider-neutral-contract-first

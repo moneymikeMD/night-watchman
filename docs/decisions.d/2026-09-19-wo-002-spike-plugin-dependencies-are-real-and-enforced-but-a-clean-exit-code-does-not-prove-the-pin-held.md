@@ -1,5 +1,4 @@
 ---
-seq: 13
 date: 2026-09-19
 level: 3
 slug: 2026-09-19-wo-002-spike-plugin-dependencies-are-real-and-enforced-but-a-clean-exit-code-does-not-prove-the-pin-held

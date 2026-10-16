@@ -1,5 +1,4 @@
 ---
-seq: 7
 date: 2026-09-19
 level: 2
 slug: 2026-09-19-e6-sequencing-migrate-the-cost-scripts-first-then-make-them-model-aware-in-ai-toolkit

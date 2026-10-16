@@ -1,5 +1,4 @@
 ---
-seq: 17
 date: 2026-09-19
 level: 3
 slug: 2026-09-19-mcp-sits-beside-rung-1-as-a-surface-not-a-fourth-rung-wo-030

@@ -18,4 +18,4 @@ the `Reality` column here rather than duplicated.
 
 | Script | Claim (from header) | Verified reality | Checked |
 | --- | --- | --- | --- |
-| `scripts/decisions.sh` | `index` never runs against a live host — repo-docs only, touches nothing outside `docs/decisions.d/` and `docs/decisions.md` | Confirmed: no network calls, no credential reads in the script | 2026-09-24 |
+| `scripts/example.sh` | Header claim, quoted | What was checked and found | YYYY-MM-DD |

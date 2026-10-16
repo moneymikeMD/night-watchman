@@ -1,5 +1,4 @@
 ---
-seq: 15
 date: 2026-09-19
 level: 2
 slug: 2026-09-19-bare-cd-repo-bash-prefixes-replaced-with-c-repo-wo-034

@@ -128,7 +128,7 @@ reaches a network, site, or credential — the reason they can run on a public r
 
 ## Handoffs
 
-`docs/handoffs/` holds at most one dated note, read once at the next session start and then moved to `docs/handoffs/archive/`. A handoff is a pointer to tickets and `docs/decisions.md`, not a
+`docs/handoffs/` holds at most one dated note, read once at the next session start and then moved to `docs/handoffs/archive/`. A handoff is a pointer to tickets and `docs/decisions.d/`, not a
 substitute for either; `skills/handoff-docs/` says what goes in one.
 
 ## Writing this file
@@ -147,7 +147,7 @@ scripts/work-order-root.sh --issues-py                # resolve the work-order d
 scripts/ai-toolkit-root.sh --known-issue              # resolve the ai-toolkit dependency
 scripts/land-branch-selftest.sh [old-land-branch.sh] [issues.py]
 "$(scripts/ai-toolkit-root.sh --known-issue)" --root . add|reindex|resolve <slug>
-scripts/decisions.sh --root . add --title T --body B  # a new docs/decisions.d entry
+"$(scripts/ai-toolkit-root.sh --decisions)" --root . add --title T --decision D --why W --cost C
 scripts/kit-consumer-lint.sh                          # kit.sh's cleanup contract
 scripts/gen-reference-docs.sh --check                 # CI's drift check
 scripts/gen-reference-docs.sh                         # regenerate after editing a source

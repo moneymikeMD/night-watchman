@@ -1,5 +1,4 @@
 ---
-seq: 24
 date: 2026-09-22
 level: 3
 slug: 2026-09-22-script-analytics-py-vendors-its-cost-helpers-instead-of-importing-them-nwm-156
