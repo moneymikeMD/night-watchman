@@ -45,7 +45,7 @@ tickets** instead of build tickets.
 
 **A decision ticket.** Its title is the question itself, not a task
 description. It carries `tags: [decision]`. Its `verify` greps
-`docs/decisions.md` for an entry citing the ticket's id — the decision
+`docs/decisions.d/` for an entry citing the ticket's id — the decision
 isn't done until the answer is recorded where future sessions will read
 it, not left in a comment thread.
 

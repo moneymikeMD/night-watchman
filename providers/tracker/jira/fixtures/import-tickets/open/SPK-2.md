@@ -12,7 +12,7 @@ blocked_by:
 touches:
   - docs/api.md
 appends:
-  - docs/decisions.md
+  - docs/handbooks.md
 verify: |
   grep -q '/health' docs/api.md
 human_steps: |

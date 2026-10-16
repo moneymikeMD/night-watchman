@@ -74,7 +74,7 @@
 #
 # Optional layer: with HERDR_ENV=1 and `herdr` on PATH, a successful landing
 # also removes the herdr worktree workspace matching this branch by name.
-# Closing state (NWM-120, gated on a hand-off file by NWM-134): docs/decisions.md.
+# Closing state (NWM-120, gated on a hand-off file by NWM-134).
 
 set -euo pipefail
 # shellcheck source=lib/kit.sh

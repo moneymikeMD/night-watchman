@@ -1,10 +1,13 @@
 ---
-seq: 18
 date: 2026-09-19
-level: 3
-slug: 2026-09-19-wo-037-ship-about-learning-risk-decision-as-four-named-verbs-not-a-mutate-passthrough
+slug: wo-037-ship-about-learning-risk-decision-as-four-named-verbs-not-a-mutate-passthrough
 title: "WO-037: ship About/Learning/Risk/Decision as four named verbs, not a `mutate` passthrough"
+migrated: true
 ---
+
+# WO-037: ship About/Learning/Risk/Decision as four named verbs, not a `mutate` passthrough
+
+## Decision
 
 The Home Projects fields that carry the *reasoning* behind a status
 (Learning, Decision, Risk, About) have no REST fallback (memory `8238ce2c`),
@@ -35,3 +38,11 @@ string is rejected, naming the field), while `summary` on
 Learning/Risk/Decision is the one exception and is sent as plain text; and
 Risk/Decision's created id carries the ARI type segment `learning`
 regardless — the server's own inconsistency, not a bug.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

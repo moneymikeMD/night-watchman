@@ -32,6 +32,7 @@ make_ai_toolkit() {
     : > "$1/scripts/script-analytics.py"
     : > "$1/scripts/script-retire.sh"
     : > "$1/scripts/land-core.sh"
+    : > "$1/scripts/decisions.sh"
 }
 
 # run_sut [AI_TOOLKIT_ROOT=...] ARGS... — sets RC, OUT and ERR. A leading
@@ -83,6 +84,13 @@ else
     bad "--known-issue: rc=$RC out='$OUT' err='$ERR'"
 fi
 
+run_sut "AI_TOOLKIT_ROOT=$REAL_AT" --decisions
+if [ "$RC" -eq 0 ] && [ "$OUT" = "$REAL_AT/scripts/decisions.sh" ]; then
+    ok "--decisions appends the script's path"
+else
+    bad "--decisions: rc=$RC out='$OUT' err='$ERR'"
+fi
+
 mkdir -p "$WORK/empty-dir"
 run_sut "AI_TOOLKIT_ROOT=$WORK/empty-dir"
 if [ "$RC" -eq 1 ] && [[ "$ERR" == *"cannot locate"* ]]; then
@@ -123,7 +131,7 @@ else
 fi
 
 run_sut --help
-if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core]"* ]] && [ -z "$ERR" ]; then
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core|--decisions]"* ]] && [ -z "$ERR" ]; then
     ok "--help prints the header on stdout, exit 0"
 else
     bad "--help: rc=$RC out='$OUT' err='$ERR'"

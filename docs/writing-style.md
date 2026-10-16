@@ -12,7 +12,7 @@ One file, one mode.
 - **Tutorial** (learning by doing) — none yet; `docs/adopting.md`'s numbered runbook is the closest fit if one is added.
 - **How-to** (steps to a goal) — `docs/adopting.md`.
 - **Reference** (facts for lookup, no opinion) — the topic files: `ethos.md`, `known-issues.md`, `cost.md`, `scripts.md`, `testing-philosophy.md`.
-- **Explanation** (why, opinion allowed) — `docs/decisions.md`, `docs/faq.md`, `docs/evidence.md`.
+- **Explanation** (why, opinion allowed) — `docs/decisions.d/`, `docs/faq.md`, `docs/evidence.md`.
 
 Don't mix modes in one file: no reference tables inside a how-to, no arguing inside reference. Split and link instead.
 

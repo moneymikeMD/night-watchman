@@ -7,7 +7,7 @@ executor: agent
 touches:
   - reference/c.py
 appends:
-  - docs/decisions.md
+  - docs/handbooks.md
 verify: |
   test -f reference/c.py
 ---
@@ -15,5 +15,5 @@ verify: |
 ## Problem
 
 Fixture for `issues.py preflight` and `--landing`. Three tickets that touch
-three different files and all append one shared `docs/decisions.md`: benign
+three different files and all append one shared `docs/handbooks.md`: benign
 under serialized landing, a conflict generator under parallel landing.

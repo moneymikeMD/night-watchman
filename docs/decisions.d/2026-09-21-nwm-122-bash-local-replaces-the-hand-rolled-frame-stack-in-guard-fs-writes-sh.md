@@ -1,10 +1,13 @@
 ---
-seq: 23
 date: 2026-09-21
-level: 3
-slug: 2026-09-21-nwm-122-bash-local-replaces-the-hand-rolled-frame-stack-in-guard-fs-writes-sh
+slug: nwm-122-bash-local-replaces-the-hand-rolled-frame-stack-in-guard-fs-writes-sh
 title: "NWM-122: bash `local` replaces the hand-rolled frame stack in guard-fs-writes.sh"
+migrated: true
 ---
+
+# NWM-122: bash `local` replaces the hand-rolled frame stack in guard-fs-writes.sh
+
+## Decision
 
 `hooks/guard-fs-writes.sh`'s scanner is re-entrant through bash's own
 `local`, not a hand-rolled frame stack. Each of `scan_command_text`,
@@ -57,3 +60,11 @@ records that no probe can isolate that stack's behaviour, and removing an
 unfalsifiable guard inside a redesign of the same mechanism is how a
 regression ships unnoticed. Removing it is a separate ticket with its own
 oracle.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

@@ -1,10 +1,13 @@
 ---
-seq: 16
 date: 2026-09-19
-level: 3
-slug: 2026-09-19-wo-035-memorygraph-gets-a-typed-mcp-dispatcher-not-a-bundled-server
+slug: wo-035-memorygraph-gets-a-typed-mcp-dispatcher-not-a-bundled-server
 title: "WO-035: memorygraph gets a typed MCP dispatcher, not a bundled server"
+migrated: true
 ---
+
+# WO-035: memorygraph gets a typed MCP dispatcher, not a bundled server
+
+## Decision
 
 `memorygraph` is the second-highest-volume Bash family in the corpus — 744
 `recall` calls averaging 124 characters, 622 `store` calls averaging 1,427
@@ -43,3 +46,11 @@ two diverge.
 Out of scope, deliberately: changing `memorygraph` itself, or upstreaming
 the multi-word-recall behaviour as a fix there; auto-recall on session
 start.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

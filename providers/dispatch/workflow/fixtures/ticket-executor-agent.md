@@ -10,7 +10,7 @@ touches:
   - night-watchman/providers/dispatch/**
   - night-watchman/providers/README.md
 appends:
-  - night-watchman/docs/decisions.md
+  - night-watchman/docs/handbooks.md
 ---
 
 Body trimmed: the selftest reads the frontmatter only.

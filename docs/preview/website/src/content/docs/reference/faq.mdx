@@ -20,7 +20,7 @@ The deeper mismatch is state. A workflow is a script with a thread pool. It star
 by design and exists precisely because there is a next time:
 
 - ticket status is a directory move, or a tracker transition
-- `docs/decisions.md` is a dated append, never a rewrite
+- `docs/decisions.d/` holds one dated file per decision, never a rewrite
 - `known-issues/` carries per-entry hashes so a silent edit is detectable
 - memory-graph holds what would otherwise die with the session
 - `docs/handoffs/` is written so the next session can start cold

@@ -15,7 +15,7 @@
         "customfield_10043": "reference/a.py",
         "customfield_10044": "test -f reference/a.py",
         "customfield_10045": "",
-        "customfield_10046": "docs/decisions.md",
+        "customfield_10046": "docs/handbooks.md",
         "customfield_10047": "agent",
         "customfield_10048": null
       }
@@ -35,7 +35,7 @@
         "customfield_10043": "reference/b.py",
         "customfield_10044": "test -f reference/b.py",
         "customfield_10045": "",
-        "customfield_10046": "docs/decisions.md",
+        "customfield_10046": "docs/handbooks.md",
         "customfield_10047": "agent",
         "customfield_10048": null
       }
@@ -55,7 +55,7 @@
         "customfield_10043": "reference/c.py",
         "customfield_10044": "test -f reference/c.py",
         "customfield_10045": "",
-        "customfield_10046": "docs/decisions.md",
+        "customfield_10046": "docs/handbooks.md",
         "customfield_10047": "agent",
         "customfield_10048": null
       }

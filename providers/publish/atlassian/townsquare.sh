@@ -7,7 +7,7 @@
 #
 # Ships whoami, list projects, post a status update, and edits for a
 # project's About tab and its Learning/Risk/Decision highlights. The
-# free-form mutate passthrough stays unshipped — see docs/decisions.md,
+# free-form mutate passthrough stays unshipped — see docs/decisions.d/2026-09-19-wo-037-ship-about-learning-risk-decision-as-four-named-verbs-not-a-mutate-passthrough.md,
 # WO-037: a passthrough makes an arbitrary mutation one typo away.
 #
 # Usage:

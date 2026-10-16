@@ -1,10 +1,13 @@
 ---
-seq: 12
 date: 2026-09-19
-level: 3
-slug: 2026-09-19-the-extraction-bar-has-two-triggers-not-one-and-the-ticket-contract-leaves-for-work-order
+slug: the-extraction-bar-has-two-triggers-not-one-and-the-ticket-contract-leaves-for-work-order
 title: "the extraction bar has two triggers, not one, and the ticket contract leaves for `work-order`"
+migrated: true
 ---
+
+# the extraction bar has two triggers, not one, and the ticket contract leaves for `work-order`
+
+## Decision
 
 `docs/ethos.md`'s extraction default — a measured second consumer is the
 bar for extracting a shared core — was written for de-duplication, and
@@ -79,3 +82,11 @@ release line to a plumbing repository's moving `@v1` major tag, which is
 exactly what decision 10 exists to prevent. `ai-toolkit` remains the default
 for shared tooling; `work-order` is the documented exception, not a
 precedent.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

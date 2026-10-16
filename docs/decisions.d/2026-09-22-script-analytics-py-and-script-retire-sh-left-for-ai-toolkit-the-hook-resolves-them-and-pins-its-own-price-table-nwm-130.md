@@ -1,10 +1,13 @@
 ---
-seq: 26
 date: 2026-09-22
-level: 3
-slug: 2026-09-22-script-analytics-py-and-script-retire-sh-left-for-ai-toolkit-the-hook-resolves-them-and-pins-its-own-price-table-nwm-130
+slug: script-analytics-py-and-script-retire-sh-left-for-ai-toolkit-the-hook-resolves-them-and-pins-its-own-price-table-nwm-130
 title: "script-analytics.py and script-retire.sh left for ai-toolkit; the hook resolves them and pins its own price table (NWM-130)"
+migrated: true
 ---
+
+# script-analytics.py and script-retire.sh left for ai-toolkit; the hook resolves them and pins its own price table (NWM-130)
+
+## Decision
 
 The donate half of NWM-125. `script-analytics.py` and `script-retire.sh`
 and their selftests live in moneymikeMD/ai-toolkit, consumed here through
@@ -31,3 +34,11 @@ priced at the project's rate.
 Running the moved script BY HAND with `$CLAUDE_PROJECT_DIR` unset finds no
 price table and exits 2. Pass `--prices templates/claude-prices.tsv` or
 export `$CLAUDE_PROJECT_DIR`.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

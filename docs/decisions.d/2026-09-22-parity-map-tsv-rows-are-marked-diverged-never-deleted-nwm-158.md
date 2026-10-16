@@ -1,10 +1,13 @@
 ---
-seq: 25
 date: 2026-09-22
-level: 3
-slug: 2026-09-22-parity-map-tsv-rows-are-marked-diverged-never-deleted-nwm-158
+slug: parity-map-tsv-rows-are-marked-diverged-never-deleted-nwm-158
 title: "parity-map.tsv rows are marked diverged, never deleted (NWM-158)"
+migrated: true
 ---
+
+# parity-map.tsv rows are marked diverged, never deleted (NWM-158)
+
+## Decision
 
 A pair that is known not to converge — two files sharing a name that an
 owner decision settled as two different programs — gets a third
@@ -32,3 +35,11 @@ contract that LAB-228's and NWM-125's verify blocks read.
 Two rows carry a marker: the two claude-cost rows (NWM-129). land-branch.sh
 is NOT marked: NWM-131 splits it behind a hook contract rather than forking
 it permanently.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

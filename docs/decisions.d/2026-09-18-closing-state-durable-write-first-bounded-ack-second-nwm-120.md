@@ -1,10 +1,13 @@
 ---
-seq: 11
 date: 2026-09-18
-level: 3
-slug: 2026-09-18-closing-state-durable-write-first-bounded-ack-second-nwm-120
+slug: closing-state-durable-write-first-bounded-ack-second-nwm-120
 title: "closing state: durable write first, bounded ack second (NWM-120)"
+migrated: true
 ---
+
+# closing state: durable write first, bounded ack second (NWM-120)
+
+## Decision
 
 A worker's exit is a handoff. `land-branch.sh` with `HERDR_ENV=1` writes the
 worker's closing state to the tracker and reads it back before it ends the
@@ -26,3 +29,11 @@ with no `## Human run list` in the worker's
 `.night-watchman/closing-state.md` stops the landing at exit 2 before
 anything is mutated, because a promised-but-absent run list is the defect.
 Only under `HERDR_ENV=1`; without it the script is unchanged.
+
+## Why
+
+unrecorded
+
+## Cost
+
+unrecorded

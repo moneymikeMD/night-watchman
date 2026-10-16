@@ -5,7 +5,7 @@ description: Keep an append-only decision trail for an unattended or dispatch-pr
 
 # Wave trail
 
-`docs/decisions.md` records project "why". The cost ledger records spend.
+`docs/decisions.d/` records project "why". The cost ledger records spend.
 Neither records what a specific unattended wave decided, on what evidence,
 or whether that record matches what actually happened. This skill closes
 that gap for waves nobody is watching.
@@ -16,14 +16,14 @@ Open `.night-watchman/wave-trail.tsv` at the start of any wave dispatched
 through a dispatch provider (see `session-start`'s "Dispatching a wave
 through a worktree-dispatch tool"), or any run the owner has said they will
 not be watching live. A wave worked entirely on the main thread with the
-owner present does not need one — `docs/decisions.md` already covers that
+owner present does not need one — `docs/decisions.d/` already covers that
 case at project grain.
 
 ## Where it lives
 
 `.night-watchman/wave-trail.tsv`, gitignored (same file class as
 `.night-watchman/last-session-cost.txt`). It is a working artifact for the
-wave, not project history — `docs/decisions.md` is where a decision graduates
+wave, not project history — `docs/decisions.d/` is where a decision graduates
 to if it turns out to matter beyond the wave that made it. Start a fresh
 file per wave; copy `templates/wave-trail.tsv` (header row only) to seed it.
 

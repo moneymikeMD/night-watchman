@@ -12,12 +12,12 @@ ai-toolkit-root.sh — print the root of the ai-toolkit checkout this repo
 consumes operator scripts from, so nothing here needs a second copy of one.
 
 ```text
-Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core]
+Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core|--decisions]
   Prints the directory holding ai-toolkit's scripts/. With a flag, prints
   that script's path inside it instead. Each flag names a script this repo
   donated and now consumes: known-issue.sh (NWM-128), script-analytics.py
   and script-retire.sh (NWM-130), and land-core.sh, the merge-and-push
-  core land-branch.sh wraps (NWM-131).
+  core land-branch.sh wraps (NWM-131), and decisions.sh (NWM-203).
 ```
 
 ### scripts/bash-family-report.py
@@ -54,15 +54,6 @@ Usage:
                    [--result R] [--file FILE] [--dry-run]
   decision-log.sh --help
 ```
-
-### scripts/decisions.sh
-
-Manage docs/decisions.d/ — one markdown file per dated decision, with
-docs/decisions.md as a GENERATED index concatenating every entry in
-order. Modelled on ai-toolkit's known-issue.sh shape (add/index/lint); no
-manifest/hash tamper-check (WO-022 found known-issue.sh's had drifted
-from every entry) and no status/severity, since a decision is never
-resolved or reopened, only deleted when it no longer holds.
 
 ### scripts/dev-install.sh
 
