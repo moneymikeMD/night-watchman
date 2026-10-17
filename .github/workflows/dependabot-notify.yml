@@ -1,0 +1,30 @@
+name: Dependabot notify
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+jobs:
+  notify:
+    if: >-
+      github.actor == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      BUZZ_URL: ${{ secrets.BUZZ_CI_HOOK_URL }}
+    steps:
+      - id: meta
+        if: env.BUZZ_URL != ''
+        uses: dependabot/fetch-metadata@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: notify
+        if: env.BUZZ_URL != ''
+        uses: moneymikeMD/ai-toolkit/actions/notify-buzz@v1
+        with:
+          url: ${{ secrets.BUZZ_CI_HOOK_URL }}
+          secret: ${{ secrets.BUZZ_CI_HOOK_SECRET }}
+          status: dependabot
+          title: ${{ github.repository }} dependabot bump ${{ steps.meta.outputs.dependency-names }} to ${{ steps.meta.outputs.new-version }}
+          link: ${{ github.event.pull_request.html_url }}

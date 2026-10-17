@@ -12,9 +12,50 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    env:
+      BUZZ_URL: ${{ secrets.BUZZ_RELEASES_HOOK_URL }}
     steps:
-      - uses: googleapis/release-please-action@v5
+      - id: rp
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+      - name: resolve release PR
+        id: pr
+        if: steps.rp.outputs.prs_created == 'true' && env.BUZZ_URL != ''
+        env:
+          PR_JSON: ${{ steps.rp.outputs.pr }}
+          PRS_JSON: ${{ steps.rp.outputs.prs }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          num="$(jq -r '.number // empty' <<<"${PR_JSON:-null}" 2>/dev/null || true)"
+          [ -n "$num" ] || num="$(jq -r '.[0].number // empty' <<<"${PRS_JSON:-null}" 2>/dev/null || true)"
+          [ -n "$num" ] || exit 0
+          title="$(gh pr view "$num" --json title --jq .title)"
+          {
+            echo "number=$num"
+            echo "version=${title##* }"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: notify release PR
+        if: steps.pr.outputs.number != ''
+        uses: moneymikeMD/ai-toolkit/actions/notify-buzz@v1
+        with:
+          url: ${{ secrets.BUZZ_RELEASES_HOOK_URL }}
+          secret: ${{ secrets.BUZZ_RELEASES_HOOK_SECRET }}
+          status: release-pr
+          title: night-watchman release PR ${{ steps.pr.outputs.version }}
+          link: ${{ github.server_url }}/${{ github.repository }}/pull/${{ steps.pr.outputs.number }}
+
+      - name: notify release
+        if: steps.rp.outputs.release_created == 'true' && env.BUZZ_URL != ''
+        uses: moneymikeMD/ai-toolkit/actions/notify-buzz@v1
+        with:
+          url: ${{ secrets.BUZZ_RELEASES_HOOK_URL }}
+          secret: ${{ secrets.BUZZ_RELEASES_HOOK_SECRET }}
+          status: released
+          title: night-watchman released ${{ steps.rp.outputs.tag_name }}
+          link: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.rp.outputs.tag_name }}

@@ -217,3 +217,39 @@ jobs:
             fi
           fi
           echo 'no-major: ok'
+
+  notify-failure:
+    needs: [selftests, comment-lint, no-personal-paths, skill-routing, docs-site, no-major]
+    if: >-
+      always() && contains(needs.*.result, 'failure') && (
+        github.event_name == 'push' ||
+        github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    env:
+      BUZZ_URL: ${{ secrets.BUZZ_CI_HOOK_URL }}
+    steps:
+      - name: describe the run
+        id: what
+        if: env.BUZZ_URL != ''
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+          REF_NAME: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          subject="${HEAD_MESSAGE%%$'\n'*}"
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            msg="$GITHUB_WORKFLOW failed on $REF_NAME: $subject"
+          else
+            msg="$GITHUB_WORKFLOW failed on PR branch $REF_NAME"
+          fi
+          echo "message=$msg" >> "$GITHUB_OUTPUT"
+
+      - name: notify
+        if: env.BUZZ_URL != ''
+        uses: moneymikeMD/ai-toolkit/actions/notify-buzz@v1
+        with:
+          url: ${{ secrets.BUZZ_CI_HOOK_URL }}
+          secret: ${{ secrets.BUZZ_CI_HOOK_SECRET }}
+          status: failed
+          title: ${{ github.repository }} CI failed
+          message: ${{ steps.what.outputs.message }}
