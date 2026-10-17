@@ -25,16 +25,16 @@ jobs:
       - name: resolve release PR
         id: pr
         if: steps.rp.outputs.prs_created == 'true' && env.BUZZ_URL != ''
+        continue-on-error: true
         env:
           PR_JSON: ${{ steps.rp.outputs.pr }}
           PRS_JSON: ${{ steps.rp.outputs.prs }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          num="$(jq -r '.number // empty' <<<"${PR_JSON:-null}" 2>/dev/null || true)"
-          [ -n "$num" ] || num="$(jq -r '.[0].number // empty' <<<"${PRS_JSON:-null}" 2>/dev/null || true)"
+          pr="$(jq -c 'if type == "array" then .[0] else . end' <<<"${PR_JSON:-${PRS_JSON:-null}}")"
+          num="$(jq -r '.number // empty' <<<"$pr")"
           [ -n "$num" ] || exit 0
-          title="$(gh pr view "$num" --json title --jq .title)"
+          title="$(jq -r '.title // empty' <<<"$pr")"
           {
             echo "number=$num"
             echo "version=${title##* }"
