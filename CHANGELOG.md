@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [1.16.0](https://github.com/moneymikeMD/night-watchman/compare/v1.15.0...v1.16.0) (2026-10-17)
+
+
+### Features
+
+* **ci:** post CI failures, Dependabot PRs and releases to Buzz (NWM-204) ([#142](https://github.com/moneymikeMD/night-watchman/issues/142)) ([83dcb97](https://github.com/moneymikeMD/night-watchman/commit/83dcb979de25215e46c2f4165ab733bb21de6da8))
+
+
+### Bug Fixes
+
+* **ci:** read the release PR number and title from release-please outputs (NWM-204) ([#145](https://github.com/moneymikeMD/night-watchman/issues/145)) ([0fb3409](https://github.com/moneymikeMD/night-watchman/commit/0fb3409027391a18f377b71d574d9672aa2d04d7))
+
 ## [1.15.0](https://github.com/moneymikeMD/night-watchman/compare/v1.14.0...v1.15.0) (2026-10-16)
 
 
