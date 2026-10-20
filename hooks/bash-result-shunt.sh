@@ -37,9 +37,7 @@
 # redacts Python kwargs; fds 8 and 9 are clobbered while the command runs.
 #
 # It defaults off because the rewrite touches every Bash call and has not been
-# observed in a live session: guard-fs-writes.sh, a PreToolUse Bash hook in
-# this same plugin, blocks redirects outside the worktree, and the rewrite
-# adds exactly such redirects. Watch one session before making it default.
+# observed in a live session. Watch one session before making it default.
 #
 # Pipeline, in order: strip_heredocs(), a `;`/`&&`/`||`/`&`/newline split into
 # statements, each into `|`-separated stages, each into quote-aware words.

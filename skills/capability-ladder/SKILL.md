@@ -105,9 +105,8 @@ because agents copy whatever the surrounding code already does and a weaker
 guard becomes the next template. If the fix is structural, only use the
 structural fix; prose is the symptom, not the cure.
 
-1. **Unrepresentable** — make the wrong state impossible to produce.
-   `guard-fs-writes.sh` blocks a disallowed write before it happens, not
-   after.
+1. **Unrepresentable** — make the wrong state impossible to produce,
+   for example a wrapper that exposes only the allowed operations.
 2. **A lint in CI** — `issues.py lint` rejects overlapping `touches` before
    a wave starts.
 3. **A helper that does it right** — `known-issue.sh add` is the only

@@ -4,8 +4,7 @@ A terse runbook for wiring an existing repo up as a night-watchman adopter.
 
 ## Runbook
 
-1. **Stash the adopter repo's dirty tree first.** `git status --short` to see what's there, then `git stash push -u -m "<ticket> pre-install stash <date>"` to get a clean baseline. Do this from
-   **outside** any session that has night-watchman's `hooks/guard-fs-writes.sh` active — see Snags below. Record the stash ref; leave it unpopped for the owner unless told otherwise.
+1. **Stash the adopter repo's dirty tree first.** `git status --short` to see what's there, then `git stash push -u -m "<ticket> pre-install stash <date>"` to get a clean baseline. Record the stash ref; leave it unpopped for the owner unless told otherwise.
 
 2. **Confirm the plugin is actually available to the adopter repo.** `claude plugin list` — if `night-watchman@moneymike-plugins` shows `Scope: user` and `Status: ✔ enabled`, it already covers every
    repo on the machine; no per-project enable step is needed. Only reach for `claude plugin enable` or an `enabledPlugins` entry in `.claude/settings.json` if the listing shows it disabled or absent.
@@ -33,8 +32,7 @@ A terse runbook for wiring an existing repo up as a night-watchman adopter.
    `providers/README.md`'s "Private config" section describes.
 
 4. **Create `.claude/settings.json`** (don't touch `settings.local.json` if one exists) with the tracker env vars the adopter's tooling needs (`ISSUES_SOURCE`, `ISSUES_JIRA_PROJECT`,
-   `ISSUES_JIRA_API`, `NW_CONFIG`). Do **not** add a local `guard-fs-writes` hook entry — the plugin's own copy already runs via the plugin manifest once it's enabled (user or project scope); a second
-   copy would just be redundant. Say so explicitly in the adopter's CLAUDE.md so a future reader doesn't "fix" the perceived gap.
+   `ISSUES_JIRA_API`, `NW_CONFIG`).
 
    Check whether the adopter's `.gitignore` has a blanket `.claude/` entry before assuming `settings.json` will commit — see Snags.
 
@@ -126,12 +124,6 @@ finds (its step 4); the manual form above is the fallback for a field it did not
 
 ## Snags
 
-- **`hooks/guard-fs-writes.sh`, once enabled at user scope, guards every repo, not just night-watchman's own.** It blocked `git stash push -u` run from inside a hooked session against the adopter
-  repo's main worktree (it can't confirm the adopter repo is a linked worktree of anything it's tracking, so it treats it as "the main worktree" and refuses). Workaround: run the stash from outside
-  the hooked session — in Claude Code, the `!` prefix runs a raw shell command that bypasses the PreToolUse hook. There's no in-session override; this is a structural block, not a permission prompt,
-  and correctly so — it just means the *human* runs this one command, not the agent.
-- **The same hook also blocks writing command output to `/tmp` or anywhere outside the current worktree/scratchpad** (e.g. `... > /tmp/out.txt`). Redirect into the worktree or the session scratchpad
-  instead, or just let the command print to stdout.
 - **A blanket `.claude/` entry in `.gitignore` swallows the new `settings.json` too**, and a plain `!.claude/settings.json` negation does not resurrect it — git won't descend into an already-excluded
   directory to evaluate negations inside it. Fix: change the ignore line to `.claude/*` (ignore contents, not the directory itself) and keep the `!.claude/settings.json` negation under it.
   `settings.local.json` stays ignored under the same `.claude/*` line.

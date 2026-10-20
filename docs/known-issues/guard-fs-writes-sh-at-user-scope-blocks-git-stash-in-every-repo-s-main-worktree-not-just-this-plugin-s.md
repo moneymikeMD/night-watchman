@@ -2,7 +2,8 @@
 title: "guard-fs-writes.sh at user scope blocks git stash in every repo's main worktree, not just this plugin's"
 heading_raw: "guard-fs-writes.sh at user scope blocks git stash in every repo's main worktree, not just this plugin's — LOW"
 severity: LOW
-status: open
+status: resolved
+resolved: 2026-10-19
 qualifiers: []
 tickets: []
 slug: guard-fs-writes-sh-at-user-scope-blocks-git-stash-in-every-repo-s-main-worktree-not-just-this-plugin-s

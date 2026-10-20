@@ -1,7 +1,7 @@
 scripts/dev/bash-result-shunt.sh	hooks/bash-result-shunt.sh
 scripts/dev/bash-result-shunt-selftest.sh	hooks/bash-result-shunt-selftest.sh
-scripts/dev/guard-fs-writes.sh	hooks/guard-fs-writes.sh
-scripts/dev/guard-fs-writes-selftest.sh	hooks/guard-fs-writes-selftest.sh
+scripts/dev/guard-fs-writes.sh	-
+scripts/dev/guard-fs-writes-selftest.sh	-
 scripts/dev/read-shunt.sh	hooks/read-shunt.sh
 scripts/dev/read-shunt-selftest.sh	hooks/read-shunt-selftest.sh
 scripts/dev/commit-staged-worktrees.sh	providers/dispatch/herdr/commit-staged-worktrees.sh

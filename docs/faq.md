@@ -31,8 +31,6 @@ dispatch. The orchestration lives in the skills — `session-start`, `tickets-pr
 The hooks are the part neither a workflow nor an agent roster can reproduce, because they change the economics of the session they run inside rather than the plan the session is following:
 
 - `read-shunt.sh` and `bash-result-shunt.sh` keep tool output out of the expensive model's context, so a cheap model does the reading
-- `guard-fs-writes.sh` is a deterministic control that fires on every Bash call regardless of what any agent intends, which is the point — a rule written in a `CLAUDE.md` is a rule a fresh subagent
-  can read and still violate
 - `session-cost.sh` meters what a run actually cost
 
 An agent team is a roster. A workflow is control flow. Neither can install a `PreToolUse` hook.

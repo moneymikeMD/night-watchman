@@ -16,7 +16,6 @@ scripts/claude-cost-scan-selftest.sh
 # real first name and /home/mike is a plausible real path on a Linux box, so
 # exempting the name globally would blind the gate to an actual leak. Exempting
 # the one file that needs it keeps the rest of the repo covered.
-hooks/guard-fs-writes-selftest.sh
 
 # A generic placeholder in a module docstring's worked example
 # (/Users/me/code/foo -> -Users-me-code-foo). Exempted by name rather than by
