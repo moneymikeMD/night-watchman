@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.17.0](https://github.com/moneymikeMD/night-watchman/compare/v1.16.0...v1.17.0) (2026-10-21)
+
+
+### Features
+
+* **hooks:** remove guard-fs-writes; make token-saving hooks advisory ([#146](https://github.com/moneymikeMD/night-watchman/issues/146)) ([af20b70](https://github.com/moneymikeMD/night-watchman/commit/af20b7075c33bf9bc8f2b51e4949327b37284b74))
+
 ## [1.16.0](https://github.com/moneymikeMD/night-watchman/compare/v1.15.0...v1.16.0) (2026-10-17)
 
 
