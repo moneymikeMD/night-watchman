@@ -46,7 +46,7 @@ stub_claude() {
 [ "$1" = "plugin" ] && [ "$2" = "list" ] || { echo "unexpected: $*" >&2; exit 64; }
 cat <<'JSON'
 HEAD
-    printf '[{"id":"caveman@caveman","installPath":"/nope"},{"id":"%s","version":"1.3.0","installPath":"%s"}]\n' \
+    printf '[{"id":"other@elsewhere","installPath":"/nope"},{"id":"%s","version":"1.3.0","installPath":"%s"}]\n' \
         "$1" "$2" >> "$WORK/stub-bin/claude"
     echo JSON >> "$WORK/stub-bin/claude"
     chmod +x "$WORK/stub-bin/claude"

@@ -55,7 +55,8 @@ folding generic work in from the project this one was extracted from), run
 here. It is read-only against both trees. Exit 2 (could not evaluate) stops
 orientation the same way an unreachable tracker does. A non-empty "new"
 section — source files under a mapped directory with no row in
-`templates/parity-map.tsv` — means file a parity ticket, one row per item;
+`templates/parity-map.tsv` — means fold each item in now, filing a parity
+ticket only for one that will outlive the session (see `tickets-protocol`);
 a non-empty "vanished" section means the map itself needs a hand-edit to
 drop the stale row.
 
