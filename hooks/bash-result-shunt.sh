@@ -13,9 +13,8 @@
 # PreToolUse fires BEFORE the command runs, so the command string is the only
 # size signal available for gating.
 #
-# Exit codes: 0 allow; 2 block, with guidance naming the flag or pipe to add,
-# on stderr — Claude Code surfaces a PreToolUse hook's stderr as the tool's
-# result.
+# Exit code: always 0. Guidance naming the flag or pipe to add goes out as
+# additionalContext; the command is never blocked.
 #
 # SECRET REDACTION (NWM-136), OFF BY DEFAULT — set BASH_SHUNT_REDACT_OUTPUT=1.
 # No hook primitive can rewrite a tool result after the fact, so the only
@@ -839,6 +838,6 @@ fi
   echo "If you run the EXACT SAME command again in this session, it will be"
   echo "allowed through unblocked — use that if the cap genuinely does not"
   echo "apply here."
-} >&2
+} | jq -Rs '{hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:.}}'
 
-exit 2
+exit 0

@@ -9,8 +9,7 @@
 #
 # Exit codes:
 #   0  allow — the tool runs and the model sees the real content
-#   2  block, with the summary on stderr, which Claude Code surfaces to the
-#      model as the tool's result rather than as an error
+#      A summary goes out as additionalContext; the hook never blocks (exit 0 always)
 #
 # What gets matched:
 #   - `.tool_name == "Read"`: the file at `.tool_input.file_path`, unless
@@ -323,6 +322,6 @@ rm -f "$SUMMARY_OUT"
   echo "the second read in this session is served unshunted."
   echo ""
   echo "$SUMMARY"
-} >&2
+} | jq -Rs '{hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:.}}'
 
-exit 2
+exit 0

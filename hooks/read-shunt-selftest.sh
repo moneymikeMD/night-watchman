@@ -125,8 +125,12 @@ run_hook() {
   [ -n "$_timeout" ] && _timeout_env="READ_SHUNT_TIMEOUT=$_timeout"
 
   # shellcheck disable=SC2086 # deliberate word-split: an empty _timeout_env must vanish, not pass "" as an env(1) arg
-  echo "$_payload" | env PATH="$_env_path" READ_SHUNT_STATE_ROOT="$STATE_ROOT" $_timeout_env "$SCRIPT" 2>"$WORKDIR/.last_stderr"
-  echo "RC=$?"
+  _o="$(echo "$_payload" | env PATH="$_env_path" READ_SHUNT_STATE_ROOT="$STATE_ROOT" $_timeout_env "$SCRIPT" 2>"$WORKDIR/.last_stderr")"; _r=$?
+  [ "$_r" -eq 2 ] && _r=99
+  if [ "$_r" -eq 0 ] && printf '%s' "$_o" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1; then
+    printf '%s' "$_o" | jq -r '.hookSpecificOutput.additionalContext' >"$WORKDIR/.last_stderr"; _r=2
+  fi
+  echo "RC=$_r"
 }
 
 last_stderr() { cat "$WORKDIR/.last_stderr" 2>/dev/null; }
@@ -186,8 +190,12 @@ run_ranged_read() {
   # $1 = file_path, $2 = session_id, $3 = jq object fragment merged into tool_input
   _payload="$(jq -n --arg sid "$2" --arg fp "$1" --arg cwd "$WORKDIR" --argjson extra "$3" \
     '{tool_name: "Read", session_id: $sid, cwd: $cwd, tool_input: ({file_path: $fp} + $extra)}')"
-  echo "$_payload" | env PATH="$STUBBIN:$MINIMAL_PATH" READ_SHUNT_STATE_ROOT="$STATE_ROOT" "$SCRIPT" 2>"$WORKDIR/.last_stderr"
-  echo "RC=$?"
+  _o="$(echo "$_payload" | env PATH="$STUBBIN:$MINIMAL_PATH" READ_SHUNT_STATE_ROOT="$STATE_ROOT" "$SCRIPT" 2>"$WORKDIR/.last_stderr")"; _r=$?
+  [ "$_r" -eq 2 ] && _r=99
+  if [ "$_r" -eq 0 ] && printf '%s' "$_o" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1; then
+    printf '%s' "$_o" | jq -r '.hookSpecificOutput.additionalContext' >"$WORKDIR/.last_stderr"; _r=2
+  fi
+  echo "RC=$_r"
 }
 
 SENT="$WORKDIR/sentinel.ranged-both"; rm -f "$SENT"

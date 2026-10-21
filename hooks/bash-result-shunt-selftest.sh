@@ -90,9 +90,13 @@ run_hook() {
   _tool="$1"; _cmd="$2"; _session="$3"
   _payload="$(jq -n --arg tn "$_tool" --arg sid "$_session" --arg cmd "$_cmd" \
     '{tool_name: $tn, session_id: $sid, tool_input: {command: $cmd}}')"
-  echo "$_payload" | env BASH_SHUNT_STATE_ROOT="$STATE_ROOT" \
-    "$SCRIPT" 2>"$WORKDIR/.last_stderr"
-  echo "RC=$?"
+  _o="$(echo "$_payload" | env BASH_SHUNT_STATE_ROOT="$STATE_ROOT" \
+    "$SCRIPT" 2>"$WORKDIR/.last_stderr")"; _r=$?
+  [ "$_r" -eq 2 ] && _r=99
+  if [ "$_r" -eq 0 ] && printf '%s' "$_o" | jq -e '.hookSpecificOutput.additionalContext' >/dev/null 2>&1; then
+    printf '%s' "$_o" | jq -r '.hookSpecificOutput.additionalContext' >"$WORKDIR/.last_stderr"; _r=2
+  fi
+  echo "RC=$_r"
 }
 
 last_stderr() { cat "$WORKDIR/.last_stderr" 2>/dev/null; }
