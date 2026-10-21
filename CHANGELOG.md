@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.17.1](https://github.com/moneymikeMD/night-watchman/compare/v1.17.0...v1.17.1) (2026-10-21)
+
+
+### Miscellaneous Chores
+
+* release 1.17.1 ([#149](https://github.com/moneymikeMD/night-watchman/issues/149)) ([b0c40cf](https://github.com/moneymikeMD/night-watchman/commit/b0c40cf1ddcff61014fcbf6328d24f2080420891))
+
 ## [1.17.0](https://github.com/moneymikeMD/night-watchman/compare/v1.16.0...v1.17.0) (2026-10-21)
 
 
