@@ -45,6 +45,13 @@ Rate a claim before routing it, five tiers, reusing the UNVERIFIED marker (Porte
 
 Code is mechanics, not evidence of its own intent. Causal words ("because", "fixes") need a citation next to them.
 
+## When to file a ticket
+
+File a ticket only for work that will outlive the session. Work finished in
+the session it starts in needs none: do it, land it, and let the commit
+carry the record. Gate only actions that are irreversible or touch live
+state.
+
 ## Ticket flow
 
 ```mermaid

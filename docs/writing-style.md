@@ -1,6 +1,6 @@
 # docs/ writing style
 
-This section applies to committed `docs/` prose. Skill and agent prose (`skills/`, `agents/`, `CLAUDE.md`) follows the separate rules below — caveman mode shapes chat output only, not committed files.
+This section applies to committed `docs/` prose. Skill and agent prose (`skills/`, `agents/`, `CLAUDE.md`) follows the separate rules below.
 
 Declare the world as it is. A doc states the current fact, never the path it took to get there: no correction notes, dated ledgers, "used to say" or strikethrough. The history is in git. A question
 that is genuinely open is written as a question.
