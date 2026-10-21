@@ -94,9 +94,9 @@ incident it is.
 ## Dependency
 
 This agent is meant to run unattended, on a schedule or a webhook trigger.
-It should run behind the filesystem-scope PreToolUse hook this plugin ships
-(`hooks/guard-fs-writes.sh`) — the guard is exactly the protection an
-unattended, repo-writing agent needs, not an unrelated precondition.
+It writes only inside its own worktree and session scratchpad, and never
+runs `git stash`, `reset`, `clean` or `checkout --` against a shared main
+worktree.
 Scheduling itself (cron, webhook wiring, alert routing) is not this
 agent's job — that belongs to whatever scheduler the host project already
 uses.

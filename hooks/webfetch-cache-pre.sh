@@ -9,8 +9,7 @@
 #
 # Exit codes:
 #   0  allow — WebFetch runs and the model sees a freshly fetched page
-#   2  block, with the cached reading on stderr, which Claude Code surfaces
-#      to the model as the tool's result rather than as an error
+#      A cache hit goes out as additionalContext; the hook never blocks (exit 0 always)
 #
 # There is NO TTL and the prompt is not part of the cache key. Freshness is
 # delegated entirely to the origin's validators, so a cache hit is a fresh
@@ -185,6 +184,6 @@ CACHED_PROMPT="$(cat "$PROMPT_FILE" 2>/dev/null)"
   echo ""
   echo "--- cached reading ---"
   cat "$BODY"
-} >&2
+} | jq -Rs '{hookSpecificOutput:{hookEventName:"PreToolUse",additionalContext:.}}'
 
-exit 2
+exit 0

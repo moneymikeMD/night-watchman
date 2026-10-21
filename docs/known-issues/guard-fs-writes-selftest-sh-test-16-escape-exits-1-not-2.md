@@ -3,7 +3,7 @@ title: "guard-fs-writes-selftest.sh: test 16 (~/../.. escape) exits 1 not 2"
 heading_raw: "guard-fs-writes-selftest.sh: test 16 (~/../.. escape) exits 1 not 2 — LOW"
 severity: LOW
 status: resolved
-resolved: 2026-10-09
+resolved: 2026-10-19
 qualifiers: []
 note: "Linux only: the test cd'd into /private/tmp, which Linux lacks"
 tickets: []

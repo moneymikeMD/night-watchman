@@ -95,7 +95,14 @@ run_pre() {
     STUB_ETAG="${STUB_ETAG_OVERRIDE-$ETAG}" STUB_LAST_MODIFIED="${STUB_LMOD_OVERRIDE-$LMOD}" \
     STUB_FAIL="${STUB_FAIL_OVERRIDE-}" STUB_HEAD_STATUS="${STUB_HEAD_STATUS_OVERRIDE-200}" \
     STUB_REDIRECT_TO="${STUB_REDIRECT_OVERRIDE-}" STUB_REDIRECT_ETAG="${STUB_REDIRECT_ETAG_OVERRIDE-}" \
-    bash "$PRE" <<<"$payload"
+    bash "$PRE" <<<"$payload" >"$WORK/.pre.out"
+  local rc=$?
+  [ "$rc" -eq 2 ] && return 99
+  if [ "$rc" -eq 0 ] && jq -e '.hookSpecificOutput.additionalContext' "$WORK/.pre.out" >/dev/null 2>&1; then
+    jq -r '.hookSpecificOutput.additionalContext' "$WORK/.pre.out" >&2
+    return 2
+  fi
+  return "$rc"
 }
 run_post() {
   local payload="$1" cache="${2:-$CACHE}"

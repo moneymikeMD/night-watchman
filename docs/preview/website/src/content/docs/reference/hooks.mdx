@@ -23,19 +23,6 @@ PreToolUse fires BEFORE the command runs, so the command string is the only
 size signal available for gating.
 ```
 
-### hooks/guard-fs-writes.sh
-
-guard-fs-writes.sh — Claude Code PreToolUse hook for the Bash tool.
-Enforces "agents write only inside their own trees" deterministically,
-rather than as prose in a CLAUDE.md a fresh subagent can read and violate.
-
-```text
-Usage: not a CLI. Claude Code feeds it the PreToolUse payload on stdin; it
-reads `.tool_input.command` (literal, pre-expansion text) and `.cwd` (the
-recorded working directory the call ran from, falling back to this
-process's own `pwd -P`).
-```
-
 ### hooks/memory-push.sh
 
 memory-push.sh — Claude Code SessionStart, UserPromptSubmit and
@@ -133,7 +120,6 @@ Usage: not a CLI. Fed the PreToolUse payload on stdin.
 
 | Event | Matcher | Command | Timeout |
 | --- | --- | --- | --- |
-| PreToolUse | Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/guard-fs-writes.sh` | 10 |
 | PreToolUse | Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/bash-result-shunt.sh` | 10 |
 | PreToolUse | Bash | `${CLAUDE_PLUGIN_ROOT}/hooks/read-shunt.sh` | 60 |
 | PreToolUse | Read | `${CLAUDE_PLUGIN_ROOT}/hooks/read-shunt.sh` | 60 |

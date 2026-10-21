@@ -58,10 +58,9 @@ For a failed-check signal, classify it first:
 
 ## Prerequisites
 
-- The `hooks/guard-fs-writes.sh` PreToolUse hook (this plugin's core
-  filesystem-scope guard) should be active before this agent runs
-  unattended — it is the guard rail an agent with write access to a repo
-  needs, and this skill assumes it is present.
+- The agent writes only inside its own worktree and session scratchpad,
+  and never runs `git stash`, `reset`, `clean` or `checkout --` against a
+  shared main worktree.
 - A credential for opening PRs that is scoped to pull-requests and
   contents on the target repo only, with branch protection on the
   destination branch enforced independently of that credential's own

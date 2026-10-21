@@ -43,9 +43,6 @@ Moved from README.md's "What's in the box" section.
   the session that produced them.
 
 **Hooks** (PreToolUse, on by default)
-- `guard-fs-writes.sh` — blocks a destructive command (`rm -rf`, `git
-  stash`/`checkout --`/`reset`/`clean` against the main worktree, an
-  out-of-tree `mv`/redirect) before it runs, rather than after.
 - `read-shunt.sh` — a Read (or bare `cat`) of a file over the line
   threshold is summarised by a stateless `haiku` subprocess instead of
   being returned to the calling model in full; the same path read again
