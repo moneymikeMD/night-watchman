@@ -29,6 +29,9 @@
 #   provider.sh watch <ticket-id>
 #   provider.sh stop  <ticket-id> [--reason TEXT]
 #
+# [dispatch.brief] forbidden is a string or a one-line array of strings; its
+# items render first, one bullet each, then each --forbidden flag line.
+#
 # <ticket-id> is matched case-insensitively; the branch, the journal name and
 # the agent name are all the LOWERCASED id (e.g. `wo-026`).
 #
@@ -247,9 +250,11 @@ case "$verb" in
         esac
 
         [ -n "$TIMEBOX" ] || TIMEBOX=$(nw_config_get dispatch.brief.timebox "" 2>/dev/null) || TIMEBOX=""
-        if [ -z "$FORBIDDEN" ]; then
-            CFG_FORBIDDEN=$(nw_config_get dispatch.brief.forbidden "" 2>/dev/null) || CFG_FORBIDDEN=""
-            [ -z "$CFG_FORBIDDEN" ] || FORBIDDEN="- $CFG_FORBIDDEN"
+        CFG_FORBIDDEN=$(nw_config_get dispatch.brief.forbidden "" 2>/dev/null) || CFG_FORBIDDEN=""
+        if [ -n "$CFG_FORBIDDEN" ]; then
+            CFG_FORBIDDEN=$(printf '%s\n' "$CFG_FORBIDDEN" | sed 's/^/- /')
+            FORBIDDEN="$CFG_FORBIDDEN${FORBIDDEN:+
+$FORBIDDEN}"
         fi
         [ -n "$TIMEBOX" ] || die "no TIMEBOX: pass --timebox TEXT or set [dispatch.brief] timebox — an incomplete brief is never sent"
         [ -n "$FORBIDDEN" ] || die "no FORBIDDEN: pass --forbidden TEXT (repeatable) or set [dispatch.brief] forbidden — an incomplete brief is never sent"

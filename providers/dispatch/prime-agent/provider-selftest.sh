@@ -298,6 +298,25 @@ scenario_start_tracker_commands() {
     rm -rf "$d"
 }
 
+# T12 — config forbidden array lines come first, then each --forbidden flag.
+scenario_start_forbidden_merge() {
+    local d out brief section
+    d=$(scratch) || { echo "FAIL: T12 setup" >&2; FAIL=1; return; }
+    mkdir -p "$d/repo/.night-watchman"
+    printf '[dispatch.brief]\nforbidden = ["a", "b"]\n' > "$d/repo/.night-watchman/config.toml"
+    out=$(run_json "$d" start WO-026 --executor agent --model "$MODEL" \
+        --timebox "3 hours" --forbidden c)
+    brief="$(cat "$d/state/wo-026.brief.md")"
+    section=$(printf '%s\n' "$brief" | awk '/^## FORBIDDEN/ { on = 1; next } /^## / { on = 0 } on && NF')
+    assert_eq "T12 FORBIDDEN is config lines then flag lines" "$(printf -- '- a\n- b\n- c')" "$section"
+    printf '[dispatch.brief]\nforbidden = "solo"\n' > "$d/repo/.night-watchman/config.toml"
+    out=$(run_json "$d" start WO-027 --executor agent --model "$MODEL" --timebox "3 hours")
+    brief="$(cat "$d/state/wo-027.brief.md")"
+    section=$(printf '%s\n' "$brief" | awk '/^## FORBIDDEN/ { on = 1; next } /^## / { on = 0 } on && NF')
+    assert_eq "T12 a single-string config stays one bullet" "- solo" "$section"
+    rm -rf "$d"
+}
+
 # T5 — a second start on an open request re-composes nothing; a stopped run
 # is refused; a worktree path in the way with no run recorded is refused.
 scenario_start_again() {
@@ -539,6 +558,7 @@ scenario_start_model
 scenario_start_executor
 scenario_start_dry_run
 scenario_start_tracker_commands
+scenario_start_forbidden_merge
 scenario_start_again
 scenario_start_base
 scenario_watch_live
