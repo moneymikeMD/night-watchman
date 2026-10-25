@@ -308,7 +308,7 @@ writable from any shell through the `prime-agent` CLI.
 | Verb | `herdr` | `workflow` | `prime-agent` |
 | --- | --- | --- | --- |
 | `start` | opens a worktree and pane, starts a pinned-model agent, hands it the brief, transitions the ticket | composes the brief, records the launch request, prints it. No pane, no folder-trust dialog, no worktree — the brief tells the agent to create its own, the way the wave ran | creates the worktree from an explicit base, composes the brief, records the request, prints the `rlm.create_session` call (session named after the lowercased ticket id, cwd the worktree) for the turn to make |
-| `watch` | `herdr agent wait`, blocking, optionally `--until STATE --timeout MS`; a pane a human can look at | a point-in-time read of the run journal. It does not block, and there is nothing to look at | a real read of `prime-agent sessions --json`, matched by name and cwd, with tokens and cost; `--until STATE --timeout MS` polls. `prime-agent attach` gives a human a view |
+| `watch` | `herdr agent wait`, blocking, optionally `--until STATE --timeout MS`; a pane a human can look at | a point-in-time read of the run journal. It does not block, and there is nothing to look at | a real read of `prime-agent sessions --json`, matched by name and cwd, with tokens and cost, plus `finished` (true once `.night-watchman/closing-state.md` in the worktree is modified at or after `requested_at`); `--until STATE|finished --timeout MS` polls. `finished` is the done signal. `prime-agent attach` gives a human a view |
 | `stop` | closes the agent's owning workspace, taking the pane with it | records a stop request and prints the `TaskStop` the turn must issue. Nothing is killed, because nothing was spawned | `prime-agent stop <active id>` on the matched live session, recorded in the journal |
 
 ### The declared gap
@@ -361,7 +361,11 @@ over:
   `--until` that names a state Prime Agent never reports only times out.
   `idle` means between turns, not finished: in the live check a worker
   read as `idle` while waiting on a background command, then woke for
-  another turn when it completed.
+  another turn when it completed. `watch --until idle` therefore fires
+  early; use `finished`, the JSON key (and `--until finished`) that is true
+  when the worktree's `.night-watchman/closing-state.md` was modified at or
+  after the journal's `requested_at`. Every brief makes the worker write
+  that file before it stops.
 
 No implementation is a superset of another, and a caller written against
 one should read this section before assuming another will do.
