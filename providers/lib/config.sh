@@ -124,7 +124,63 @@ _nw_config_awk() {
                 err("multi-line strings are not supported by this reader (key " key ")")
                 next
             }
-            if (c == "[") { err("arrays are not supported by this reader (key " key ")"); next }
+            if (c == "[") {
+                # One-line array of strings; stored as its items joined by an
+                # encoded newline, so nw_config_get prints one item per line.
+                val = ""
+                nitems = 0
+                i = 2
+                n = length(raw)
+                state = "item"
+                ok = 0
+                while (i <= n) {
+                    ch = substr(raw, i, 1)
+                    if (ch == " " || ch == "\t") { i++; continue }
+                    if (state == "item" && ch == "]" && nitems == 0) { ok = i; break }
+                    if (state == "sep") {
+                        if (ch == "]") { ok = i; break }
+                        if (ch != ",") { break }
+                        state = "item"
+                        i++
+                        continue
+                    }
+                    if (ch == "\"") {
+                        item = ""
+                        i++
+                        fin = 0
+                        while (i <= n) {
+                            ch = substr(raw, i, 1)
+                            if (ch == "\\") {
+                                e = substr(raw, i + 1, 1)
+                                if      (e == "\"") { item = item "\"" }
+                                else if (e == "\\") { item = item "\\" }
+                                else { break }
+                                i += 2
+                                continue
+                            }
+                            if (ch == "\"") { fin = 1; i++; break }
+                            item = item ch
+                            i++
+                        }
+                        if (!fin) break
+                    } else if (ch == "'"'"'") {
+                        j = index(substr(raw, i + 1), "'"'"'")
+                        if (j == 0) break
+                        item = substr(raw, i + 1, j - 1)
+                        i += j + 1
+                    } else { break }
+                    val = (nitems ? val "\n" : "") item
+                    nitems++
+                    state = "sep"
+                }
+                if (!ok) { err("only one-line arrays of strings are supported by this reader (key " key ")"); next }
+                if (!rest_ok(substr(raw, ok + 1))) { err("trailing junk after value for key: " key); next }
+                full = (table == "" ? key : table "." key)
+                if (full in seen_key) { err("duplicate key: " full); next }
+                seen_key[full] = 1
+                printf "%s\t%s\n", full, encode(val)
+                next
+            }
             if (c == "{") { err("inline tables are not supported by this reader (key " key ")"); next }
 
             if (c == "\"") {

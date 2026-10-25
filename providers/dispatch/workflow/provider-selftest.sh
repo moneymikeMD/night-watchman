@@ -294,6 +294,25 @@ scenario_start_bad_ticket_id() {
     rm -rf "$d"
 }
 
+# T12 — config forbidden array lines come first, then each --forbidden flag.
+scenario_start_forbidden_merge() {
+    local d out brief section
+    d=$(scratch) || { echo "FAIL: T12 setup" >&2; FAIL=1; return; }
+    mkdir -p "$d/repo/.night-watchman"
+    printf '[dispatch.brief]\nforbidden = ["a", "b"]\n' > "$d/repo/.night-watchman/config.toml"
+    out=$(run_json "$d" start WO-026 --ticket-file "$AGENT_TICKET" --model opus \
+        --timebox "3 hours" --forbidden c)
+    brief="$(cat "$d/state/wo-026.brief.md")"
+    section=$(printf '%s\n' "$brief" | awk '/^## FORBIDDEN/ { on = 1; next } /^## / { on = 0 } on && NF')
+    assert_eq "T12 FORBIDDEN is config lines then flag lines" "$(printf -- '- a\n- b\n- c')" "$section"
+    printf '[dispatch.brief]\nforbidden = "solo"\n' > "$d/repo/.night-watchman/config.toml"
+    out=$(run_json "$d" start WO-027 --ticket-file "$AGENT_TICKET" --model opus --timebox "3 hours")
+    brief="$(cat "$d/state/wo-027.brief.md")"
+    section=$(printf '%s\n' "$brief" | awk '/^## FORBIDDEN/ { on = 1; next } /^## / { on = 0 } on && NF')
+    assert_eq "T12 a single-string config stays one bullet" "- solo" "$section"
+    rm -rf "$d"
+}
+
 # T6 — an incomplete brief is refused rather than composed, naming the part
 # that is missing. No config exists above the scratch root to supply either.
 scenario_start_incomplete_brief() {
@@ -600,6 +619,7 @@ scenario_start_requires_an_executor_assertion
 scenario_start_unreadable_executor
 scenario_start_bad_model
 scenario_start_bad_ticket_id
+scenario_start_forbidden_merge
 scenario_start_incomplete_brief
 scenario_start_dry_run
 scenario_start_is_idempotent

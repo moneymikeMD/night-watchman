@@ -119,6 +119,11 @@ eq "a key after a multi-line value is still readable" "still here" \
 printf "lit = 'a\\\\tb'\n" > "$WORK/lit.toml"
 eq "a literal string does NOT process escapes" 'a\tb' "$(get "$WORK/lit.toml" lit)"
 
+printf 'l = ["a", '"'"'b,c'"'"' , "d\\"e"]  # c\nempty = []\nsingle = ["x"]\n' > "$WORK/arr.toml"
+eq "a string array reads as one item per line" "$(printf 'a\nb,c\nd"e')" "$(get "$WORK/arr.toml" l)"
+eq "an empty array reads as empty" "" "$(get "$WORK/arr.toml" empty)"
+eq "a one-item array reads as that item" "x" "$(get "$WORK/arr.toml" single)"
+
 # A '#' or '=' inside a quoted string is DATA. Both are ordinary in real
 # values (op:// refs, URLs with fragments, query strings).
 cat > "$WORK/punct.toml" <<'EOF'
@@ -177,7 +182,9 @@ reject() {
     contains "$1" "$2" "$out"
 }
 
-reject "arrays are rejected"              "arrays are not supported"            'a = [1, 2]'
+reject "arrays of integers are rejected"  "arrays of strings"                   'a = [1, 2]'
+reject "an unterminated array is rejected" "arrays of strings"                  'a = ["x"'
+reject "trailing junk after an array is rejected" "trailing junk"               'a = ["x"] y'
 reject "inline tables are rejected"       "inline tables are not supported"     'a = { b = 1 }'
 reject "arrays of tables are rejected"    "arrays of tables"                    '[[x]]'
 reject "multi-line strings are rejected"  "multi-line strings"                  'a = """x"""'
@@ -195,7 +202,7 @@ reject "a duplicate table header is rejected" "duplicate table header"          
 
 printf 'a = 1\nb = [2]\nc = 1.5\n' > "$WORK/many.toml"
 MANY=$( ( unset NW_CONFIG NW_ROOT; . "$CONFIG_SH"; nw_config_parse "$WORK/many.toml" >/dev/null ) 2>&1 )
-contains "every bad line is reported, not just the first (arrays)" "arrays are not supported" "$MANY"
+contains "every bad line is reported, not just the first (arrays)" "arrays of strings" "$MANY"
 contains "every bad line is reported, not just the first (floats)" "only strings, integers" "$MANY"
 contains "an error names the line number" "many.toml:2:" "$MANY"
 

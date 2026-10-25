@@ -83,10 +83,12 @@ workspace = "night-watchman"
 
 [dispatch.brief]
 # Defaults for the brief `dispatch start` sends as the agent's first prompt,
-# used when --timebox / --forbidden are not passed. start dies naming
-# whichever is still empty rather than send an incomplete brief.
+# used when --timebox is not passed. `forbidden` is a string or an array of
+# strings (one line); each item is a standing FORBIDDEN bullet, rendered
+# before any --forbidden flag lines. start dies naming whichever of the two
+# is still empty rather than send an incomplete brief.
 timebox = "3 hours"
-forbidden = "do not touch paths outside the ticket's touches"
+forbidden = ["do not touch paths outside the ticket's touches"]
 # Optional: the Atlassian connector cloud id, printed in the brief's tracker
 # line. Uncomment and fill in if agents reach Jira through the connector.
 # cloud_id = "00000000-0000-0000-0000-000000000000"
