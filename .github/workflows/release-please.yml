@@ -58,4 +58,5 @@ jobs:
           secret: ${{ secrets.BUZZ_RELEASES_HOOK_SECRET }}
           status: released
           title: night-watchman released ${{ steps.rp.outputs.tag_name }}
+          message: ${{ steps.rp.outputs.body }}
           link: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.rp.outputs.tag_name }}
