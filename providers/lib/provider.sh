@@ -29,6 +29,7 @@
 #     secrets/env/provider.sh
 #     dispatch/workflow/provider.sh
 #     dispatch/herdr/provider.sh
+#     dispatch/prime-agent/provider.sh
 #     memory/memorygraph/provider.sh
 #     publish/atlassian/provider.sh
 #

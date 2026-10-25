@@ -72,6 +72,15 @@ vault = "Private"
 # workspace a wave's panes are opened in.
 workspace = "night-watchman"
 
+[dispatch.prime-agent]
+# Each worker a Prime Agent session; usable only when the orchestrator is a
+# top-level Prime Agent session (see providers/README.md), so it is chosen
+# per run with NW_DISPATCH=prime-agent. `model` is a `prime-agent model list`
+# selector and has no default; `thinking` is optional.
+# model = "anthropic/claude-sonnet-5-5"
+# thinking = "medium"
+# state_dir = "/absolute/path/for/run/journals"
+
 [dispatch.brief]
 # Defaults for the brief `dispatch start` sends as the agent's first prompt,
 # used when --timebox / --forbidden are not passed. start dies naming

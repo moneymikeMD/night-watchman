@@ -33,7 +33,7 @@ pluggable seam quietly becomes a hard dependency on one tool.
 | `publish` | `publish-brief` `post-headline` | Where the owner-facing wave brief is written, and where its headline is posted |
 
 **Shipped:** `secrets/op` and `secrets/env`; `tracker/jira`;
-`dispatch/workflow` and `dispatch/herdr`; `memory/memorygraph`
+`dispatch/workflow`, `dispatch/herdr` and `dispatch/prime-agent`; `memory/memorygraph`
 (`store`/`recall` over the `memorygraph` CLI); `publish/atlassian`.
 `tracker/jira` is a port of the source project's `jira-api.sh` +
 `jira-common.sh`, de-identified: the site host comes from
@@ -52,11 +52,12 @@ Statuses and transition rules are not its job: work-order's
 shared Universal Managed workflows. It is
 not a verb of the `tracker` contract itself, since it is a one-time setup
 operation, not part of the fetch/transition/comment/create surface every
-implementation must offer. `dispatch` ships two implementations —
-`dispatch/workflow` (the default) and `dispatch/herdr` (the fallback) —
+implementation must offer. `dispatch` ships three implementations —
+`dispatch/workflow` (the default), `dispatch/herdr` (the fallback) and
+`dispatch/prime-agent` (selected per run with `NW_DISPATCH=prime-agent`) —
 and they do not mean the same thing by the same verb; see
-"dispatch: `workflow` and `herdr`" below for the table and the one
-declared gap. `dispatch/herdr` is a port of a
+"dispatch: `workflow`, `herdr` and `prime-agent`" below for the table and
+the declared gaps. `dispatch/herdr` is a port of a
 worktree-dispatch tool's ticket-start flow (`herdr-ticket-start.sh`,
 under `providers/dispatch/herdr/`): its `start` verb opens a Herdr
 worktree, starts a pinned-model Claude agent in it, and hands it the
@@ -261,11 +262,11 @@ A repo that is published should keep `space`, `root_page`,
 committed config and put them in the private copy described under
 "Private config" below, alongside `[tracker.jira] host`.
 
-## dispatch: `workflow` and `herdr`
+## dispatch: `workflow`, `herdr` and `prime-agent`
 
-`dispatch` is the first kind with two implementations, and they do not
-mean the same thing by the same verb. That is what having two is for; it
-is also where this contract's only declared gap lives.
+`dispatch` is the first kind with more than one implementation, and they
+do not mean the same thing by the same verb. That is what having several
+is for; it is also where this contract's declared gaps live.
 
 **`workflow`** runs subagents in-process, inside the orchestrating turn,
 under a deterministic script — Claude Code's Workflow tool. It is the
@@ -281,6 +282,14 @@ the Workflow tool does not do: a human-visible pane during a supervised
 run, a session that outlives the orchestrating turn, and anything that
 needs a real terminal.
 
+**`prime-agent`** starts each ticket's worker as its own Prime Agent
+session, held by the Prime Agent daemon. **It only works when the
+orchestrator is itself a top-level Prime Agent session.** A daemon-backed
+session can only be created by `rlm.create_session(...)` in a top-level
+session's Python REPL; `prime-agent -p` runs do not register with the
+daemon, and no shell command creates one. It is not the committed default
+for that reason: a Claude Code orchestrator cannot use it at all.
+
 ### What the three verbs mean for an in-process dispatcher
 
 A subprocess cannot call an in-process tool. So
@@ -290,11 +299,17 @@ half only it can perform. Every verb prints one JSON object naming what is
 left for the turn to do, and a run journal outside the repo (see that
 file's header for where) is the only state that outlives the turn.
 
-| Verb | `herdr` | `workflow` |
-| --- | --- | --- |
-| `start` | opens a worktree and pane, starts a pinned-model agent, hands it the brief, transitions the ticket | composes the brief, records the launch request, prints it. No pane, no folder-trust dialog, no worktree — the brief tells the agent to create its own, the way the wave ran |
-| `watch` | `herdr agent wait`, blocking, optionally `--until STATE --timeout MS`; a pane a human can look at | a point-in-time read of the run journal. It does not block, and there is nothing to look at |
-| `stop` | closes the agent's owning workspace, taking the pane with it | records a stop request and prints the `TaskStop` the turn must issue. Nothing is killed, because nothing was spawned |
+`prime-agent` splits the same way for `start` only: the provider creates
+the worktree, composes the brief, records the request and prints the exact
+`rlm.create_session` call, and the orchestrating Prime Agent turn makes it.
+`watch` and `stop` need no turn, because the daemon's state is readable and
+writable from any shell through the `prime-agent` CLI.
+
+| Verb | `herdr` | `workflow` | `prime-agent` |
+| --- | --- | --- | --- |
+| `start` | opens a worktree and pane, starts a pinned-model agent, hands it the brief, transitions the ticket | composes the brief, records the launch request, prints it. No pane, no folder-trust dialog, no worktree — the brief tells the agent to create its own, the way the wave ran | creates the worktree from an explicit base, composes the brief, records the request, prints the `rlm.create_session` call (session named after the lowercased ticket id, cwd the worktree) for the turn to make |
+| `watch` | `herdr agent wait`, blocking, optionally `--until STATE --timeout MS`; a pane a human can look at | a point-in-time read of the run journal. It does not block, and there is nothing to look at | a real read of `prime-agent sessions --json`, matched by name and cwd, with tokens and cost; `--until STATE --timeout MS` polls. `prime-agent attach` gives a human a view |
+| `stop` | closes the agent's owning workspace, taking the pane with it | records a stop request and prints the `TaskStop` the turn must issue. Nothing is killed, because nothing was spawned | `prime-agent stop <active id>` on the matched live session, recorded in the journal |
 
 ### The declared gap
 
@@ -323,8 +338,33 @@ over:
   unattended dispatch where nobody checked who the ticket is for is the
   one failure mode worth a required flag.
 
-Neither implementation is a superset of the other, and a caller written
-against one should read this table before assuming the other will do.
+### `prime-agent`'s declared gaps
+
+- **`start` launches nothing, and cannot from a Claude Code orchestrator.**
+  The printed call is Python for a top-level Prime Agent REPL. A subagent
+  (depth 1 or deeper) cannot make it either: `rlm.create_session` is only
+  available at depth 0.
+- **The worker does not load this plugin.** A Prime Agent session reads the
+  repo's context files but not this plugin's skills, agents or hooks, so
+  none of `hooks/` (cost, memory push, the token-saving shunts) runs in
+  it. The brief
+  carries a HARNESS section saying so and pointing at `skills/*/SKILL.md`
+  by path; staying inside the ticket's touches is the worker's own job.
+- **`start` does not transition the ticket**, for workflow's reason: the
+  launch happens after `start` returns.
+- **A session name is unique only under one parent.** Two orchestrators can
+  each start a `wo-026`. `watch` and `stop` match name and cwd together and
+  refuse (exit 2) when two live sessions still match.
+- **`watch`'s states are Prime Agent's, not herdr's**: the live session's
+  `activity` (`working`, `idle`, ...), `archived` once only a stopped
+  session matches, `not-started` before the launch call is made. A
+  `--until` that names a state Prime Agent never reports only times out.
+  `idle` means between turns, not finished: in the live check a worker
+  read as `idle` while waiting on a background command, then woke for
+  another turn when it completed.
+
+No implementation is a superset of another, and a caller written against
+one should read this section before assuming another will do.
 
 ## Adding an implementation
 

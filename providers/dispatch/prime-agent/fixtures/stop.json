@@ -1,0 +1,6 @@
+{
+  "type": "response",
+  "command": "kill",
+  "success": true,
+  "id": "daemon_1"
+}
