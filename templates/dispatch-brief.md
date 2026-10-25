@@ -10,9 +10,9 @@ section for an executor:mixed ticket.
 -->
 # @KEY@ worker brief
 
-You are the worker for @KEY@ on branch `@BRANCH@` (model: @MODEL@). Load the
-session-start skill's "Dispatching a wave through a worktree-dispatch tool"
-guidance, read the ticket in the tracker, and work it to its verify block.
+You are the worker for @KEY@ on branch `@BRANCH@` (model: @MODEL@). Read the
+ticket in the tracker, its contract fields with the verify block first, and
+work it to its verify block.
 
 ## TRACKER
 @TRACKER@
