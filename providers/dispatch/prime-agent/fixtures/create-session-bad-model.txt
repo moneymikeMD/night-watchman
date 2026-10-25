@@ -1,0 +1,1 @@
+RuntimeError: Requested top-level session model "anthropic/claude-nonexistent-9" is unavailable, unauthenticated, or expired; selectors use the form "provider/model-id" (e.g. "prime-inference/z-ai/glm-5.3")

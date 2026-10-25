@@ -1,0 +1,8 @@
+Usage:
+  prime-agent sessions [--all] [--json]
+
+Show agent status, activity, and usage.
+
+Options:
+  -a, --all  Include saved agents
+  --json      Print JSON

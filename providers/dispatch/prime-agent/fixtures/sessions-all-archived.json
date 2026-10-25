@@ -1,0 +1,174 @@
+{
+  "sessions": [
+    {
+      "id": "40913d2193d2",
+      "lifecycle": "live",
+      "activity": "working",
+      "isSessionActive": true,
+      "hasRegisteredCronJob": false,
+      "lastActivityAt": "2026-10-25T17:24:40.805Z",
+      "rlmDepth": 0,
+      "activeSessionId": "40913d2193d2",
+      "sessionId": "01a173f7-99d0-76ce-9965-a3bcab8190be",
+      "sessionFile": "/Users/adopter/.prime/agent/sessions/01a173f7-99d0-76ce-9965-a3bcab8190be.jsonl",
+      "sessionName": "dotfiles-prime-harness",
+      "cwd": "/Users/adopter/.local/share/chezmoi",
+      "thinkingLevel": "medium",
+      "isStreaming": true,
+      "isCompacting": false,
+      "isQuotaParked": false,
+      "isBashRunning": false,
+      "isRunningTools": false,
+      "hasRunningSubagents": false,
+      "attachedClients": 0,
+      "messageCount": 62,
+      "sessionActions": {
+        "queuedCount": 0,
+        "steering": [],
+        "followUps": [],
+        "active": {
+          "kind": "turn",
+          "phase": "running",
+          "label": "Agent message received: Two follow-ups from applying your Linux steps on mike-desktop-l (done via herdr; the symlink, timer and merge driver are live there,..."
+        }
+      },
+      "created": "2026-10-25T16:49:29.040Z",
+      "modified": "2026-10-25T17:24:40.812Z",
+      "firstMessage": "You are working in the dotfiles repo (chezmoi source, /Users",
+      "toolUseCount": 30,
+      "parentSessionPath": "/Users/adopter/.prime/agent/sessions/01a173de-261b-77c8-b94c-70eafa558b82.jsonl",
+      "usage": {
+        "inputTokens": 1664399,
+        "outputTokens": 37767,
+        "cost": 1.8334930000000005
+      },
+      "workerState": "ready",
+      "workerPid": 50102,
+      "rosterDeltaSequence": 94,
+      "workerInstanceId": "31619c08-2689-4aa6-9f6e-d0cf407f0f1d",
+      "model": {
+        "id": "claude-opus-5-5",
+        "name": "Claude Opus 5.5",
+        "api": "anthropic-messages",
+        "provider": "anthropic",
+        "reasoning": true
+      },
+      "runtimeKind": "top-level",
+      "unfinishedActionCount": 0,
+      "anthropicWarningShown": false
+    },
+    {
+      "id": "01a17417-1cf8-74b0-9e2f-dc30108a27d8",
+      "lifecycle": "archived",
+      "activity": "idle",
+      "isSessionActive": false,
+      "activeSessionId": "01a17417-1cf8-74b0-9e2f-dc30108a27d8",
+      "sessionId": "01a17417-1cf8-74b0-9e2f-dc30108a27d8",
+      "sessionFile": "/Users/adopter/.prime/agent/sessions/01a17417-1cf8-74b0-9e2f-dc30108a27d8.jsonl",
+      "sessionName": "nw-probe-001",
+      "cwd": "/Users/adopter/code/wt-nw-probe-001",
+      "isStreaming": false,
+      "isCompacting": false,
+      "attachedClients": 0,
+      "messageCount": 5,
+      "sessionActions": {
+        "queuedCount": 0,
+        "steering": [],
+        "followUps": []
+      },
+      "created": "2026-10-25T17:23:54.232Z",
+      "modified": "2026-10-25T17:24:20.839Z",
+      "firstMessage": "Run the shell command `sleep 25` with bash and wait for it, then reply with the single word DONE. Do nothing else.",
+      "rlmDepth": 0,
+      "parentSessionPath": "/Users/adopter/.prime/agent/sessions/01a17416-0fb9-7759-93a7-57369de682cd.jsonl",
+      "thinkingLevel": "off",
+      "usage": {
+        "inputTokens": 34451,
+        "outputTokens": 94,
+        "cost": 0.017229350000000004
+      }
+    },
+    {
+      "id": "63dd6c88349a",
+      "lifecycle": "live",
+      "activity": "working",
+      "isSessionActive": true,
+      "hasRegisteredCronJob": false,
+      "lastActivityAt": "2026-10-25T17:24:02.630Z",
+      "rlmDepth": 0,
+      "activeSessionId": "63dd6c88349a",
+      "sessionId": "01a17416-0f5c-7677-8dec-66ccc5fc0ad9",
+      "sessionFile": "/Users/adopter/.prime/agent/sessions/01a17416-0f5c-7677-8dec-66ccc5fc0ad9.jsonl",
+      "sessionName": "phase1-homelab-agents-md",
+      "cwd": "/Users/adopter/code/home_workspace/homelab",
+      "thinkingLevel": "medium",
+      "isStreaming": true,
+      "isCompacting": false,
+      "isQuotaParked": false,
+      "isBashRunning": false,
+      "isRunningTools": true,
+      "hasRunningSubagents": false,
+      "attachedClients": 0,
+      "messageCount": 20,
+      "sessionActions": {
+        "queuedCount": 0,
+        "steering": [],
+        "followUps": []
+      },
+      "created": "2026-10-25T17:22:45.212Z",
+      "modified": "2026-10-25T17:24:08.932Z",
+      "firstMessage": "Work in the homelab repo (/Users/adopter/code/home_wo",
+      "toolUseCount": 10,
+      "parentSessionPath": "/Users/adopter/.prime/agent/sessions/01a173de-261b-77c8-b94c-70eafa558b82.jsonl",
+      "usage": {
+        "inputTokens": 574018,
+        "outputTokens": 4117,
+        "cost": 0.6047520000000001
+      },
+      "workerState": "ready",
+      "workerPid": 5123,
+      "rosterDeltaSequence": 30,
+      "workerInstanceId": "90bd2a46-4eb5-4a6b-a729-73c4632ad67f",
+      "model": {
+        "id": "claude-opus-5-5",
+        "name": "Claude Opus 5.5",
+        "api": "anthropic-messages",
+        "provider": "anthropic",
+        "reasoning": true
+      },
+      "runtimeKind": "top-level",
+      "unfinishedActionCount": 0,
+      "anthropicWarningShown": false
+    },
+    {
+      "id": "01a173f5-0226-72c2-80ea-bc5a7a2a9262",
+      "lifecycle": "live",
+      "activity": "idle",
+      "isSessionActive": false,
+      "activeSessionId": "01a173f5-0226-72c2-80ea-bc5a7a2a9262",
+      "sessionId": "01a173f5-0226-72c2-80ea-bc5a7a2a9262",
+      "sessionFile": "/Users/adopter/.prime/agent/sessions/01a173f5-0226-72c2-80ea-bc5a7a2a9262.jsonl",
+      "sessionName": null,
+      "cwd": "/Users/adopter/.prime/agent/session-artifacts/01a173de-261b-77c8-b94c-70eafa558b82/scratch/lifecycle",
+      "isStreaming": false,
+      "isCompacting": false,
+      "attachedClients": 0,
+      "messageCount": 4,
+      "sessionActions": {
+        "queuedCount": 0,
+        "steering": [],
+        "followUps": []
+      },
+      "created": "2026-10-25T16:46:39.142Z",
+      "modified": "2026-10-25T16:47:05.997Z",
+      "firstMessage": "Run the shell command 'sleep 25' via bash and wait for it, t",
+      "rlmDepth": 0,
+      "thinkingLevel": "low",
+      "usage": {
+        "inputTokens": 27546,
+        "outputTokens": 107,
+        "cost": 0.0715168
+      }
+    }
+  ]
+}

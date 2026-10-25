@@ -67,7 +67,7 @@ Three of the open herdr dispatch issues — a cold boot swallowing the brief, th
 when the same wave runs under the Workflow tool.
 
 WO-26 answered that by adding the Workflow tool as the second implementation and making it the default; herdr stays as the fallback for a supervised pane, a session outliving the turn, and anything
-needing a real terminal. So the seam now carries two implementations rather than one, which is the only way its design gets tested by something other than argument. What that surfaced is written down
+needing a real terminal. So the seam now carries more than one implementation (a third, `prime-agent`, starts each worker as a Prime Agent session), which is the only way its design gets tested by something other than argument. What that surfaced is written down
 in `providers/README.md`: the verbs do not map one-to-one, and `watch` in particular promises a read of a run journal rather than the live view and blocking wait herdr's offers — declared as a gap
 instead of approximated.
 

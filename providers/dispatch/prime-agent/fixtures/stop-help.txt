@@ -1,0 +1,4 @@
+Usage:
+  prime-agent stop <agent> [--json]
+
+Stop an agent.
