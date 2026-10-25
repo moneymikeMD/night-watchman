@@ -73,6 +73,10 @@
 #       unreadable template or ticket, a corrupt journal, unparseable
 #       prime-agent output, an ambiguous session match).
 #
+# The brief's TRACKER section names the read and comment commands: [dispatch.brief]
+# tracker_read and tracker_comment verbatim (@KEY@ is replaced) when set, else this
+# plugin's providers/lib/provider.sh tracker fetch|comment by absolute path.
+#
 # bash 3.2 compatible (no associative arrays, no `${var^^}`).
 
 set -euo pipefail
@@ -346,6 +350,15 @@ case "$verb" in
         else
             TRACKER_LINE="Tracker project ${CFG_PROJECT:-${TICKET_UPPER%%-*}}; read $TICKET_UPPER there first"
         fi
+        TRACKER_READ=$(nw_config_get dispatch.brief.tracker_read "" 2>/dev/null) || TRACKER_READ=""
+        TRACKER_COMMENT=$(nw_config_get dispatch.brief.tracker_comment "" 2>/dev/null) || TRACKER_COMMENT=""
+        [ -n "$TRACKER_READ" ] || TRACKER_READ="$PLUGIN_ROOT/providers/lib/provider.sh tracker fetch $TICKET_UPPER"
+        [ -n "$TRACKER_COMMENT" ] || TRACKER_COMMENT="$PLUGIN_ROOT/providers/lib/provider.sh tracker comment $TICKET_UPPER -"
+        TRACKER_READ=${TRACKER_READ//@KEY@/$TICKET_UPPER}
+        TRACKER_COMMENT=${TRACKER_COMMENT//@KEY@/$TICKET_UPPER}
+        TRACKER_LINE="$TRACKER_LINE
+Read the ticket:    $TRACKER_READ
+Comment on it:      $TRACKER_COMMENT  (text on stdin)"
 
         PROMPT_TEXT=${TEMPLATE_BODY//@KEY@/$TICKET_UPPER}
         PROMPT_TEXT=${PROMPT_TEXT//@BRANCH@/$BRANCH}
@@ -353,6 +366,7 @@ case "$verb" in
         PROMPT_TEXT=${PROMPT_TEXT//@TRACKER@/$TRACKER_LINE}
         PROMPT_TEXT=${PROMPT_TEXT//@TIMEBOX@/$TIMEBOX}
         PROMPT_TEXT=${PROMPT_TEXT//@FORBIDDEN@/$FORBIDDEN}
+        PROMPT_TEXT=${PROMPT_TEXT//"Post as a Jira comment on your ticket, then stop:"/"Post as a Jira comment on your ticket with the \"Comment on it\" command in TRACKER above, then stop:"}
         PROMPT_TEXT="$PROMPT_TEXT
 
 ## WORKTREE

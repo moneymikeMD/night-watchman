@@ -270,6 +270,34 @@ scenario_start_dry_run() {
     rm -rf "$d"
 }
 
+# T4b — the brief names the tracker read and comment commands: the plugin's
+# provider.sh by absolute path by default, [dispatch.brief] values verbatim
+# when set; REPORT points at the comment command.
+scenario_start_tracker_commands() {
+    local d out brief root
+    root=$(cd "$HERE/../../.." && pwd)
+    d=$(scratch) || { echo "FAIL: T4b setup" >&2; FAIL=1; return; }
+    out=$(run_json "$d" start WO-026 --executor agent --model "$MODEL" \
+        --timebox "3 hours" --forbidden "x" --dry-run)
+    brief=$(jf "$out" .brief)
+    assert_contains "T4b default read command" "$brief" "$root/providers/lib/provider.sh tracker fetch WO-026"
+    assert_contains "T4b default comment command" "$brief" "$root/providers/lib/provider.sh tracker comment WO-026 -"
+    assert_contains "T4b REPORT points at the comment command" "$brief" "with the \"Comment on it\" command in TRACKER above"
+
+    mkdir -p "$d/repo/.night-watchman"
+    printf '[dispatch.brief]\ntracker_read = "/opt/x/read.sh show @KEY@"\ntracker_comment = "/opt/x/say.sh add @KEY@ --stdin"\n' \
+        > "$d/repo/.night-watchman/config.toml"
+    out=$(run_json "$d" start WO-026 --executor agent --model "$MODEL" \
+        --timebox "3 hours" --forbidden "x" --dry-run)
+    brief=$(jf "$out" .brief)
+    assert_contains "T4b configured read command" "$brief" "/opt/x/read.sh show WO-026"
+    assert_contains "T4b configured comment command" "$brief" "/opt/x/say.sh add WO-026 --stdin"
+    case "$brief" in
+        *"provider.sh tracker fetch"*) echo "FAIL: T4b configured commands must replace the default" >&2; FAIL=1 ;;
+    esac
+    rm -rf "$d"
+}
+
 # T5 — a second start on an open request re-composes nothing; a stopped run
 # is refused; a worktree path in the way with no run recorded is refused.
 scenario_start_again() {
@@ -474,6 +502,7 @@ scenario_start_thinking
 scenario_start_model
 scenario_start_executor
 scenario_start_dry_run
+scenario_start_tracker_commands
 scenario_start_again
 scenario_start_base
 scenario_watch_live
