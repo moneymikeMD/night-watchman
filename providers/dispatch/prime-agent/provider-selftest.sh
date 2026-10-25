@@ -497,6 +497,42 @@ scenario_usage() {
     assert_eq "U0 NW_DISPATCH=prime-agent resolves here" "$HERE" "$out"
 }
 
+# W4 — finished is false without closing-state.md (or with one older than
+# requested_at) and true once one at or after requested_at exists; --until
+# finished returns on the second read though the session still reads idle.
+scenario_watch_finished() {
+    local d out rc cs
+    d=$(started) || { echo "FAIL: W4 setup" >&2; FAIL=1; return; }
+    cs="$d/wt-wo-026/.night-watchman/closing-state.md"
+    serve "$d" sessions 1 sessions-idle.json nw-probe-001 wo-026 "$d/wt-wo-026"
+    out=$(run_json "$d" watch wo-026)
+    assert_eq "W4 idle without closing-state is not finished" "idle false" "$(jf "$out" '"\(.state) \(.finished)"')"
+
+    mkdir -p "$d/wt-wo-026/.night-watchman"
+    echo old > "$cs"; touch -t 200001010000 "$cs"
+    out=$(run_json "$d" watch wo-026)
+    assert_eq "W4 a closing-state older than requested_at is not finished" "false" "$(jf "$out" .finished)"
+
+    touch -t 203001010000 "$cs"
+    out=$(run_json "$d" watch wo-026)
+    assert_eq "W4 a newer closing-state is finished while idle" "idle true" "$(jf "$out" '"\(.state) \(.finished)"')"
+    rm -rf "$d"
+
+    d=$(started) || { echo "FAIL: W4b setup" >&2; FAIL=1; return; }
+    cs="$d/wt-wo-026/.night-watchman/closing-state.md"
+    serve "$d" sessions 1 sessions-working.json nw-probe-001 wo-026 "$d/wt-wo-026"
+    serve "$d" sessions 2 sessions-idle.json nw-probe-001 wo-026 "$d/wt-wo-026"
+    mkdir -p "$d/wt-wo-026/.night-watchman"
+    out=$(run_json "$d" watch wo-026 --until finished --timeout 1000) && rc=0 || rc=$?
+    assert_eq "W4b no closing-state times out" "1" "$rc"
+    echo finished > "$cs"; touch -t 203001010000 "$cs"
+    rm -f "$d/fake/calls.log"
+    out=$(run_json "$d" watch wo-026 --until finished --timeout 30000) && rc=0 || rc=$?
+    assert_eq "W4b --until finished exit code" "0" "$rc"
+    assert_eq "W4b returned finished" "true" "$(jf "$out" .finished)"
+    rm -rf "$d"
+}
+
 scenario_start_happy
 scenario_start_thinking
 scenario_start_model
@@ -509,6 +545,7 @@ scenario_watch_live
 scenario_watch_not_live
 scenario_watch_until
 scenario_watch_errors
+scenario_watch_finished
 scenario_stop
 scenario_stop_refusals
 scenario_usage

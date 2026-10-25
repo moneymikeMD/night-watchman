@@ -43,9 +43,9 @@
 #
 # watch's STATE is the session's `activity` while it is live (working, idle,
 # ...), `archived` once only a stopped session matches, and `not-started`
-# when no session matches at all — the launch call has not been made yet.
-# `idle` is between turns, not finished: a worker waiting on a background
-# command reads idle and wakes again when it completes.
+# when none matches — the launch call has not been made yet. `idle` is not
+# finished; `finished` (JSON key, also `--until finished`) is: closing-state.md
+# in the worktree modified at or after requested_at.
 #
 # A session name is unique only among one parent's children, so a name alone
 # could match another orchestrator's worker; the cwd (the worktree, as a
@@ -168,6 +168,18 @@ sessions_json() {
     printf '%s' "$out" | jq -e '.sessions | type == "array"' >/dev/null 2>&1 \
         || stop2 "'prime-agent sessions $* --json' did not return a sessions[] array"
     printf '%s' "$out"
+}
+
+# finished WORKTREE REQUESTED_AT — "true" when the worktree's
+# closing-state.md was modified at or after REQUESTED_AT, else "false".
+# GNU stat first: on GNU, `stat -f` is filesystem status, not a format.
+finished() {
+    local f="$1/.night-watchman/closing-state.md" mtime req
+    [ -f "$f" ] || { echo false; return 0; }
+    mtime=$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null) || stop2 "cannot stat $f"
+    req=$(printf '%s' "$2" | jq -rR 'fromdateiso8601' 2>/dev/null) || req=""
+    [ -n "$req" ] || stop2 "the run journal's requested_at is missing or not an ISO-8601 UTC time"
+    [ "$mtime" -ge "$req" ] && echo true || echo false
 }
 
 # observe NAME CWD — one JSON object {state, session} for the session named
@@ -451,7 +463,7 @@ run by a person after landing, not before."
         while [ $# -gt 0 ]; do
             case "$1" in
                 --until)
-                    [ -n "${2:-}" ] || die "--until needs a state (working, idle, archived, not-started, ...)"
+                    [ -n "${2:-}" ] || die "--until needs a state (working, idle, archived, not-started, finished, ...)"
                     UNTIL="$UNTIL $2 "; shift 2 ;;
                 --timeout)
                     [ -n "${2:-}" ] || die "--timeout needs milliseconds"
@@ -468,6 +480,7 @@ run by a person after landing, not before."
         NAME=$(printf '%s' "$JOURNAL_JSON" | jq -r '.session_name // empty')
         CWD=$(printf '%s' "$JOURNAL_JSON" | jq -r '.worktree // empty')
         [ -n "$NAME" ] && [ -n "$CWD" ] || stop2 "the run journal for '$TICKET_ID' names no session_name or worktree"
+        REQUESTED_AT=$(printf '%s' "$JOURNAL_JSON" | jq -r '.requested_at // empty')
 
         POLL_S="${NW_PRIME_AGENT_POLL_S:-5}"
         START_S=$(date +%s)
@@ -475,8 +488,12 @@ run by a person after landing, not before."
         while :; do
             OBS=$(observe "$NAME" "$CWD")
             STATE=$(printf '%s' "$OBS" | jq -r '.state')
+            FINISHED=$(finished "$CWD" "$REQUESTED_AT")
             [ -n "$UNTIL" ] || break
             case "$UNTIL" in *" $STATE "*) break ;; esac
+            if [ "$FINISHED" = true ]; then
+                case "$UNTIL" in *" finished "*) break ;; esac
+            fi
             if [ -n "$TIMEOUT_MS" ] && [ $(( ($(date +%s) - START_S) * 1000 )) -ge "$TIMEOUT_MS" ]; then
                 TIMED_OUT=true
                 break
@@ -485,7 +502,8 @@ run by a person after landing, not before."
         done
 
         printf '%s' "$JOURNAL_JSON" | jq --argjson obs "$OBS" --arg at "$(now_utc)" --argjson timed_out "$TIMED_OUT" \
-            '. + {state:$obs.state, session:$obs.session, observed_at:$at}
+            --argjson finished "$FINISHED" \
+            '. + {state:$obs.state, finished:$finished, session:$obs.session, observed_at:$at}
              + (if $timed_out then {timed_out:true} else {} end)'
         [ "$TIMED_OUT" = false ] || { echo "Error: watch --until timed out after ${TIMEOUT_MS}ms in state '$STATE'" >&2; exit 1; }
         ;;
