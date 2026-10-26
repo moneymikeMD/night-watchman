@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.18.0](https://github.com/moneymikeMD/night-watchman/compare/v1.17.1...v1.18.0) (2026-10-25)
+
+
+### Features
+
+* **dispatch:** add a prime-agent implementation (NWM-206) ([a8b59d3](https://github.com/moneymikeMD/night-watchman/commit/a8b59d39d307182deba8c968f61038726535720c))
+
 ## [1.17.1](https://github.com/moneymikeMD/night-watchman/compare/v1.17.0...v1.17.1) (2026-10-21)
 
 
