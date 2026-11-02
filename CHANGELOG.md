@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [1.18.1](https://github.com/moneymikeMD/night-watchman/compare/v1.18.0...v1.18.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* read-shunt passes images and PDFs straight through ([#158](https://github.com/moneymikeMD/night-watchman/issues/158)) ([f245f8b](https://github.com/moneymikeMD/night-watchman/commit/f245f8b312b0793ecb0d6c4a94f69bc6bafb06b0))
+
 ## [1.18.0](https://github.com/moneymikeMD/night-watchman/compare/v1.17.1...v1.18.0) (2026-10-25)
 
 
