@@ -29,6 +29,9 @@
 #   READ_SHUNT_SCRIPT=/tmp/mutant.sh ./read-shunt-selftest.sh   # expect FAIL
 #   ./read-shunt-selftest.sh                                    # expect PASS
 #
+# Group 9 (image/PDF passthrough) goes red when the `LOWER_NAME` case block
+# is removed from read-shunt.sh.
+#
 # Exit 0 if every assertion passes, 1 on the first failure summary printed.
 
 set -u
@@ -314,6 +317,22 @@ assert_rc "'cat \$VAR' (unresolved variable) is left alone" "0" "$OUT"
 
 OUT="$(run_hook Bash "grep foo $F401" "sess-grepnotcat" "$STUBBIN" "")"
 assert_rc "non-cat Bash command is left alone" "0" "$OUT"
+
+# 9. Natively rendered formats pass through however many newline bytes they hold.
+F_PNG="$WORKDIR/shot.png"; mk_lines "$F_PNG" 900
+F_JPG="$WORKDIR/PHOTO.JPG"; mk_lines "$F_JPG" 900
+F_PDF="$WORKDIR/doc.Pdf"; mk_lines "$F_PDF" 900
+F_BIGTXT="$WORKDIR/big.txt"; mk_lines "$F_BIGTXT" 900
+for _f in "$F_PNG" "$F_JPG" "$F_PDF"; do
+  SENT="$WORKDIR/sentinel.img.$(basename "$_f")"; rm -f "$SENT"
+  OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$_f" "sess-img" "$STUBBIN" "")"
+  assert_rc "large $(basename "$_f") passes straight through" "0" "$OUT"
+  if [ -e "$SENT" ]; then fail "$(basename "$_f"): summariser was invoked (should not be)"; else pass "$(basename "$_f"): summariser not invoked"; fi
+done
+SENT="$WORKDIR/sentinel.bigtxt"; rm -f "$SENT"
+OUT="$(STUB_SENTINEL="$SENT" run_hook Read "$F_BIGTXT" "sess-img" "$STUBBIN" "")"
+assert_rc "large .txt is still shunted" "2" "$OUT"
+if [ -e "$SENT" ]; then pass "large .txt: summariser was invoked"; else fail "large .txt: summariser NOT invoked (should be)"; fi
 
 echo ""
 echo "read-shunt-selftest.sh: $PASS passed, $FAIL failed"

@@ -19,6 +19,10 @@
 #     and `cat "$VAR"` are left alone. This is not a shell parser.
 #   - anything else: exit 0 immediately.
 #
+# Image and PDF files (png, jpg, jpeg, gif, webp, bmp, ico, pdf; matched by
+# extension, case-insensitively) always pass straight through: the Read tool
+# renders them natively, and their newline bytes say nothing about size.
+#
 # Escape hatch: the FIRST read of a given path in a given hook session is
 # summarised and recorded under $READ_SHUNT_STATE_ROOT/<session_id>/<key>.
 # Asking for the same path again in the same session returns the real,
@@ -238,6 +242,11 @@ case "$TOOL_NAME" in
   *)
     exit 0
     ;;
+esac
+
+LOWER_NAME="$(printf '%s' "${FILE_PATH##*/}" | tr '[:upper:]' '[:lower:]')"
+case "$LOWER_NAME" in
+  *.png|*.jpg|*.jpeg|*.gif|*.webp|*.bmp|*.ico|*.pdf) exit 0 ;;
 esac
 
 # Order matters: the secrets check runs against the fully symlink-resolved,
