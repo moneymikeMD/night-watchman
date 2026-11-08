@@ -394,6 +394,9 @@ You are a Prime Agent session, not a Claude Code one: this plugin's skills,
 agents and hooks are not loaded. Where this brief names a skill, read
 $PLUGIN_ROOT/skills/<name>/SKILL.md and follow it. Staying inside your
 worktree and inside the ticket's touches is on you.
+\`await bash(cmd)\` returns a finished result (\`.exit_code\`, \`.output\`), or a
+snapshot whose \`.handle\` is the live process if still running; never await
+that result again.
 
 ## CLOSING STATE
 Before you stop, write \`.night-watchman/closing-state.md\` in your worktree (do

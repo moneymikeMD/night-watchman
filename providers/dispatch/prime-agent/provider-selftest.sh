@@ -189,6 +189,7 @@ scenario_start_happy() {
     assert_contains "T0 the brief names the model" "$brief" "(model: $MODEL)"
     assert_contains "T0 the brief says the worktree already exists" "$brief" "Your working directory is your own worktree, $d/wt-wo-026"
     assert_contains "T0 the brief says no plugin skills or hooks are loaded" "$brief" "## HARNESS"
+    assert_contains "T0 the HARNESS section warns await bash returns a result" "$(printf '%s\n' "$brief" | sed -n '/^## HARNESS/,/^## CLOSING/p')" "never await"
     assert_eq "T0 an agent ticket has no mixed section" "" "$(printf '%s' "$brief" | grep '## MIXED TICKET')"
     rm -rf "$d"
 }
