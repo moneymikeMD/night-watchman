@@ -303,7 +303,7 @@ do_sprint_close() {
 }
 
 # sprint-update <sprint-id> [--name N] [--goal G] [--start ISO] [--end ISO] —
-# partial PUT /sprint/{id}. Only fields named by a flag are sent; at least
+# partial POST /sprint/{id} (PUT is a full replace and needs state). Only fields named by a flag are sent; at least
 # one is required.
 do_sprint_update() {
     local id="$1"; shift
@@ -341,7 +341,7 @@ do_sprint_update() {
          | if $has_start == 1 then .startDate = $start else . end
          | if $has_end == 1 then .endDate = $end else . end') \
         || die "sprint-update: could not build request body"
-    do_write PUT "/sprint/$id" "$body"
+    do_write POST "/sprint/$id" "$body"
 }
 
 # sprint-delete <sprint-id> — permanently deletes a sprint. Jira only

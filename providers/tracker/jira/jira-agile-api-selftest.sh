@@ -278,9 +278,9 @@ assert_empty "6a: refused sprint-update sends no request" "$LAST_REQLOG"
 
 STUB_HTTP_CODE=200 run update1 --yes sprint-update 7 --goal "ship it"
 assert_eq "6b: sprint-update with --goal alone succeeds" "0" "$LAST_RC"
-check "6b: goal lands in the PUT body" "$(cat "$LAST_REQLOG")" '"goal": "ship it"'
+check "6b: goal lands in the POST body" "$(cat "$LAST_REQLOG")" '"goal": "ship it"'
 check_not "6b: name is not sent when --name was not given" "$(cat "$LAST_REQLOG")" '"name"'
-assert_eq "6b: request method is PUT" "1" "$(grep -c '^PUT	' "$LAST_REQLOG")"
+assert_eq "6b: request method is POST" "1" "$(grep -c '^POST	' "$LAST_REQLOG")"
 
 STUB_HTTP_CODE=200 run update2 --yes sprint-update 7 --name "Renamed" --goal "g" --start 2026-09-13T00:00:00.000Z --end 2026-09-20T00:00:00.000Z
 assert_eq "6c: sprint-update with all four flags succeeds" "0" "$LAST_RC"
