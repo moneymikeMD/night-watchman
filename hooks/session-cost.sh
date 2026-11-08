@@ -17,6 +17,7 @@
 # is a one-line stderr warning, and this script always exits 0.
 #
 # Env overrides (mainly for the selftest): NW_COST_LEDGER (default
+# <state root>/docs/cost-ledger.tsv, the same root as the state file, else
 # <cwd>/docs/cost-ledger.tsv — only appended to if it already exists),
 # NW_COST_PROJECTS_DIR (default: claude-cost-scan.py's own
 # ~/.claude/projects), NW_COST_PROJECT_SLUG (scan by this fixed slug
@@ -132,7 +133,17 @@ fi
 [ -n "$WORK_TURNS" ] || WORK_TURNS=0
 [ -n "$WORK_USD" ] || WORK_USD=0
 
-LEDGER="${NW_COST_LEDGER:-$CWD/docs/cost-ledger.tsv}"
+# State goes to the repo's MAIN worktree: a .night-watchman/ written inside a
+# dispatched worktree trips land-branch's dirty-tree preflight.
+ROOT=""
+TOP="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)"
+if [ -n "$TOP" ]; then
+    ROOT="$(git -C "$TOP" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
+fi
+if [ -z "$ROOT" ] && [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
+    ROOT="$CLAUDE_PROJECT_DIR"
+fi
+LEDGER="${NW_COST_LEDGER:-${ROOT:-$CWD}/docs/cost-ledger.tsv}"
 LEDGER_SCRIPT="$PLUGIN_ROOT/scripts/claude-cost.py"
 if [ -f "$LEDGER" ] && [ -f "$LEDGER_SCRIPT" ]; then
     WAVE="$(date -u +%Y-%m-%d)-${SESSION_ID:0:8}"
@@ -150,16 +161,6 @@ if [ -f "$LEDGER" ] && [ -f "$LEDGER_SCRIPT" ]; then
     fi
 fi
 
-# State goes to the repo's MAIN worktree: a .night-watchman/ written inside a
-# dispatched worktree trips land-branch's dirty-tree preflight.
-ROOT=""
-TOP="$(git -C "$CWD" rev-parse --show-toplevel 2>/dev/null)"
-if [ -n "$TOP" ]; then
-    ROOT="$(git -C "$TOP" worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')"
-fi
-if [ -z "$ROOT" ] && [ -n "${CLAUDE_PROJECT_DIR:-}" ] && [ -d "$CLAUDE_PROJECT_DIR" ]; then
-    ROOT="$CLAUDE_PROJECT_DIR"
-fi
 [ -n "$ROOT" ] || { warn "cwd $CWD is not in a git repo and CLAUDE_PROJECT_DIR is unset — skipping state file"; exit 0; }
 STATE_DIR="$ROOT/.night-watchman"
 mkdir -p "$STATE_DIR" 2>/dev/null || { warn "could not create $STATE_DIR — skipping state file"; exit 0; }
