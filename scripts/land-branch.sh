@@ -33,6 +33,7 @@
 #                  [--outcome "text" | --outcome-file PATH]
 #   land-branch.sh <branch> <ticket-id> --no-complete [--dry-run] [--note "text"] [--tracker file|jira] ...
 #   land-branch.sh <branch> <ticket-id> --already-merged [--merged-as SHA] ...
+#   land-branch.sh --batch <branch> <ticket-id> [<branch> <ticket-id>]... [--dry-run] ...
 #   land-branch.sh --help
 #
 # --already-merged (jira only) runs the LIFECYCLE half for a branch merged
@@ -40,28 +41,33 @@
 # the landing by CONTENT, not ancestry, so a squash counts: every path the
 # branch changed since it forked must be identical at the landing commit.
 #
+# --batch: every pair passes the single-branch preflight, then one land-core.sh
+# --item run (one lint, one push; no --outcome/--note/--no-complete/--already-
+# merged). Jira tickets move to Awaiting at pre-merge; file tickets' moves are
+# committed at pre-push, survivors only.
+# Landed tickets complete at post-push. One not landed goes back to In Progress
+# (jira, if this run moved it; not after a failed push) with a note naming why;
+# one missing from land-core's table is left untouched for a manual check. Exit:
+# land-core's batch codes (0 all, 3 some, 1/2 none), or 1 when either went wrong.
+#
 # INTEGRATION WORKTREE, lock, --reset-land and the lint gate are land-core.sh's
-# (see its header): `<parent-of-the-main-worktree>/<repo-basename>-land`,
-# reset to origin/<target-branch> every run. --lint-cmd runs through bash -c.
+# (see its header), at `<parent-of-the-main-worktree>/<repo-basename>-land`.
 #
 # Exit codes:
 #   0   landed cleanly
-#   1   a step failed AFTER the merge succeeded (lint, or completing), or the
-#       Awaiting Deployment transition failed. The merge is reverted — except
-#       a failed `git push`, which is NOT reverted (complete locally).
-#   2   could not evaluate / stopped early — bad input, a dirty tree, a
-#       missing ticket, a git precondition check that itself failed, a
-#       missing ai-toolkit checkout, or a merge conflict.
+#   1   a step failed AFTER the merge (lint, completing), or the Awaiting
+#       Deployment move failed. The merge is reverted, except after a failed
+#       `git push` (complete locally).
+#   2   stopped early, nothing mutated: bad input, a dirty tree, a missing
+#       ticket or ai-toolkit checkout, a failed git precondition, a conflict.
 #
 # Env overrides (all have a `--flag` equivalent; the flag wins):
 #   TARGET_BRANCH                     branch to land onto (default: main).
 #   LAND_BRANCH_TRACKER               file (default) | jira.
 #   ISSUES_DIR                        file mode's tickets dir (default: issues).
 #   ISSUES_JIRA_API                   jira mode's API wrapper path.
-#   LAND_BRANCH_JIRA_PROGRESS_STATUS  In Progress status id. Required in jira mode.
-#   LAND_BRANCH_JIRA_AWAITING_STATUS  Awaiting Deployment status id. Required in jira mode.
-#   LAND_BRANCH_JIRA_DONE_STATUS      Completed status id. Required in jira
-#                                     mode unless --no-complete; no default.
+#   LAND_BRANCH_JIRA_{PROGRESS,AWAITING,DONE}_STATUS  status ids, no defaults;
+#                                     required in jira mode (DONE: unless --no-complete).
 #   LAND_BRANCH_LINT_CMD              command run on the merged tree (default:
 #                                     ./scripts/lint.sh if present, else skipped).
 #   AI_TOOLKIT_ROOT                   ai-toolkit checkout (ai-toolkit-root.sh).
@@ -69,12 +75,10 @@
 #   LAND_BRANCH_HANDOFF_FILE          closing-state path; unreadable = no closing state.
 #   LAND_BRANCH_ORCHESTRATOR_PANE     override the orchestrator pane id.
 #   LAND_BRANCH_EXECUTOR_FIELD        jira executor field (customfield_10047).
-#   LAND_BRANCH_CLOSING_READBACK_ATTEMPTS jira read-back attempts (default 4).
-#   LAND_BRANCH_CLOSING_READBACK_DELAY_S  seconds between them (default 1).
+#   LAND_BRANCH_CLOSING_READBACK_{ATTEMPTS,DELAY_S}  jira read-back (4, 1 s).
 #
-# Optional layer: with HERDR_ENV=1 and `herdr` on PATH, a successful landing
-# also removes the herdr worktree workspace matching this branch by name.
-# Closing state (NWM-120, gated on a hand-off file by NWM-134).
+# With HERDR_ENV=1 and `herdr` on PATH, a landing also writes the closing state
+# (NWM-120, NWM-134) and removes the herdr workspace matching the branch.
 
 set -euo pipefail
 # shellcheck source=lib/kit.sh
@@ -100,6 +104,9 @@ LIFECYCLE_NOTE=""
 HOOK_MODE=0
 HOOK_STATE=""
 JIRA_ERR=""
+BATCH=0
+ITEM_MERGE_SHA=""
+TAB=$(printf '\t')
 
 stop2() { echo "Error: $*${LIFECYCLE_NOTE:+
 $LIFECYCLE_NOTE}" >&2; exit 2; }
@@ -141,6 +148,16 @@ save_state() {
     for v in "$@"; do
         printf '%s=%q\n' "$v" "${!v}" >> "$HOOK_STATE"
     done
+}
+
+save_all_state() {
+    save_state TRACKER ISSUES_DIR JIRA_API JIRA_DONE_STATUS JIRA_AWAITING_STATUS JIRA_PROGRESS_STATUS \
+        BRANCH TICKET_ID TARGET_BRANCH NO_COMPLETE NOTE_TEXT NOTE_GIVEN OUTCOME_TEXT ALREADY_MERGED \
+        LANDED_SHA LANDED_HOW WHEN_BEFORE WHEN_AFTER TICKET_FILE TICKET_STAGE ALREADY_DONE \
+        JIRA_STATUS_NOW JIRA_AWAIT_TID JIRA_AWAIT_TO JIRA_DONE_TID JIRA_DONE_TO COMPLETE_FAILED \
+        CLOSING CLOSING_FAILED CLOSING_TEXT CLOSING_MARK MERGE_SHA HANDOFF_FILE EXECUTOR \
+        BRANCH_CONDITION WORKER_WT ORCH_PANE MAIN_WORKTREE PRE_PUSH_OK WRAPPER_RC \
+        LIFECYCLE_NOTE
 }
 
 # lc_fail RC MESSAGE — a lifecycle step failed. In hook mode the non-zero exit
@@ -314,7 +331,7 @@ lc_post_merge() {
             MERGE_SHA="$LANDED_SHA"
             LANDED_HOW="already on $TARGET_BRANCH at"
         else
-            MERGE_SHA=$(git rev-parse HEAD)
+            MERGE_SHA="${ITEM_MERGE_SHA:-$(git rev-parse HEAD)}"
             LANDED_HOW="merge commit"
         fi
         CLOSING_MARK="closing-state:$TICKET_ID:${MERGE_SHA}"
@@ -662,6 +679,256 @@ lc_finish() {
     exit 0
 }
 
+# batch_in_item STATE FUNC — run FUNC in a subshell holding one batch item's
+# preflight state; its save_state calls append to that item's state file.
+batch_in_item() {
+    # shellcheck disable=SC1090  # written by this script's preflight child
+    ( HOOK_STATE="$1"; . "$1"; "$2" )
+}
+
+batch_state_of() { awk -F "$TAB" -v b="$1" '$1 == b { print $3 }' "$BATCH_ITEMS_FILE"; }
+
+# shellcheck disable=SC2329  # called by name through batch_in_item
+batch_pre_merge_item() {
+    [ "$TRACKER" = jira ] || return 0
+    lc_pre_merge
+}
+
+# batch_pre_push_item — the train is merged and linted. A file ticket takes
+# both its moves here, so one that drops out of the train never moves.
+# shellcheck disable=SC2329  # called by name through batch_in_item
+batch_pre_push_item() {
+    ITEM_MERGE_SHA=$(git log --first-parent --merges --format='%H %s' "origin/$TARGET_BRANCH..HEAD" 2>/dev/null \
+        | awk -v s="$TICKET_ID: merge branch '$BRANCH' into $TARGET_BRANCH" '{ h = $1; sub(/^[^ ]+ /, "") } !f && $0 == s { print h; f = 1 }') \
+        || ITEM_MERGE_SHA=""
+    [ -n "$ITEM_MERGE_SHA" ] || ITEM_MERGE_SHA=$(git rev-parse "refs/heads/$BRANCH")
+    [ "$TRACKER" = jira ] || lc_pre_merge
+    lc_post_merge
+    lc_pre_push
+}
+
+# batch_hook POINT — hook mode under land-core.sh's batch: pre-merge and
+# pre-push once for every item still in the train, post-push per landed item.
+batch_hook() {
+    local br st
+    case "$1" in
+        pre-merge|pre-push)
+            while IFS="$TAB" read -r br _; do
+                [ -n "$br" ] || continue
+                st=$(batch_state_of "$br")
+                [ -n "$st" ] || die "batch hook: '$br' is not one of this batch's branches"
+                batch_in_item "$st" "batch_${1//-/_}_item" || exit 1
+            done <<EOF
+${LAND_CORE_ITEMS:-}
+EOF
+            ;;
+        post-push)
+            st=$(batch_state_of "$LAND_CORE_BRANCH")
+            [ -n "$st" ] || die "batch hook: '$LAND_CORE_BRANCH' is not one of this batch's branches"
+            batch_in_item "$st" lc_post_push || exit 1
+            ;;
+    esac
+    exit 0
+}
+
+# shellcheck disable=SC2329  # called by name through batch_in_item
+batch_plan_item() {
+    local head="  $TICKET_ID ('$BRANCH'):"
+    if [ "$TRACKER" = file ]; then
+        if [ "$ALREADY_DONE" = 1 ]; then
+            echo "$head already in '$ISSUES_DIR/completed/' — nothing to move"
+        else
+            echo "$head at hook pre-push, only if it is still in the train: $ISSUES_DIR/$TICKET_STAGE/ -> awaiting-deployment/ -> completed/, one commit each"
+        fi
+    elif [ "$ALREADY_DONE" = 1 ]; then
+        echo "$head already '$JIRA_STATUS_NOW' — no transition"
+    elif [ -n "$JIRA_AWAIT_TID" ]; then
+        echo "$head at hook pre-merge, '$JIRA_STATUS_NOW' -> '$JIRA_AWAIT_TO' (transition $JIRA_AWAIT_TID, read back); at hook post-push, into status id $JIRA_DONE_STATUS"
+    else
+        echo "$head already '$JIRA_STATUS_NOW'; at hook post-push, into status id $JIRA_DONE_STATUS"
+    fi
+}
+
+# shellcheck disable=SC2329  # called by name through batch_in_item
+batch_report_landed() {
+    local what="landed and completed"
+    [ "$ALREADY_DONE" != 1 ] || what="landed; it was already complete"
+    [ -z "$COMPLETE_FAILED" ] || what="landed, NOT completed: $COMPLETE_FAILED"
+    [ -z "$CLOSING_FAILED" ] || what="$what, closing state NOT written: $CLOSING_FAILED"
+    echo "  $TICKET_ID ('$BRANCH'): $what"
+}
+
+# batch_unland_item — a ticket land-core.sh did not land: undo this run's
+# Awaiting move and say why on the ticket. Reads BATCH_FATE and BATCH_WHY.
+# shellcheck disable=SC2329  # called by name through batch_in_item
+batch_unland_item() {
+    local how rc=0
+    RESOLVE_MSG=""; MOVE_MSG=""
+    if [ "$TRACKER" = file ]; then
+        echo "  $TICKET_ID ('$BRANCH'): $BATCH_FATE — its ticket stays in '$ISSUES_DIR/$TICKET_STAGE/' on $TARGET_BRANCH${BATCH_WHY:+: $BATCH_WHY}"
+        return 0
+    fi
+    JIRA_ERR=$(tmpfile) || return 1
+    how="left '$JIRA_STATUS_NOW'"
+    if [ -n "$LIFECYCLE_NOTE" ]; then
+        if jira_resolve_to "$JIRA_PROGRESS_STATUS" && jira_move "$RESOLVED_TID" "$JIRA_PROGRESS_STATUS"; then
+            how="moved back to '$MOVE_AFTER_NAME'"
+        else
+            echo "Error: $TICKET_ID was moved to '$JIRA_STATUS_NOW' by this run and could not be moved back: ${RESOLVE_MSG:-$MOVE_MSG}" >&2
+            how="NOT moved back, still '$JIRA_STATUS_NOW'"
+            rc=1
+        fi
+    fi
+    if ! jira_post_comment "$TICKET_ID" "Progress note ($(date +%F)): land-branch.sh --batch did not land branch '$BRANCH' — $BATCH_FATE${BATCH_WHY:+: $BATCH_WHY}. The ticket was $how."; then
+        echo "Error: could not post the progress note on $TICKET_ID" >&2
+        rc=1
+    fi
+    echo "  $TICKET_ID ('$BRANCH'): $BATCH_FATE — $how"
+    return "$rc"
+}
+
+# batch_unconfirmed_item — land-core.sh's table has no row for this pair, so
+# its fate is a guess; the ticket is never touched. Reads BATCH_TIP,
+# BATCH_RC and BATCH_ON_TARGET (yes, no, or unknown when the fetch failed).
+# shellcheck disable=SC2329  # called by name through batch_in_item
+batch_unconfirmed_item() {
+    local now="${JIRA_STATUS_NOW:-$ISSUES_DIR/$TICKET_STAGE/}"
+    case "$BATCH_ON_TARGET" in
+        yes) echo "  $TICKET_ID ('$BRANCH'): landed-unconfirmed — no row in land-core.sh's table (exit $BATCH_RC), but tip ${BATCH_TIP:0:7} is on origin/$TARGET_BRANCH. NOT touched: check its status, outcome and closing state by hand" ;;
+        no) echo "  $TICKET_ID ('$BRANCH'): unknown — no row in land-core.sh's table (exit $BATCH_RC), and tip ${BATCH_TIP:0:7} is not on origin/$TARGET_BRANCH. Left as it was ('$now'). Check: git merge-base --is-ancestor $BATCH_TIP origin/$TARGET_BRANCH; git -C '$(dirname "$MAIN_WORKTREE")/$(basename "$MAIN_WORKTREE")-land' log --oneline origin/$TARGET_BRANCH..HEAD; then the ticket's status" ;;
+        *) echo "  $TICKET_ID ('$BRANCH'): unknown — no row in land-core.sh's table (exit $BATCH_RC), and 'git fetch origin' failed, so tip ${BATCH_TIP:0:7} could not be checked against origin/$TARGET_BRANCH. Left as it was ('$now'): check by hand" ;;
+    esac
+}
+
+# batch_rows FILE — `branch<TAB>fate<TAB>note` per row of the last
+# 'Batch result:' table in land-core.sh's output (format: its header).
+batch_rows() {
+    awk '
+        /^Batch result:$/ { on = 1; n = 0; next }
+        on && /^  [^ ]/ {
+            s = substr($0, 3); fate = s; sub(/ .*/, "", fate)
+            s = substr(s, length(fate) + 1); sub(/^ +/, "", s)
+            br = s; sub(/ .*/, "", br); s = substr(s, length(br) + 1)
+            sub(/^ \[[^]]*\]/, "", s); sub(/^  [^ ]+/, "", s); sub(/^  /, "", s)
+            row[++n] = br "\t" fate "\t" s; next
+        }
+        on { on = 0 }
+        END { for (i = 1; i <= n; i++) print row[i] }
+    ' "$1"
+}
+
+# batch_main — --batch's wrapper half: preflight every pair through this
+# script's own single-branch checks, run land-core.sh once, settle each ticket.
+batch_main() {
+    local br t st tip rc row fate why out rows n=0 unland_rc=0 unknown=0 fetched="" allowed
+    local pass=() items=() core_args=()
+    # shellcheck disable=SC2086  # newline-joined bare args, as in single mode
+    set -- $POSITIONAL
+    [ $# -ge 2 ] && [ $(($# % 2)) = 0 ] || stop2 "--batch expects <branch> <ticket-id> pairs, got $# positional argument(s) (see --help)"
+    need git
+    [ "$TRACKER" = file ] || need jq
+    INVOKING_REPO=$(git rev-parse --show-toplevel 2>/dev/null) || stop2 "not inside a git repository"
+    cd "$INVOKING_REPO"
+    WT_PORCELAIN=$(git worktree list --porcelain 2>&1) || stop2 "could not evaluate 'git worktree list': $WT_PORCELAIN"
+    MAIN_WORKTREE=$(printf '%s\n' "$WT_PORCELAIN" | awk '/^worktree /{sub(/^worktree /,""); print; exit}')
+    [ -n "$MAIN_WORKTREE" ] || stop2 "could not determine the main worktree from 'git worktree list'"
+    CORE_ERR_TMP=$(tmpfile) || stop2 "could not create a temp file for ai-toolkit-root.sh diagnostics"
+    LAND_CORE=$("$SELF_DIR/ai-toolkit-root.sh" --land-core 2>"$CORE_ERR_TMP") \
+        || stop2 "cannot resolve ai-toolkit's land-core.sh, which does this landing's merge and push. Nothing mutated. ai-toolkit-root.sh said:
+$(cat "$CORE_ERR_TMP")"
+    [ -x "$LAND_CORE" ] || stop2 "ai-toolkit's land-core.sh at '$LAND_CORE' is not executable. Nothing mutated"
+
+    pass=(--tracker "$TRACKER" --issues-dir "$ISSUES_DIR")
+    [ -z "$JIRA_API" ] || pass+=(--jira-api "$JIRA_API")
+    [ -z "$JIRA_PROGRESS_STATUS" ] || pass+=(--jira-progress-status "$JIRA_PROGRESS_STATUS")
+    [ -z "$JIRA_AWAITING_STATUS" ] || pass+=(--jira-awaiting-status "$JIRA_AWAITING_STATUS")
+    [ -z "$JIRA_DONE_STATUS" ] || pass+=(--jira-done-status "$JIRA_DONE_STATUS")
+    [ -z "$LINT_CMD" ] || pass+=(--lint-cmd "$LINT_CMD")
+    BATCH_ITEMS_FILE=$(tmpfile) || stop2 "could not create the batch item list. Nothing mutated"
+    while [ $# -gt 0 ]; do
+        br="$1"; t="$2"; shift 2
+        if awk -F "$TAB" -v b="$br" -v t="$t" '$1 == b || $2 == t { f = 1 } END { exit !f }' "$BATCH_ITEMS_FILE"; then
+            stop2 "--batch lists branch '$br' or ticket '$t' twice. Nothing mutated"
+        fi
+        st=$(tmpfile) || stop2 "could not create a batch item state file. Nothing mutated"
+        rc=0
+        LAND_BRANCH_BATCH_ITEM_STATE="$st" "$SELF" "$br" "$t" "${pass[@]}" >/dev/null || rc=$?
+        [ "$rc" = 0 ] || stop2 "--batch: the preflight of '$br' ($t) stopped with exit $rc, its error is above. Nothing in the batch was mutated"
+        tip=$(git rev-parse --verify --quiet "refs/heads/$br^{commit}") || stop2 "could not read the tip of '$br'. Nothing mutated"
+        printf '%s\t%s\t%s\t%s\n' "$br" "$t" "$st" "$tip" >> "$BATCH_ITEMS_FILE"
+        items+=(--item "$br:$t")
+        n=$((n + 1))
+    done
+
+    echo "Plan (--batch, $n ticket(s)); land-core.sh's own plan for the merge train follows:"
+    while IFS="$TAB" read -r br t st tip; do
+        batch_in_item "$st" batch_plan_item
+    done < "$BATCH_ITEMS_FILE"
+    echo "  every landed ticket, at hook post-push: complete it, write its closing state (HERDR_ENV=1), remove its herdr workspace"
+    echo "  every ticket not landed: back to In Progress if this run moved it (jira), plus a progress note naming why"
+    echo
+
+    core_args=(--repo "$MAIN_WORKTREE" --target "$TARGET_BRANCH" --hook "$SELF" "${items[@]}")
+    for allowed in ${ALLOWED_UNTRACKED[@]+"${ALLOWED_UNTRACKED[@]}"}; do
+        core_args+=(--allow-untracked "$allowed")
+    done
+    [ "$RESET_LAND" != 1 ] || core_args+=(--reset-land)
+    [ -z "$LINT_CMD" ] || core_args+=(--lint-cmd "$LINT_CMD")
+    if [ "$DRY_RUN" = 1 ]; then
+        rc=0
+        env -u LAND_CORE_LINT_CMD -u LAND_CORE_HOOK -u LAND_CORE_TARGET_BRANCH \
+            "$LAND_CORE" "${core_args[@]}" --dry-run || rc=$?
+        exit "$rc"
+    fi
+
+    HOOK_STATE=$(tmpfile) || stop2 "could not create the hook state file. Nothing mutated"
+    HOOK_MODE=1
+    save_state TRACKER ISSUES_DIR JIRA_API JIRA_DONE_STATUS JIRA_AWAITING_STATUS JIRA_PROGRESS_STATUS \
+        TARGET_BRANCH BATCH_ITEMS_FILE
+    HOOK_MODE=0
+    out=$(tmpfile) || stop2 "could not create a temp file for land-core.sh's output. Nothing mutated"
+    set +e
+    env -u LAND_CORE_LINT_CMD -u LAND_CORE_HOOK -u LAND_CORE_TARGET_BRANCH \
+        LAND_BRANCH_HOOK_STATE="$HOOK_STATE" "$LAND_CORE" "${core_args[@]}" | tee "$out"
+    rc=${PIPESTATUS[0]}
+    set -e
+
+    rows=$(tmpfile) || die "could not create a temp file for the batch table — check each ticket by hand"
+    batch_rows "$out" > "$rows"
+    echo
+    echo "Batch lifecycle:"
+    while IFS="$TAB" read -r br t st tip; do
+        row=$(awk -F "$TAB" -v b="$br" '$1 == b { print }' "$rows")
+        fate=$(printf '%s' "$row" | cut -f2)
+        why=$(printf '%s' "$row" | cut -f3-)
+        if [ -z "$fate" ]; then
+            if [ -z "$fetched" ]; then
+                fetched=ok
+                git fetch -q origin 2>/dev/null || fetched=failed
+            fi
+            BATCH_TIP="$tip"; BATCH_RC="$rc"; BATCH_ON_TARGET=unknown
+            if [ "$fetched" = ok ]; then
+                BATCH_ON_TARGET=no
+                git merge-base --is-ancestor "$tip" "origin/$TARGET_BRANCH" 2>/dev/null && BATCH_ON_TARGET=yes
+            fi
+            batch_in_item "$st" batch_unconfirmed_item
+            unknown=1
+            continue
+        fi
+        case "$fate" in
+            landed|post-push-failed) batch_in_item "$st" batch_report_landed ;;
+            push-failed)
+                echo "  $t ('$br'): push-failed — the train is complete LOCALLY in the integration worktree; $t was not moved back: push by hand, then complete it" ;;
+            *)
+                BATCH_FATE="$fate"; BATCH_WHY="$why"
+                batch_in_item "$st" batch_unland_item || unland_rc=1 ;;
+        esac
+    done < "$BATCH_ITEMS_FILE"
+    [ "$unknown" = 0 ] || die "--batch: land-core.sh (exit $rc) reported no fate for at least one pair; those tickets were NOT touched — check each one named above by hand before re-running"
+    [ "$unland_rc" = 0 ] || die "--batch: at least one ticket that did not land could not be moved back or noted — see the errors above"
+    exit "$rc"
+}
+
 # Hook mode: land-core.sh calls this script as `<path> <point>` from the
 # integration worktree, with the state file the wrapper wrote.
 if [ $# -eq 1 ] && [ -n "${LAND_BRANCH_HOOK_STATE:-}" ] && [ "${LAND_CORE_POINT:-}" = "$1" ]; then
@@ -673,6 +940,7 @@ if [ $# -eq 1 ] && [ -n "${LAND_BRANCH_HOOK_STATE:-}" ] && [ "${LAND_CORE_POINT:
     if [ "$TRACKER" = jira ]; then
         JIRA_ERR=$(tmpfile) || die "could not create a temp file for jira-api diagnostics"
     fi
+    [ "${LAND_CORE_BATCH:-}" != 1 ] || batch_hook "$1"
     case "$1" in
         pre-merge)  lc_pre_merge ;;
         post-merge) lc_post_merge ;;
@@ -704,6 +972,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help|help) show_help ;;
         --dry-run) DRY_RUN=1; shift ;;
+        --batch) BATCH=1; shift ;;
         --no-complete) NO_COMPLETE=1; shift ;;
         --reset-land) RESET_LAND=1; shift ;;
         --already-merged) ALREADY_MERGED=1; shift ;;
@@ -753,6 +1022,11 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+if [ "$BATCH" = 1 ]; then
+    [ "$NO_COMPLETE" != 1 ] && [ "$NOTE_GIVEN" != 1 ] && [ -z "$OUTCOME_TEXT$OUTCOME_FILE" ] \
+        && [ "$ALREADY_MERGED" != 1 ] && [ -z "$MERGED_AS" ] \
+        || stop2 "--batch takes no --no-complete, --note, --outcome, --outcome-file, --already-merged or --merged-as: each ticket gets the default outcome. Land a ticket that needs one on its own"
+fi
 if [ "$NO_COMPLETE" = 1 ]; then
     if [ -n "$OUTCOME_TEXT" ] || [ -n "$OUTCOME_FILE" ]; then
         stop2 "--no-complete and --outcome/--outcome-file are mutually exclusive — a ticket left open takes no outcome"
@@ -799,6 +1073,8 @@ if [ "$TRACKER" = jira ]; then
         *) JIRA_API="$(cd "$(dirname "$JIRA_API")" && pwd)/$(basename "$JIRA_API")" ;;
     esac
 fi
+
+[ "$BATCH" != 1 ] || batch_main
 
 # shellcheck disable=SC2086  # deliberate word splitting: POSITIONAL is a
 # newline-joined list of bare args (branch, ticket id)
@@ -1112,6 +1388,14 @@ else
     echo "  5.$WT_PLAN git branch $PLAN_BRANCH_DEL '$BRANCH' (HERDR_ENV not set — no herdr workspace is touched)"
 fi
 
+# --batch's preflight child: hand the parent this pair's resolved state.
+if [ -n "${LAND_BRANCH_BATCH_ITEM_STATE:-}" ]; then
+    HOOK_STATE="$LAND_BRANCH_BATCH_ITEM_STATE"
+    HOOK_MODE=1
+    save_all_state
+    exit 0
+fi
+
 if [ "$DRY_RUN" = 1 ]; then
     echo
     echo "--dry-run: stopping before any git-mutating command (including the integration worktree). Nothing was changed."
@@ -1154,13 +1438,7 @@ fi
 
 HOOK_STATE=$(tmpfile) || stop2 "could not create the hook state file. Nothing mutated"
 HOOK_MODE=1
-save_state TRACKER ISSUES_DIR JIRA_API JIRA_DONE_STATUS JIRA_AWAITING_STATUS JIRA_PROGRESS_STATUS \
-    BRANCH TICKET_ID TARGET_BRANCH NO_COMPLETE NOTE_TEXT NOTE_GIVEN OUTCOME_TEXT ALREADY_MERGED \
-    LANDED_SHA LANDED_HOW WHEN_BEFORE WHEN_AFTER TICKET_FILE TICKET_STAGE ALREADY_DONE \
-    JIRA_STATUS_NOW JIRA_AWAIT_TID JIRA_AWAIT_TO JIRA_DONE_TID JIRA_DONE_TO COMPLETE_FAILED \
-    CLOSING CLOSING_FAILED CLOSING_TEXT CLOSING_MARK MERGE_SHA HANDOFF_FILE EXECUTOR \
-    BRANCH_CONDITION WORKER_WT ORCH_PANE MAIN_WORKTREE PRE_PUSH_OK WRAPPER_RC \
-    LIFECYCLE_NOTE
+save_all_state
 HOOK_MODE=0
 
 CORE_ARGS=(--repo "$MAIN_WORKTREE" --branch "$BRANCH" --target "$TARGET_BRANCH"
