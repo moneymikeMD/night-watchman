@@ -135,6 +135,7 @@ run_json() {
     (
         cd "$d/repo" || exit 9
         unset NW_CONFIG NW_ROOT NW_DRY_RUN
+        if [ -n "${T_NW_CONFIG:-}" ]; then export NW_CONFIG="$T_NW_CONFIG"; fi
         PATH="$d/bin:$PATH" FAKE_PA_DIR="$d/fake" FAKE_PA_FIXTURES="$FIXTURES" \
             NW_PRIME_AGENT_POLL_S=0.2 NW_DISPATCH_PRIME_AGENT_STATE="$d/state" "$SUT" "$@" 2>/dev/null
     )
@@ -286,6 +287,31 @@ scenario_start_tracker_commands() {
     assert_contains "T4b REPORT points at the comment command" "$brief" "with the \"Comment on it\" command in TRACKER above"
 
     mkdir -p "$d/repo/.night-watchman"
+    printf '[tracker]\nkind = "x"\n' > "$d/repo/.night-watchman/config.toml"
+    out=$(run_json "$d" start WO-026 --executor agent --model "$MODEL" \
+        --timebox "3 hours" --forbidden "x" --dry-run)
+    brief=$(jf "$out" .brief)
+    assert_contains "T4b default read command carries NW_CONFIG" "$brief" "NW_CONFIG=$d/repo/.night-watchman/config.toml $root/providers/lib/provider.sh tracker fetch WO-026"
+    assert_contains "T4b default comment command carries NW_CONFIG" "$brief" "NW_CONFIG=$d/repo/.night-watchman/config.toml $root/providers/lib/provider.sh tracker comment WO-026 -"
+
+    printf '[tracker]\nkind = "x"\n' > "$d/repo/rel.toml"
+    out=$(T_NW_CONFIG=rel.toml run_json "$d" start WO-026 --executor agent --model "$MODEL" \
+        --timebox "3 hours" --forbidden "x" --dry-run)
+    brief=$(jf "$out" .brief)
+    assert_contains "T4b relative NW_CONFIG is absolutized" "$brief" "NW_CONFIG=$(cd "$d/repo" && pwd -P)/rel.toml "
+
+    mkdir -p "$d/my dir"
+    printf '[tracker]\nkind = "x"\n' > "$d/my dir/c.toml"
+    out=$(T_NW_CONFIG="$d/my dir/c.toml" run_json "$d" start WO-026 --executor agent --model "$MODEL" \
+        --timebox "3 hours" --forbidden "x" --dry-run)
+    brief=$(jf "$out" .brief)
+    local line cmd got
+    line=$(printf '%s\n' "$brief" | grep 'tracker fetch WO-026' | head -1)
+    cmd=${line#*:}
+    cmd=${cmd# }; cmd=${cmd# }; cmd=${cmd# }
+    got=$(bash -c "${cmd%%"$root"/providers/lib/provider.sh*} printenv NW_CONFIG")
+    assert_contains "T4b spaced config path survives bash eval" "$got" "$d/my dir/c.toml"
+
     printf '[dispatch.brief]\ntracker_read = "/opt/x/read.sh show @KEY@"\ntracker_comment = "/opt/x/say.sh add @KEY@ --stdin"\n' \
         > "$d/repo/.night-watchman/config.toml"
     out=$(run_json "$d" start WO-026 --executor agent --model "$MODEL" \

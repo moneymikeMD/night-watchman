@@ -74,7 +74,8 @@
 #
 # The brief's TRACKER section names the read and comment commands: [dispatch.brief]
 # tracker_read and tracker_comment verbatim (@KEY@ is replaced) when set, else this
-# plugin's providers/lib/provider.sh tracker fetch|comment by absolute path.
+# plugin's providers/lib/provider.sh tracker fetch|comment by absolute path, prefixed
+# NW_CONFIG=<the config file in effect> when one resolved, so a worktree needs no export.
 #
 # bash 3.2 compatible (no associative arrays, no `${var^^}`).
 
@@ -365,8 +366,14 @@ $FORBIDDEN}"
         fi
         TRACKER_READ=$(nw_config_get dispatch.brief.tracker_read "" 2>/dev/null) || TRACKER_READ=""
         TRACKER_COMMENT=$(nw_config_get dispatch.brief.tracker_comment "" 2>/dev/null) || TRACKER_COMMENT=""
-        [ -n "$TRACKER_READ" ] || TRACKER_READ="$PLUGIN_ROOT/providers/lib/provider.sh tracker fetch $TICKET_UPPER"
-        [ -n "$TRACKER_COMMENT" ] || TRACKER_COMMENT="$PLUGIN_ROOT/providers/lib/provider.sh tracker comment $TICKET_UPPER -"
+        CFG_FILE=$(nw_config_file 2>/dev/null) || CFG_FILE=""
+        CFG_ENV=""
+        if [ -n "$CFG_FILE" ] && [ -f "$CFG_FILE" ]; then
+            CFG_FILE="$(cd "$(dirname "$CFG_FILE")" && pwd -P)/$(basename "$CFG_FILE")"
+        fi
+        if [ -n "$CFG_FILE" ]; then CFG_ENV="NW_CONFIG=$(printf '%q' "$CFG_FILE") "; fi
+        [ -n "$TRACKER_READ" ] || TRACKER_READ="${CFG_ENV}$PLUGIN_ROOT/providers/lib/provider.sh tracker fetch $TICKET_UPPER"
+        [ -n "$TRACKER_COMMENT" ] || TRACKER_COMMENT="${CFG_ENV}$PLUGIN_ROOT/providers/lib/provider.sh tracker comment $TICKET_UPPER -"
         TRACKER_READ=${TRACKER_READ//@KEY@/$TICKET_UPPER}
         TRACKER_COMMENT=${TRACKER_COMMENT//@KEY@/$TICKET_UPPER}
         TRACKER_LINE="$TRACKER_LINE
