@@ -27,9 +27,8 @@ reasoning behind this ordering.
 ## Check known-issues before reporting broken
 
 Before telling anyone something is broken, unexplained, or missing — in a report, a PR, or a hand-back — check whatever this project's memory already holds: `grep -ril '<symptom>' docs/known-issues/`
-(adapt the path to your project's layout) and, if this project also runs memory-graph, `memorygraph recall --query "<symptom or question>"`, the whole symptom as one query (falkordb and falkordblite
-backends only: one noun per call, since a multi-word query matches nothing there). A hit is the answer, not a lead to re-verify from scratch. Reproducing a failure proves it is real; it does not prove
-it is new.
+(adapt the path to your project's layout) and, if this project also runs lamplighter, `lampl recall --query "<symptom or question>"`, the whole symptom as one query. A hit is the answer, not a lead to
+re-verify from scratch. Reproducing a failure proves it is real; it does not prove it is new.
 
 ## Testing a script never touches a live target
 

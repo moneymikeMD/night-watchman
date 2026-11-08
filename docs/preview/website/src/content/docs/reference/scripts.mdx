@@ -256,30 +256,14 @@ Usage:
   provider.sh stop  <ticket-id> [--reason TEXT]
 ```
 
-## Provider: memory/memorygraph
+## Provider: memory/lamplighter
 
-### providers/memory/memorygraph/provider.sh
+### providers/memory/lamplighter/provider.sh
 
-provider.sh — memorygraph's implementation of the `memory` provider kind
-(verbs: store, recall — see ../../README.md for the contract). Dispatch
-only; the work is in the sibling script named after each verb.
-
-### providers/memory/memorygraph/recall.sh
-
-recall.sh — the `recall` verb. On falkordb and falkordblite, `memorygraph
-recall --query` finds nothing for a multi-word phrase, so there this
-tokenises the query into single-noun candidates (stopwords and sub-3-char
-words dropped, deduped, capped at --max-queries), runs one `memorygraph
-recall --query WORD --limit N` per token, and fuses the per-token rankings
-with reciprocal rank fusion (score = sum over matching tokens of
-1/(60 + rank_in_that_token)). Every other backend, postgres's hybrid
-recall included, gets the whole query in one call.
-
-### providers/memory/memorygraph/store.sh
-
-store.sh — the `store` verb: wraps `memorygraph store` so every memory is
-tagged with its project, component and kind of change, which is what makes
-the graph filterable later.
+provider.sh — lamplighter's implementation of the `memory` provider kind
+(verbs: store, recall — see ../../README.md for the contract), over the
+`lampl` CLI. Pushing memories into a session is lamplighter's own plugin's
+job, not this provider's.
 
 ## Provider: publish/atlassian
 

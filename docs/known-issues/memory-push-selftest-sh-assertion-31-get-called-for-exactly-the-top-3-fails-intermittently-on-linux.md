@@ -2,7 +2,8 @@
 title: "memory-push-selftest.sh: assertion 31 (get called for exactly the top 3) fails intermittently on Linux"
 heading_raw: "memory-push-selftest.sh: assertion 31 (get called for exactly the top 3) fails intermittently on Linux — MEDIUM"
 severity: MEDIUM
-status: open
+status: resolved
+resolved: 2026-11-08
 qualifiers: []
 note: "Linux: about 1 run in 15; reddened main CI at 025bc4c"
 tickets: []

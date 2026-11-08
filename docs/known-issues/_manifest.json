@@ -5,7 +5,7 @@
   "guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2": "47bfb956896c40fffaf17f507620174e687c83d0f80c19cb19d1570ae10b31de",
   "guard-fs-writes-sh-at-user-scope-blocks-git-stash-in-every-repo-s-main-worktree-not-just-this-plugin-s": "074cbc1c79fb6672ab9d0235eacaeb7a05fabbe7b04d1341b7f69b11ff795e21",
   "land-branch-selftest-sh-needs-pyyaml-but-neither-declares-nor-checks-for-it": "2d6fed73124c694b8036fcc1fa0313b025a5e8f1d572c775d312a59431b70ac5",
-  "memory-push-selftest-sh-assertion-31-get-called-for-exactly-the-top-3-fails-intermittently-on-linux": "bf756b552253cd2bfcb41961d49cf3c32bab2b4b54f1c5d2b5c23782d5a76352",
+  "memory-push-selftest-sh-assertion-31-get-called-for-exactly-the-top-3-fails-intermittently-on-linux": "7560c05cd46efa8ed48a8635653646145a8173f24f54d6af82dad7994ab0d674",
   "memorygraph-link-rejects-supersedes-and-relates-to-so-a-memory-cannot-be-superseded-by-an-edge": "9c35c07d18b5b7a15cead84b286fb1f10a2200c94067df05308fa989bf08b9e9",
   "providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted": "700ebe4aa6c3f649f1689674d25a82b53292f299516d820033f6f88232948dfc",
   "subagentstop-hook-wiring-for-script-events-hook-sh-not-yet-observed-live": "1915cc28226341d96c17c5e65323994b08327b40963c24c7b0ef8221ec22ec95"

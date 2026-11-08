@@ -24,7 +24,7 @@ file's content back into it.
 
 ## Provider selection and the private config
 
-`.night-watchman/config.toml` (committed) selects: `tracker = "jira"` (project `NWM`), `secrets = "op"`, `dispatch = "workflow"`, `memory = "memorygraph"`, `publish = "atlassian"`.
+`.night-watchman/config.toml` (committed) selects: `tracker = "jira"` (project `NWM`), `secrets = "op"`, `dispatch = "workflow"`, `memory = "lamplighter"`, `publish = "atlassian"`.
 `providers/README.md` is the full contract — verb sets, precedence, private config, and how to add an implementation. Read it before calling a provider script directly.
 
 **Nothing exports `$NW_CONFIG` for you.** No shell profile sources it and this repo's `.claude/` is gitignored, so a fresh shell has it unset even when the private file exists. Export it before

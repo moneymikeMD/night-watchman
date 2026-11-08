@@ -8,8 +8,6 @@ scripts/dev/commit-staged-worktrees.sh	providers/dispatch/herdr/commit-staged-wo
 scripts/dev/commit-staged-worktrees-selftest.sh	providers/dispatch/herdr/commit-staged-worktrees-selftest.sh
 scripts/dev/herdr-ticket-start.sh	providers/dispatch/herdr/herdr-ticket-start.sh
 scripts/dev/herdr-ticket-start-selftest.sh	providers/dispatch/herdr/herdr-ticket-start-selftest.sh
-scripts/dev/recall.sh	providers/memory/memorygraph/recall.sh
-scripts/dev/recall-selftest.sh	providers/memory/memorygraph/selftest.sh
 scripts/dev/land-branch.sh	scripts/land-branch.sh
 scripts/dev/land-branch-selftest.sh	scripts/land-branch-selftest.sh
 scripts/dev/jira-backfill.sh	providers/tracker/jira/jira-backfill.sh

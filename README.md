@@ -119,8 +119,24 @@ provider contract.
   "what calls Y" without a full-repo read.
 - A **cost-tracking CLI proxy**, for filtering verbose command output
   before it reaches the model.
-- A **persistent memory-graph CLI**, for durable cross-session knowledge —
-  decisions, root causes, gotchas.
+- **[lamplighter](https://github.com/moneymikeMD/lamplighter)**, for durable
+  cross-session knowledge — decisions, root causes, gotchas. The `memory`
+  provider (`providers/memory/lamplighter`) stores and recalls through its
+  `lampl` CLI, and lamplighter's own plugin pushes relevant memories into a
+  session.
+
+### Moving from the memory push hook
+
+Earlier releases shipped `hooks/memory-push.sh`, which pushed `memorygraph`
+recall results into a session at start, on each prompt and after a failed
+Bash call, and a `memory/memorygraph` provider. Both are gone: night-watchman
+no longer injects memories itself, so running it alongside lamplighter's
+plugin cannot inject the same memories twice. To keep memories arriving in
+a session, install lamplighter's plugin. Then change `memory = "memorygraph"`
+to `memory = "lamplighter"` in `.night-watchman/config.toml` (lamplighter is
+also the default when nothing is set), and rename `[memory.memorygraph] tag`
+to `[memory.lamplighter] project`. `NW_MEMORY_PUSH` and the other
+`NW_MEMORY_PUSH_*` variables no longer do anything and can be unset.
 
 ## Contribute
 

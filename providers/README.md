@@ -33,8 +33,8 @@ pluggable seam quietly becomes a hard dependency on one tool.
 | `publish` | `publish-brief` `post-headline` | Where the owner-facing wave brief is written, and where its headline is posted |
 
 **Shipped:** `secrets/op` and `secrets/env`; `tracker/jira`;
-`dispatch/workflow`, `dispatch/herdr` and `dispatch/prime-agent`; `memory/memorygraph`
-(`store`/`recall` over the `memorygraph` CLI); `publish/atlassian`.
+`dispatch/workflow`, `dispatch/herdr` and `dispatch/prime-agent`; `memory/lamplighter`
+(`store`/`recall` over lamplighter's `lampl` CLI); `publish/atlassian`.
 `tracker/jira` is a port of the source project's `jira-api.sh` +
 `jira-common.sh`, de-identified: the site host comes from
 `[tracker.jira] host` in config and the credentials from the configured
@@ -346,7 +346,7 @@ over:
   available at depth 0.
 - **The worker does not load this plugin.** A Prime Agent session reads the
   repo's context files but not this plugin's skills, agents or hooks, so
-  none of `hooks/` (cost, memory push, the token-saving shunts) runs in
+  none of `hooks/` (cost, the token-saving shunts) runs in
   it. The brief
   carries a HARNESS section saying so and pointing at `skills/*/SKILL.md`
   by path; staying inside the ticket's touches is the worker's own job.
