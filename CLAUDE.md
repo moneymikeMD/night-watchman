@@ -87,8 +87,7 @@ an error in bash 5). Its steps, in order:
   find it.
 - **shellcheck** — `hooks providers scripts`, `-e SC1091` (several scripts source a sibling through a runtime-resolved path shellcheck can't follow).
 - **kit.sh cleanup contract** — `scripts/kit-consumer-lint.sh`.
-- **selftests** — discovers every `*selftest*.sh` by `find` and runs it; a new selftest needs no workflow edit. One is quarantined by exact path (`providers/config-selftest.sh`, failing one known
-  assertion) — skipped in the gating step, re-run informationally with `continue-on-error`.
+- **selftests** — discovers every `*selftest*.sh` by `find` and runs it; a new selftest needs no workflow edit.
 - **known-issues index is not drifted** — `known-issue.sh --root lint`, run out of the ai-toolkit checkout. `docs/known-issues.md` is **generated** from `docs/known-issues/*.md` frontmatter by
   `known-issue.sh reindex` (`add`/`resolve`/`severity` call it too); never hand-edit the index.
 - **generated reference docs are not drifted** — `scripts/gen-reference-docs.sh --check` diffs against `docs/preview/website/src/content/docs/reference/`. Those `.mdx` pages are rendered from

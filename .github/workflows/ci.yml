@@ -92,10 +92,6 @@ jobs:
           set -uo pipefail
           failed=0
           while IFS= read -r t; do
-            case "$t" in
-              # Quarantined: fails one assertion, filed in docs/known-issues.
-              ./providers/config-selftest.sh) continue ;;
-            esac
             printf '\n=== %s\n' "${t#./}"
             if "$t"; then :; else
               printf '!!! FAILED: %s\n' "${t#./}"
@@ -106,12 +102,6 @@ jobs:
                      -not -path './scripts/fixtures/*' \
                      -not -path './evals/*' | sort)
           exit "$failed"
-
-      - name: known-failing selftests (informational)
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          providers/config-selftest.sh || true
 
       - name: known-issues index is not drifted
         # --root, not cwd (NWM-145/NWM-159): the bare call was correct only
