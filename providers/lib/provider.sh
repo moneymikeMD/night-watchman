@@ -122,7 +122,7 @@ nw_require_kind() {
 # the name is concatenated into a path and executed, so `../..` is refused here.
 nw_valid_impl() {
     case "$1" in
-        *[!a-z0-9_-]* | "" | -* | _*) return 1 ;;
+        *[!abcdefghijklmnopqrstuvwxyz0123456789_-]* | "" | -* | _*) return 1 ;;
         *) return 0 ;;
     esac
 }
