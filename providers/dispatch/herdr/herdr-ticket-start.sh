@@ -194,9 +194,11 @@ if [ -f "$CFG_LIB" ]; then
     # shellcheck source=../../lib/config.sh
     . "$CFG_LIB"
     [ -n "$TIMEBOX" ] || TIMEBOX=$(nw_config_get dispatch.brief.timebox "" 2>/dev/null) || true
-    if [ -z "$FORBIDDEN" ]; then
-        CFG_FORBIDDEN=$(nw_config_get dispatch.brief.forbidden "" 2>/dev/null) || true
-        [ -z "$CFG_FORBIDDEN" ] || FORBIDDEN="- $CFG_FORBIDDEN"
+    CFG_FORBIDDEN=$(nw_config_get dispatch.brief.forbidden "" 2>/dev/null) || CFG_FORBIDDEN=""
+    if [ -n "$CFG_FORBIDDEN" ]; then
+        CFG_FORBIDDEN=$(printf '%s\n' "$CFG_FORBIDDEN" | sed 's/^/- /')
+        FORBIDDEN="$CFG_FORBIDDEN${FORBIDDEN:+
+$FORBIDDEN}"
     fi
     CFG_PROJECT=$(nw_config_get tracker.jira.project "" 2>/dev/null) || true
     CFG_CLOUD_ID=$(nw_config_get dispatch.brief.cloud_id "" 2>/dev/null) || true

@@ -1221,6 +1221,12 @@ scenario_brief_config_defaults() {
     assert_contains "B5 config forbidden" "$out" "- config ban"
     assert_contains "B5 config project" "$out" "Jira project CFGP"
     assert_contains "B5 config cloud id" "$out" "connector cloud id cloud-123"
+    printf '[tracker.jira]\nproject = "CFGP"\n[dispatch.brief]\ntimebox = "45 minutes"\nforbidden = ["a", "b"]\n' > "$repo/.night-watchman/config.toml"
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_NO_BRIEF=1 run_sut "$repo" PROJ-945 1 --forbidden c --dry-run) && rc=0 || rc=$?
+    assert_eq "B5 array exit code" "0" "$rc"
+    assert_contains "B5 array merged in order" "$out" "- a
+- b
+- c"
 }
 
 # B4 — the missing-status refusal names the STATUS id, not the transition id.
