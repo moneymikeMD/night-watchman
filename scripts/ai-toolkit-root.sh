@@ -19,9 +19,12 @@
 #     1. $AI_TOOLKIT_ROOT, when it holds scripts/known-issue.sh.
 #     2. A sibling checkout: ai-toolkit beside this plugin, then ai-toolkit
 #        beside the directory this plugin sits in.
+#     3. The same two sibling locations relative to the main worktree (the
+#        parent of git's common dir), so a linked worktree anywhere on disk
+#        finds the checkout the main worktree sits beside.
 #
-#   Exits 1 naming both when neither resolves. Never clones anything and
-#   never writes.
+#   Exits 1 naming the env var and the clone when no step resolves. Never clones
+#   anything and never writes.
 
 set -euo pipefail
 # shellcheck source=lib/kit.sh
@@ -62,6 +65,22 @@ if [ -z "$ROOT" ]; then
             break
         fi
     done
+fi
+
+if [ -z "$ROOT" ]; then
+    MAIN=""
+    COMMON=$(cd "$HERE" && git rev-parse --git-common-dir 2>/dev/null) || COMMON=""
+    if [ -n "$COMMON" ]; then
+        MAIN=$(cd "$HERE" && cd "$COMMON/.." 2>/dev/null && pwd) || MAIN=""
+    fi
+    if [ -n "$MAIN" ]; then
+        for CANDIDATE in "$MAIN/../ai-toolkit" "$MAIN/../../ai-toolkit"; do
+            if is_ai_toolkit "$CANDIDATE"; then
+                ROOT="$(cd "$CANDIDATE" && pwd)"
+                break
+            fi
+        done
+    fi
 fi
 
 if [ -z "$ROOT" ]; then

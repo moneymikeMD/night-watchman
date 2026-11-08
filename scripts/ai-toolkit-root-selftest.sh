@@ -130,6 +130,44 @@ else
     bad "markerless sibling: rc=$RC out='$OUT' err='$ERR'"
 fi
 
+# ---- linked worktree outside the repo's parent resolves via the main worktree ----
+LW="$WORK/lw"
+mkdir -p "$LW/home/main/scripts/lib" "$LW/elsewhere"
+cp "$SUT" "$LW/home/main/scripts/ai-toolkit-root.sh"
+cp "$HERE/lib/kit.sh" "$LW/home/main/scripts/lib/kit.sh"
+chmod +x "$LW/home/main/scripts/ai-toolkit-root.sh"
+git -C "$LW/home/main" init -q
+git -C "$LW/home/main" add -A
+git -C "$LW/home/main" -c user.name=t -c user.email=t@t commit -q -m init
+git -C "$LW/home/main" worktree add -q "$LW/elsewhere/wt" -b wt
+make_ai_toolkit "$LW/home/ai-toolkit"
+set +e
+OUT=$(cd "$LW/elsewhere/wt" && env -u CLAUDE_PLUGIN_ROOT -u AI_TOOLKIT_ROOT scripts/ai-toolkit-root.sh 2>"$WORK/err")
+RC=$?
+set -e
+ERR=$(cat "$WORK/err")
+if [ "$RC" -eq 0 ] && [ "$OUT" = "$LW/home/ai-toolkit" ]; then
+    ok "linked worktree outside the repo's parent resolves the main worktree's sibling"
+else
+    bad "linked worktree: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+NG="$WORK/nogit"
+mkdir -p "$NG/scripts/lib"
+cp "$SUT" "$NG/scripts/ai-toolkit-root.sh"
+cp "$HERE/lib/kit.sh" "$NG/scripts/lib/kit.sh"
+chmod +x "$NG/scripts/ai-toolkit-root.sh"
+set +e
+OUT=$(cd "$NG" && env -u CLAUDE_PLUGIN_ROOT -u AI_TOOLKIT_ROOT scripts/ai-toolkit-root.sh 2>"$WORK/err")
+RC=$?
+set -e
+ERR=$(cat "$WORK/err")
+if [ "$RC" -eq 1 ] && [ -z "$OUT" ] && [[ "$ERR" == *"cannot locate"* ]]; then
+    ok "a copy outside any git repo skips the main-worktree step and fails cleanly"
+else
+    bad "no git repo: rc=$RC out='$OUT' err='$ERR'"
+fi
+
 run_sut --help
 if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core|--decisions]"* ]] && [ -z "$ERR" ]; then
     ok "--help prints the header on stdout, exit 0"
