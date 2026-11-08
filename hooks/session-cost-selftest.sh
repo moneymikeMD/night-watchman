@@ -180,6 +180,20 @@ else
     fail "test9: expected the state file under CLAUDE_PROJECT_DIR, not the non-git cwd"
 fi
 
+mkdir -p "$WORK/repo/docs"
+head -1 "$LEDGER1" > "$WORK/repo/docs/cost-ledger.tsv"
+ROWS_BEFORE="$(wc -l < "$WORK/repo/docs/cost-ledger.tsv")"
+NW_COST_PROJECT_SLUG="-Users-fixture-repoC" NW_COST_PROJECTS_DIR="$FIXTURES/projects" \
+    bash "$HOOK" <<<"$STDIN7" >/dev/null 2>&1
+STATUS10=$?
+ROWS_AFTER="$(wc -l < "$WORK/repo/docs/cost-ledger.tsv")"
+if [ "$STATUS10" -eq 0 ] && [ "$ROWS_AFTER" -eq $((ROWS_BEFORE + 1)) ] \
+    && [ ! -e "$WORK/repo/src/deep/docs" ]; then
+    pass "test10: with NW_COST_LEDGER unset, a subdirectory cwd appends one row to the root ledger"
+else
+    fail "test10: expected one new row in the root ledger (exit $STATUS10, rows $ROWS_BEFORE -> $ROWS_AFTER)"
+fi
+
 echo
 echo "$((N - FAIL))/$N assertions passed"
 exit "$FAIL"
