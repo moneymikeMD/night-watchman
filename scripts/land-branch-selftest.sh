@@ -1360,6 +1360,388 @@ else
     ok "test38: a stray untracked .night-watchman/notes.md refuses before the lock, naming the file"
 fi
 
+# ---- NWM-218 --batch: three pairs through land-core.sh's --item mode. Origin's
+# post-receive hook counts pushes; the lint command counts its own runs.
+
+# fresh_batch_repo NAME KIND — tickets PROJ-1..3 in in-progress/ and branches
+# b1..b3, one per ticket. KIND conflict: b1 and b2 write shared.txt
+# differently. KIND lint: b2 adds bad.txt, which batch_lint refuses.
+fresh_batch_repo() {
+    local d
+    d=$(fresh_repo "$1" "$TICKET_OK")
+    (
+        cd "$d"
+        for i in 2 3; do
+            sed "s/^id: PROJ-1\$/id: PROJ-$i/" issues/in-progress/PROJ-1.md > "issues/in-progress/PROJ-$i.md"
+        done
+        git add -A
+        git commit -q -m "tickets 2 and 3"
+        git push -q origin main
+        git branch -q -D work
+        for i in 1 2 3; do
+            git checkout -q -b "b$i" main
+            case "$2:$i" in
+                conflict:1) f=shared.txt; echo one > "$f" ;;
+                conflict:2) f=shared.txt; echo two > "$f" ;;
+                lint:2) f=bad.txt; echo bad > "$f" ;;
+                *) f="f$i.txt"; echo "$i" > "$f" ;;
+            esac
+            git add "$f"
+            git commit -q -m "PROJ-$i: work"
+        done
+        git checkout -q main
+    ) >/dev/null
+    git -C "$d.git" config core.hooksPath "$d.git/hooks"
+    printf '#!/bin/sh\necho push >> "%s"\n' "$WORK/$1.pushes" > "$d.git/hooks/post-receive"
+    chmod +x "$d.git/hooks/post-receive"
+    printf '%s\n' "$d"
+}
+batch_lint() { printf "echo run >> '%s'; ! [ -e bad.txt ]" "$WORK/$1.lints"; }
+count_lines() { if [ -f "$1" ]; then wc -l < "$1" | tr -d ' '; else echo 0; fi; }
+# origin_stage REPO TICKET — the issues/ stage holding TICKET on origin's main.
+origin_stage() {
+    local st
+    for st in in-progress awaiting-deployment completed; do
+        git -C "$(land_bare_of "$1")" cat-file -e "main:issues/$st/$2.md" 2>/dev/null && { echo "$st"; return 0; }
+    done
+    echo none
+}
+
+REPO=$(fresh_batch_repo tb1 clean)
+set +e
+(cd "$REPO" && ./scripts/land-branch.sh --batch b1 PROJ-1 b2 PROJ-2 b3 PROJ-3 --lint-cmd "$(batch_lint tb1)") >"$WORK/tb1.out" 2>&1
+RC=$?
+set -e
+SUBJ=$(git -C "$(land_bare_of "$REPO")" log --first-parent --reverse --format=%s main | sed '1,2d' | tr '\n' '|')
+WANT="PROJ-1: merge branch 'b1' into main|PROJ-2: merge branch 'b2' into main|PROJ-3: merge branch 'b3' into main|PROJ-1: awaiting deployment|PROJ-1: complete|PROJ-2: awaiting deployment|PROJ-2: complete|PROJ-3: awaiting deployment|PROJ-3: complete|"
+if [ "$RC" -ne 0 ]; then
+    bad "testB1 (batch, all clean): exit $RC, expected 0:
+$(tail -15 "$WORK/tb1.out")"
+elif [ "$(count_lines "$WORK/tb1.pushes")" != 1 ] || [ "$(count_lines "$WORK/tb1.lints")" != 1 ]; then
+    bad "testB1: $(count_lines "$WORK/tb1.pushes") push(es) and $(count_lines "$WORK/tb1.lints") lint run(s), expected one of each"
+elif [ "$SUBJ" != "$WANT" ]; then
+    bad "testB1: origin/main reads '$SUBJ', expected '$WANT'"
+elif [ "$(origin_stage "$REPO" PROJ-1)$(origin_stage "$REPO" PROJ-2)$(origin_stage "$REPO" PROJ-3)" != completedcompletedcompleted ]; then
+    bad "testB1: not every ticket is in completed/ on origin"
+elif git -C "$REPO" rev-parse --verify --quiet refs/heads/b2 >/dev/null; then
+    bad "testB1: branch b2 survived a landing"
+elif ! grep -q "PROJ-3 ('b3'): landed" "$WORK/tb1.out"; then
+    bad "testB1: the lifecycle summary does not report PROJ-3 landed:
+$(tail -8 "$WORK/tb1.out")"
+else
+    ok "testB1: --batch lands three pairs with one lint and one push, every ticket completed"
+fi
+
+REPO=$(fresh_batch_repo tb2 conflict)
+set +e
+(cd "$REPO" && ./scripts/land-branch.sh --batch b1 PROJ-1 b2 PROJ-2 b3 PROJ-3 --lint-cmd "$(batch_lint tb2)") >"$WORK/tb2.out" 2>&1
+RC=$?
+set -e
+STAGES="$(origin_stage "$REPO" PROJ-1) $(origin_stage "$REPO" PROJ-2) $(origin_stage "$REPO" PROJ-3)"
+if [ "$RC" -ne 3 ]; then
+    bad "testB2 (batch, one conflict): exit $RC, expected 3:
+$(tail -15 "$WORK/tb2.out")"
+elif [ "$(count_lines "$WORK/tb2.pushes")" != 1 ]; then
+    bad "testB2: $(count_lines "$WORK/tb2.pushes") push(es), expected 1"
+elif [ "$STAGES" != "completed in-progress completed" ]; then
+    bad "testB2: ticket stages on origin are '$STAGES', expected 'completed in-progress completed'"
+elif [ "$(git -C "$(land_bare_of "$REPO")" show main:shared.txt 2>/dev/null)" != one ]; then
+    bad "testB2: origin's shared.txt is not b1's"
+elif ! git -C "$REPO" rev-parse --verify --quiet refs/heads/b2 >/dev/null; then
+    bad "testB2: the skipped branch b2 was deleted"
+elif ! grep -q "PROJ-2 ('b2'): conflict-skipped — its ticket stays in 'issues/in-progress/'" "$WORK/tb2.out"; then
+    bad "testB2: the summary does not say why PROJ-2 stayed in progress:
+$(tail -8 "$WORK/tb2.out")"
+else
+    ok "testB2: --batch skips the conflicting pair, lands the other two in one push, leaves PROJ-2 in progress with the reason"
+fi
+
+REPO=$(fresh_batch_repo tb3 lint)
+set +e
+(cd "$REPO" && ./scripts/land-branch.sh --batch b1 PROJ-1 b2 PROJ-2 b3 PROJ-3 --lint-cmd "$(batch_lint tb3)") >"$WORK/tb3.out" 2>&1
+RC=$?
+set -e
+STAGES="$(origin_stage "$REPO" PROJ-1) $(origin_stage "$REPO" PROJ-2) $(origin_stage "$REPO" PROJ-3)"
+if [ "$RC" -ne 3 ]; then
+    bad "testB3 (batch, lint culprit): exit $RC, expected 3:
+$(tail -15 "$WORK/tb3.out")"
+elif [ "$(count_lines "$WORK/tb3.pushes")" != 1 ] || [ "$(count_lines "$WORK/tb3.lints")" -lt 2 ]; then
+    bad "testB3: $(count_lines "$WORK/tb3.pushes") push(es), $(count_lines "$WORK/tb3.lints") lint run(s); expected 1 push and a bisect"
+elif git -C "$(land_bare_of "$REPO")" cat-file -e main:bad.txt 2>/dev/null; then
+    bad "testB3: the culprit's bad.txt reached origin"
+elif [ "$STAGES" != "completed in-progress completed" ]; then
+    bad "testB3: ticket stages on origin are '$STAGES', expected 'completed in-progress completed'"
+elif ! grep -q "PROJ-2 ('b2'): lint-dropped" "$WORK/tb3.out"; then
+    bad "testB3: the summary does not name PROJ-2 as the lint culprit:
+$(tail -8 "$WORK/tb3.out")"
+else
+    ok "testB3: --batch bisects a red lint to b2, lands b1 and b3 in one push, PROJ-2 stays in progress"
+fi
+
+REPO=$(fresh_batch_repo tb4 clean)
+BEFORE=$(git -C "$(land_bare_of "$REPO")" rev-parse main)
+set +e
+(cd "$REPO" && ./scripts/land-branch.sh --batch b1 PROJ-1 b2 PROJ-2 b3 PROJ-3 --dry-run --lint-cmd "$(batch_lint tb4)") >"$WORK/tb4.out" 2>&1
+RC=$?
+set -e
+if [ "$RC" -ne 0 ]; then
+    bad "testB4 (batch --dry-run): exit $RC, expected 0:
+$(tail -15 "$WORK/tb4.out")"
+elif [ "$(grep -ci 'lint' "$WORK/tb4.out")" != 1 ] || [ "$(grep -c 'git push origin' "$WORK/tb4.out")" != 1 ]; then
+    bad "testB4: the plan has $(grep -ci 'lint' "$WORK/tb4.out") lint line(s) and $(grep -c 'git push origin' "$WORK/tb4.out") push line(s), expected one each:
+$(cat "$WORK/tb4.out")"
+elif [ "$(grep -c "^  PROJ-[123] ('b[123]'): at hook pre-push" "$WORK/tb4.out")" != 3 ]; then
+    bad "testB4: the plan does not list all three tickets' lifecycle:
+$(cat "$WORK/tb4.out")"
+elif [ -e "$REPO-land" ] || [ -e "$WORK/tb4.lints" ] || [ "$(git -C "$(land_bare_of "$REPO")" rev-parse main)" != "$BEFORE" ]; then
+    bad "testB4: --dry-run mutated something (integration worktree, a lint run, or origin)"
+else
+    ok "testB4: --batch --dry-run with three pairs plans one lint and one push and mutates nothing"
+fi
+
+REPO=$(fresh_batch_repo tb5 clean)
+BEFORE=$(git -C "$(land_bare_of "$REPO")" rev-parse main)
+B5_FAIL=""
+for args in "b1 PROJ-1 b2" "b1 PROJ-1 b2 PROJ-2 --no-complete" "b1 PROJ-1 b2 PROJ-1" "b1 PROJ-1 b2 PROJ-9"; do
+    set +e
+    # shellcheck disable=SC2086  # each case is a word list on purpose
+    (cd "$REPO" && ./scripts/land-branch.sh --batch $args) >"$WORK/tb5.out" 2>&1
+    RC=$?
+    set -e
+    [ "$RC" = 2 ] || B5_FAIL="$B5_FAIL
+'$args' exited $RC, expected 2: $(tail -3 "$WORK/tb5.out")"
+done
+if [ -n "$B5_FAIL" ]; then
+    bad "testB5 (batch refusals):$B5_FAIL"
+elif ! grep -q "PROJ-9" "$WORK/tb5.out"; then
+    bad "testB5: a pair whose ticket is missing was refused without naming it:
+$(tail -5 "$WORK/tb5.out")"
+elif [ -e "$REPO-land" ] || [ "$(git -C "$(land_bare_of "$REPO")" rev-parse main)" != "$BEFORE" ] || [ -e "$WORK/tb5.pushes" ]; then
+    bad "testB5: a refused batch mutated the integration worktree or origin"
+else
+    ok "testB5: --batch refuses odd pairs, single-only flags, duplicates and a failing pair preflight at exit 2, nothing mutated"
+fi
+
+# testB6-B10: jira. A multi-issue mock offering transitions by the issue's
+# current status, as NWM's live workflow does (read 2026-11-08 from NWM-205);
+# each POST is recorded with origin's sha at that moment.
+BMOCK="$WORK/batch_jira_mock.py"
+cat > "$BMOCK" <<'MOCKEOF'
+#!/usr/bin/env python3
+import json, os, subprocess, sys
+STATE, BARE = os.environ["BMOCK_STATE"], os.environ["BMOCK_BARE"]
+NAMES = {"3": "In Progress", "10012": "Awaiting Deployment", "10014": "Completed", "10015": "Cancelled"}
+FLOW = {
+    "3": [("4", "ready for verification", "10012")],
+    "10012": [("5", "complete", "10014"), ("6", "cancel", "10015"), ("15", "re-work", "3")],
+}
+def load():
+    with open(STATE) as f:
+        return json.load(f)
+def save(st):
+    with open(STATE, "w") as f:
+        json.dump(st, f)
+def key(path):
+    return path.split("/issue/")[1].split("/")[0].split("?")[0]
+a = sys.argv[1:]
+st = load()
+if a[0] == "raw":
+    path = a[2]
+    iss = st[key(path)]
+    if path.endswith("/transitions"):
+        print(json.dumps({"transitions": [{"id": t, "name": n, "to": {"id": to, "name": NAMES[to]}}
+                                          for t, n, to in FLOW.get(iss["status"], [])]}))
+    elif path.endswith("?fields=status"):
+        print(json.dumps({"fields": {"status": {"id": iss["status"], "name": NAMES[iss["status"]]}}}))
+    elif "?fields=customfield_" in path:
+        print(json.dumps({"fields": {path.split("fields=")[1]: {"value": "agent"}}}))
+    elif "/comment" in path:
+        print(json.dumps({"comments": [{"body": c} for c in iss["comments"]]}))
+    else:
+        sys.exit("mock: unexpected GET " + path)
+elif a[:2] == ["--yes", "write"]:
+    iss = st[key(a[3])]
+    tid = json.loads(a[4])["transition"]["id"]
+    offered = {t: to for t, _, to in FLOW.get(iss["status"], [])}
+    if tid not in offered:
+        sys.exit("mock: HTTP 400, transition %s is not offered from status %s" % (tid, iss["status"]))
+    to = offered[tid]
+    if to == "10014" and "3" not in iss["exited"]:
+        sys.exit("mock: HTTP 400, the issue never transitioned through In Progress")
+    origin = subprocess.check_output(["git", "-C", BARE, "rev-parse", "main"], text=True).strip()
+    iss["exited"].append(iss["status"])
+    iss["status"] = to
+    iss["posts"].append([to, origin])
+    save(st)
+elif a[:2] == ["--yes", "comment"]:
+    st[a[2]]["comments"].append(sys.stdin.read())
+    save(st)
+else:
+    sys.exit("mock: unknown command " + " ".join(a))
+MOCKEOF
+chmod +x "$BMOCK"
+# jira_batch NAME KIND [ENV=VALUE]... — fresh_batch_repo NAME KIND, mock state
+# with PROJ-1..3 In Progress, then a jira --batch run; sets REPO, BEFORE, RC.
+jira_batch() {
+    local name="$1" kind="$2"; shift 2
+    REPO=$(fresh_batch_repo "$name" "$kind")
+    BEFORE=$(git -C "$(land_bare_of "$REPO")" rev-parse main)
+    printf '%s' '{"PROJ-1":{"status":"3","exited":[],"posts":[],"comments":[]},"PROJ-2":{"status":"3","exited":[],"posts":[],"comments":[]},"PROJ-3":{"status":"3","exited":[],"posts":[],"comments":[]}}' > "$WORK/$name.state.json"
+    [ -z "${JB_PREP:-}" ] || "$JB_PREP" "$name"
+    set +e
+    (cd "$REPO" && env BMOCK_STATE="$WORK/$name.state.json" BMOCK_BARE="$(land_bare_of "$REPO")" "$@" \
+        ./scripts/land-branch.sh --batch b1 PROJ-1 b2 PROJ-2 b3 PROJ-3 --tracker jira --jira-api "$BMOCK" \
+        --jira-progress-status 3 --jira-awaiting-status 10012 --jira-done-status 10014 \
+        --lint-cmd "$(batch_lint "$name")") >"$WORK/$name.out" 2>&1
+    RC=$?
+    set -e
+}
+# jira_check NAME PYTHON — run PYTHON with st (mock state), before, after
+# (origin's main before and after); it prints one line per problem.
+jira_check() {
+    python3 - "$WORK/$1.state.json" "$BEFORE" "$(git -C "$(land_bare_of "$REPO")" rev-parse main)" "$2" <<'CHKEOF'
+import json, sys
+st, before, after = json.load(open(sys.argv[1])), sys.argv[2], sys.argv[3]
+exec(sys.argv[4])
+CHKEOF
+}
+jira_batch tb6 conflict
+B6=$(jira_check tb6 '
+want = {
+    "PROJ-1": [["10012", before], ["10014", after]],
+    "PROJ-2": [["10012", before], ["3", after]],
+    "PROJ-3": [["10012", before], ["10014", after]],
+}
+for k, posts in want.items():
+    if st[k]["posts"] != posts:
+        print("%s posts %s, expected %s" % (k, st[k]["posts"], posts))
+c = st["PROJ-2"]["comments"]
+if len(c) != 1 or "conflict-skipped" not in c[0] or "moved back to \x27In Progress\x27" not in c[0]:
+    print("PROJ-2 comments %r, expected one progress note naming conflict-skipped and the move back" % c)
+')
+if [ "$RC" -ne 3 ]; then
+    bad "testB6 (batch, jira, one conflict): exit $RC, expected 3:
+$(tail -15 "$WORK/tb6.out")"
+elif [ "$(count_lines "$WORK/tb6.pushes")" != 1 ]; then
+    bad "testB6: $(count_lines "$WORK/tb6.pushes") push(es), expected 1"
+elif [ -n "$B6" ]; then
+    bad "testB6: $B6"
+else
+    ok "testB6: jira --batch moves all three to Awaiting before the train, completes two after the push, moves the conflicting PROJ-2 back to In Progress with a note"
+fi
+
+# testB7/B8: land-core.sh's table is missing or short a row. A stub toolkit
+# wraps the real land-core.sh and filters its stdout per STUB_TABLE.
+FAKE_TK="$WORK/fake-ai-toolkit"
+mkdir -p "$FAKE_TK/scripts"
+: > "$FAKE_TK/scripts/known-issue.sh"
+cat > "$FAKE_TK/scripts/land-core.sh" <<'STUBEOF'
+#!/bin/bash
+"$REAL_LAND_CORE" "$@" | awk -v mode="$STUB_TABLE" '
+    $0 == "Batch result:" { t = 1; if (mode == "none") next; print; next }
+    t && /^  / { if (mode == "none" || $2 == substr(mode, 6)) next; print; next }
+    { t = 0; print }
+'
+exit "${PIPESTATUS[0]}"
+STUBEOF
+chmod +x "$FAKE_TK/scripts/land-core.sh"
+REAL_LAND_CORE="$("$HERE/ai-toolkit-root.sh" --land-core)"
+
+jira_batch tb7 clean AI_TOOLKIT_ROOT="$FAKE_TK" REAL_LAND_CORE="$REAL_LAND_CORE" STUB_TABLE=none
+B7=$(jira_check tb7 '
+for k in ("PROJ-1", "PROJ-2", "PROJ-3"):
+    if st[k]["posts"] != [["10012", before], ["10014", after]]:
+        print("%s posts %s: the ticket was touched after land-core.sh returned" % (k, st[k]["posts"]))
+    if any("did not land" in c for c in st[k]["comments"]):
+        print("%s got a not-landed note" % k)
+')
+if [ "$RC" -ne 1 ]; then
+    bad "testB7 (batch, no table): exit $RC, expected 1:
+$(tail -12 "$WORK/tb7.out")"
+elif [ -n "$B7" ]; then
+    bad "testB7: $B7"
+elif [ "$(grep -c "): landed-unconfirmed — no row in land-core.sh's table" "$WORK/tb7.out")" != 3 ]; then
+    bad "testB7: not every pair is reported landed-unconfirmed:
+$(tail -8 "$WORK/tb7.out")"
+else
+    ok "testB7: with no batch table, pairs whose tips are on origin are reported landed-unconfirmed, untouched, exit 1"
+fi
+
+jira_batch tb8 conflict AI_TOOLKIT_ROOT="$FAKE_TK" REAL_LAND_CORE="$REAL_LAND_CORE" STUB_TABLE=drop:b2
+B8=$(jira_check tb8 '
+if st["PROJ-2"]["posts"] != [["10012", before]] or st["PROJ-2"]["comments"]:
+    print("PROJ-2 posts %s comments %r: it must stay in Awaiting, untouched" % (st["PROJ-2"]["posts"], st["PROJ-2"]["comments"]))
+for k in ("PROJ-1", "PROJ-3"):
+    if st[k]["status"] != "10014":
+        print("%s is %s, expected Completed" % (k, st[k]["status"]))
+')
+if [ "$RC" -ne 1 ]; then
+    bad "testB8 (batch, row missing): exit $RC, expected 1:
+$(tail -12 "$WORK/tb8.out")"
+elif [ -n "$B8" ]; then
+    bad "testB8: $B8"
+elif ! grep -q "PROJ-2 ('b2'): unknown — no row in land-core.sh's table (exit 3), and tip [0-9a-f]* is not on origin/main. Left as it was ('Awaiting Deployment'). Check: git merge-base --is-ancestor" "$WORK/tb8.out"; then
+    bad "testB8: the summary does not say what to check for PROJ-2:
+$(tail -8 "$WORK/tb8.out")"
+else
+    ok "testB8: a pair missing from the table and not on origin stays in Awaiting, untouched, with what to check, exit 1"
+fi
+
+tb9_prep() { git -C "$REPO" config remote.origin.pushurl "$WORK/tb9-nowhere.git"; }
+JB_PREP=tb9_prep jira_batch tb9 clean
+B9=$(jira_check tb9 '
+for k in ("PROJ-1", "PROJ-2", "PROJ-3"):
+    if st[k]["posts"] != [["10012", before]] or st[k]["comments"]:
+        print("%s posts %s comments %r: expected Awaiting only, no note" % (k, st[k]["posts"], st[k]["comments"]))
+')
+if [ "$RC" -ne 1 ]; then
+    bad "testB9 (batch, push fails): exit $RC, expected 1:
+$(tail -12 "$WORK/tb9.out")"
+elif [ -n "$B9" ]; then
+    bad "testB9: $B9"
+elif [ "$(grep -c "): push-failed — the train is complete LOCALLY in the integration worktree; PROJ-[123] was not moved back: push by hand, then complete it" "$WORK/tb9.out")" != 3 ]; then
+    bad "testB9: the push-by-hand line is not printed for every pair:
+$(tail -8 "$WORK/tb9.out")"
+else
+    ok "testB9: a failed batch push leaves every ticket in Awaiting with a push-by-hand line, exit 1"
+fi
+
+tb10_prep() {
+    local i
+    for i in 1 2 3; do
+        git -C "$REPO" worktree add -q "$WORK/tb10-wt$i" "b$i"
+        mkdir -p "$WORK/tb10-wt$i/.night-watchman"
+        printf 'orchestrator-pane: orch1\n\n## Findings\n- finding from b%s\n' "$i" > "$WORK/tb10-wt$i/.night-watchman/closing-state.md"
+    done
+    install_stub_herdr_exit "$REPO"
+}
+: > "$WORK/tb10.herdr.log"
+JB_PREP=tb10_prep jira_batch tb10 clean HERDR_ENV=1 PATH="$WORK/tb10/bin:$PATH" \
+    STUB_HERDR_LOG="$WORK/tb10.herdr.log" STUB_AGENT_ALIVE="$WORK/tb10/bin/alive" STUB_ORCH_ACKS=1 \
+    LAND_BRANCH_ACK_WAIT_S=2
+B10=$(jira_check tb10 '
+import re
+for i, k in enumerate(("PROJ-1", "PROJ-2", "PROJ-3"), 1):
+    if st[k]["status"] != "10014":
+        print("%s is %s, expected Completed" % (k, st[k]["status"]))
+    cs = [c for c in st[k]["comments"] if re.search("closing-state:%s:[0-9a-f]{40}" % k, c)]
+    if len(cs) != 1 or ("finding from b%d" % i) not in cs[0]:
+        print("%s carries %d closing-state comment(s) with its own findings, expected 1" % (k, len(cs)))
+')
+if [ "$RC" -ne 0 ]; then
+    bad "testB10 (batch, HERDR_ENV closing state): exit $RC, expected 0:
+$(tail -12 "$WORK/tb10.out")"
+elif [ -n "$B10" ]; then
+    bad "testB10: $B10"
+elif [ "$(grep -c '^closing state written and read back\.$' "$WORK/tb10.out")" != 3 ] \
+    || [ "$(grep -c '^orchestrator acknowledged the closing state\.$' "$WORK/tb10.out")" != 3 ] \
+    || [ "$(grep -c '^pane send-text orch1 PROJ-[123] landed' "$WORK/tb10.herdr.log")" != 3 ]; then
+    bad "testB10: expected three read-backs, three notifications and three acks:
+$(grep -i 'closing\|acknowledg' "$WORK/tb10.out")"
+else
+    ok "testB10: HERDR_ENV=1 --batch writes and reads back each landed ticket's own closing state, and each is acknowledged"
+fi
+
 echo
 echo "$PASS passed, $FAIL failed (against: $LAND_BRANCH)"
 [ "$FAIL" -eq 0 ]
