@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [2.0.0](https://github.com/moneymikeMD/night-watchman/compare/v1.18.1...v2.0.0) (2026-11-08)
+
+
+### Features
+
+* hand agent memory to lamplighter ([#162](https://github.com/moneymikeMD/night-watchman/issues/162)) ([4594239](https://github.com/moneymikeMD/night-watchman/commit/4594239c63d27054598db82fc4ba7950df14d2b9))
+
+
+### Continuous Integration
+
+* lift the major-version cap so the lamplighter memory hand-off ships as 2.0.0 ([#164](https://github.com/moneymikeMD/night-watchman/issues/164)) ([f0fa344](https://github.com/moneymikeMD/night-watchman/commit/f0fa3443c21d52757663d00b008d9f5ece07f2bd))
+
 ## [1.18.1](https://github.com/moneymikeMD/night-watchman/compare/v1.18.0...v1.18.1) (2026-11-02)
 
 
