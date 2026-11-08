@@ -329,6 +329,8 @@ run_sut() {
     else
         unset HERDR_WORKSPACE_ID
     fi
+    if [ -n "${RUN_SUT_PANE_ID:-}" ]; then export HERDR_PANE_ID="$RUN_SUT_PANE_ID"; else unset HERDR_PANE_ID; fi
+    if [ -n "${RUN_SUT_MACHINE:-}" ]; then export HERDR_MACHINE="$RUN_SUT_MACHINE"; else unset HERDR_MACHINE; fi
     if [ "${RUN_SUT_NO_PROGRESS:-0}" = 1 ]; then
         ( cd "$repo/$SUT_REL" && HERDR_ENV="$herdr_env" PATH="$repo/bin:$PATH" \
             STUB_JIRA_LOG="${STUB_JIRA_LOG:-$repo/jira.log}" \
@@ -1073,6 +1075,47 @@ scenario_brief_dry_run() {
     assert_eq "B0 prompt calls" "0" "$(call_count "$repo/herdr.log" "agent prompt")"
 }
 
+# R0..R3 — the REPLY section: names the orchestrator's pane and machine
+# label with both command forms; omitted when either is unset or malformed.
+# shellcheck disable=SC2016  # the needles are literal backticked brief text
+scenario_reply_section() {
+    local repo out rc
+    repo=$(make_repo) || { echo "FAIL: R setup" >&2; FAIL=1; return; }
+    install_stub_jira "$repo" 10020 "Scratch reply ticket"
+    install_stub_herdr "$repo"
+    : > "$repo/herdr.log"
+
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_PANE_ID="wAB:p2" RUN_SUT_MACHINE=alpha \
+        run_sut "$repo" PROJ-960 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "R0 exit code" "0" "$rc"
+    assert_contains "R0 REPLY heading" "$out" "## REPLY"
+    assert_contains "R0 names pane and machine" "$out" 'herdr pane `wAB:p2` on machine `alpha`'
+    assert_contains "R0 same-machine command" "$out" '`herdr agent prompt wAB:p2 "<message>"`'
+    assert_contains "R0 cross-machine command" "$out" '`herdr --machine alpha agent prompt wAB:p2 "<message>"`'
+    assert_contains "R0 compares the worker's own HERDR_MACHINE" "$out" 'comparing your own `$HERDR_MACHINE` with `alpha`'
+    assert_contains "R0 says when to use it" "$out" "when you are blocked, or when you need an owner decision"
+    assert_contains "R0 closing-state line kept" "$out" '`orchestrator-pane: wAB:p2`'
+
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_PANE_ID="wAB:p2" \
+        run_sut "$repo" PROJ-960 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "R1 machine unset exit code" "0" "$rc"
+    assert_not_contains "R1 machine unset omits REPLY" "$out" "## REPLY"
+    assert_not_contains "R1 machine unset has no --machine" "$out" "--machine"
+    assert_contains "R1 closing-state line kept" "$out" '`orchestrator-pane: wAB:p2`'
+
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_MACHINE=alpha \
+        run_sut "$repo" PROJ-960 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "R2 pane unset exit code" "0" "$rc"
+    assert_not_contains "R2 pane unset omits REPLY" "$out" "## REPLY"
+    assert_not_contains "R2 pane unset omits closing-state line" "$out" "orchestrator-pane:"
+
+    out=$(STUB_HERDR_LOG="$repo/herdr.log" STUB_LIST_JSON="$EMPTY_LIST" RUN_SUT_PANE_ID="wAB:p2" RUN_SUT_MACHINE='al pha;x' \
+        run_sut "$repo" PROJ-960 1 --dry-run) && rc=0 || rc=$?
+    assert_eq "R3 malformed label exit code" "0" "$rc"
+    assert_not_contains "R3 malformed label omits REPLY" "$out" "## REPLY"
+    assert_eq "R prompt calls" "0" "$(call_count "$repo/herdr.log" "agent prompt")"
+}
+
 # O0..O5 — the worktree label names the orchestrator that dispatched it:
 # flag, env var, flag over env var, neither, a malformed id, and the real
 # (non --dry-run) create call. Branch and agent name stay the ticket id.
@@ -1230,6 +1273,7 @@ scenario_lifecycle_readback_stuck
 scenario_lifecycle_missing_status_flag
 scenario_lifecycle_no_matching_transition
 scenario_brief_dry_run
+scenario_reply_section
 scenario_label_orchestrator
 scenario_brief_sent
 scenario_brief_missing_field

@@ -280,7 +280,10 @@ they live in exists here.
 registered and working, and it is still the right answer for three things
 the Workflow tool does not do: a human-visible pane during a supervised
 run, a session that outlives the orchestrating turn, and anything that
-needs a real terminal.
+needs a real terminal. Its brief carries a REPLY section naming the
+orchestrator's pane and `$HERDR_MACHINE` label, so a worker can message
+back with `herdr agent prompt`, adding `--machine <label>` only from another
+machine. `--machine` matches a saved herdr machine label, never a hostname.
 
 **`prime-agent`** starts each ticket's worker as its own Prime Agent
 session, held by the Prime Agent daemon. **It only works when the

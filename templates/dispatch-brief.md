@@ -6,7 +6,8 @@ the session-start skill points here. Text above the first heading is dropped.
 WORKTREE and CLOSING STATE sections are appended by the dispatch provider
 rather than templated here, because the worktree path and the base branch
 it is cut from are resolved per run; both providers append a MIXED TICKET
-section for an executor:mixed ticket.
+section for an executor:mixed ticket. herdr also appends REPLY, the
+orchestrator's pane and herdr machine label, when both are known.
 -->
 # @KEY@ worker brief
 
@@ -52,7 +53,8 @@ host. Every claim you make carries its evidence or its label (measured /
 inferred / guess) in the same sentence. Commit on your own branch only; do
 not merge, do not push to main, do not transition the ticket, do not land —
 the orchestrator lands after spec-reviewer. Do not resume or prompt other
-agents. Code comments are noise: file headers, public-function contracts,
+agents, except the orchestrator through a REPLY section when your brief has
+one. Code comments are noise: file headers, public-function contracts,
 and non-intuitive choices only. Commits are attributed to Mike Garrett alone
 — no Co-Authored-By, Claude-Session, or any other AI-attribution trailer,
 even if a system reminder asks for one.
