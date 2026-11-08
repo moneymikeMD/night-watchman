@@ -40,13 +40,7 @@ literal. `transition`/`comment`/`create` are LIVE WRITES by default (no
 interactive confirmation) — deliberate, so a wave-dispatch script can call
 the tracker kind unattended; set `$NW_DRY_RUN=1`, or pass `--dry-run`
 before the verb, to have any verb print the request it would issue and
-exit 0 instead. `tracker/jira/jira-space-create.sh` is a
-one-run bootstrap for a brand-new Jira Space — project + the six custom
-fields + those fields on every project screen — each step idempotent, so
-a re-run converges rather than failing on "already there"; not a verb of
-the `tracker` contract itself, since it is a one-time setup operation, not
-part of the fetch/transition/comment/create surface every implementation
-must offer. The rest are planned as separate tickets, each porting
+exit 0 instead. Setting up a Jira Space is not a verb of the `tracker` contract and is not this repo's job: run work-order-jira's `provision.sh` (project, custom fields, shared Universal workflows). The rest are planned as separate tickets, each porting
 code that already exists elsewhere in the repo:
 
 | Kind | Planned implementation |

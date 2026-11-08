@@ -441,19 +441,6 @@ Usage:
                   [--resume N] [--manifest PATH] [--progress] [--dry-run]
 ```
 
-### providers/tracker/jira/jira-space-create.sh
-
-jira-space-create.sh — one-run bootstrap for a new Jira Space (company-
-managed, "simplified scrum classic" template): project + the six custom
-fields + those fields on every screen the project's issue types use. Each step is idempotent; a re-run converges.
-
-```text
-Usage:
-  jira-space-create.sh KEY "Name" --dry-run
-  jira-space-create.sh KEY "Name" --yes [--lead ACCOUNT_ID]
-                        [--jira-api PATH] [--workflow-apply PATH]
-```
-
 ### providers/tracker/jira/provider.sh
 
 provider.sh — jira's implementation of the `tracker` provider kind
