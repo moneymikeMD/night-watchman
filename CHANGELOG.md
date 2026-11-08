@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here.
 
+## [2.2.0](https://github.com/moneymikeMD/night-watchman/compare/v2.1.0...v2.2.0) (2026-11-08)
+
+
+### Features
+
+* **dispatch:** prime-agent watch --since sets the finished reference time per review round ([003de94](https://github.com/moneymikeMD/night-watchman/commit/003de94d3eb958f8af4b449f80221a6b0df6492d))
+* **land-branch:** --batch lands several reviewed branches in one land-core.sh train (NWM-218) ([5b099a1](https://github.com/moneymikeMD/night-watchman/commit/5b099a18282f22d8d60afb4b31064e87fbde4c65))
+
+
+### Bug Fixes
+
+* ai-toolkit-root selftest compares the pwd -P path and names no home directory ([086645e](https://github.com/moneymikeMD/night-watchman/commit/086645e0530d9a6bc35c5e8ac637cce015b9db06))
+* ai-toolkit-root.sh resolves the sibling checkout from a linked worktree ([0d04bf1](https://github.com/moneymikeMD/night-watchman/commit/0d04bf177e158d89d9a45a9c9b939e0ecc6500b4))
+* **config:** accept one trailing comma in a one-line string array ([92a6be8](https://github.com/moneymikeMD/night-watchman/commit/92a6be885edca1e51b412f56d366af0a91916c4a))
+* **dispatch:** herdr brief renders each config forbidden entry as its own bullet and merges --forbidden after ([dc9a408](https://github.com/moneymikeMD/night-watchman/commit/dc9a4089df16d99c7dafae84bdfc3b2e24c761ab))
+* **dispatch:** prime-agent brief says await bash returns a finished result ([291b31b](https://github.com/moneymikeMD/night-watchman/commit/291b31b37409ade2d620be6f5c36c23bd3cc4238))
+* **dispatch:** prime-agent brief tracker commands carry NW_CONFIG ([36a892a](https://github.com/moneymikeMD/night-watchman/commit/36a892a5912d4b52f26b63209fefc8456ee70742))
+* jira-agile-api sprint-update sends POST, not a PUT Jira rejects ([35573dc](https://github.com/moneymikeMD/night-watchman/commit/35573dc51ff2683350cd4a2db95b9e0c719fa4c1))
+* session-cost resolves its ledger from the main worktree root, not the raw cwd ([bd3d8ce](https://github.com/moneymikeMD/night-watchman/commit/bd3d8ce9226d9227f2ab4089a5c42abb31699292))
+
 ## [2.1.0](https://github.com/moneymikeMD/night-watchman/compare/v2.0.0...v2.1.0) (2026-11-08)
 
 
