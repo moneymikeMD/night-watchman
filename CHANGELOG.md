@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.1.0](https://github.com/moneymikeMD/night-watchman/compare/v2.0.0...v2.1.0) (2026-11-08)
+
+
+### Features
+
+* **dispatch:** herdr brief tells the worker how to message the orchestrator ([#165](https://github.com/moneymikeMD/night-watchman/issues/165)) ([245acd0](https://github.com/moneymikeMD/night-watchman/commit/245acd08e260b8bd42d3bb7a0ad2d5f7d2326922))
+
 ## [2.0.0](https://github.com/moneymikeMD/night-watchman/compare/v1.18.1...v2.0.0) (2026-11-08)
 
 
