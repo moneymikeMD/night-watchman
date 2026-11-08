@@ -225,8 +225,8 @@ Usage:
 
 provider.sh — the `prime-agent` implementation of the `dispatch` provider
 kind (verbs: start, watch, stop — see ../../README.md for the contract and
-for where these semantics differ from workflow's and herdr's). Selected per
-run with NW_DISPATCH=prime-agent; it is not the committed default.
+how these differ from workflow's and herdr's). Selected per run with
+NW_DISPATCH=prime-agent; it is not the committed default.
 
 ```text
 Usage:
@@ -234,7 +234,7 @@ Usage:
                     [--model PROVIDER/MODEL] [--thinking LEVEL]
                     [--worktree PATH] [--base BRANCH] [--timebox TEXT]
                     [--forbidden TEXT]... [--dry-run]
-  provider.sh watch <ticket-id> [--until STATE]... [--timeout MS]
+  provider.sh watch <ticket-id> [--until STATE]... [--timeout MS] [--since TIME]
   provider.sh stop  <ticket-id> [--reason TEXT]
 ```
 
