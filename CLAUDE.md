@@ -101,10 +101,8 @@ The other five jobs run on Ubuntu:
 - **no-personal-paths** — ai-toolkit's `actions/no-personal-paths@v1`; exceptions are declared in `.github/personal-paths-allow`.
 - **skill-routing** — report-only against `evals/routing/`, deliberately: a gate that reddens every branch gets disabled rather than obeyed.
 - **docs-site** — frozen `bun install` + `astro build` for `docs/preview/website`, catching a desynced lockfile before the real deploy does.
-- **no-major** — this plugin stays below a major version bump by owner decision: no commit subject or PR title matching `^[A-Za-z]+(\([^)]*\))?!:`, no `BREAKING CHANGE:` footer. A genuinely breaking
-  change ships as a plain `feat:` describing the incompatibility in the body as prose.
 
-Only `selftests`, `docs-site` and `comment-lint` are in `protect_main-2`'s required-status-checks list; the other three run on every push and PR but aren't ruleset-required (they still gate a PR
+Only `selftests`, `docs-site` and `comment-lint` are in `protect_main-2`'s required-status-checks list; the other two run on every push and PR but aren't ruleset-required (they still gate a PR
 merged through the UI, since GitHub blocks on any check the PR shows as failing, required or not — they just don't independently block a bypassed push).
 
 ## A selftest green is not a change exercised
