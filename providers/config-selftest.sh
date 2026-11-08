@@ -124,6 +124,10 @@ eq "a string array reads as one item per line" "$(printf 'a\nb,c\nd"e')" "$(get 
 eq "an empty array reads as empty" "" "$(get "$WORK/arr.toml" empty)"
 eq "a one-item array reads as that item" "x" "$(get "$WORK/arr.toml" single)"
 
+printf 'tc = ["a", "b" , ]\ntc1 = ["x",]\n' > "$WORK/tc.toml"
+eq "one trailing comma in an array is accepted" "$(printf 'a\nb')" "$(get "$WORK/tc.toml" tc)"
+eq "a trailing comma after a single item is accepted" "x" "$(get "$WORK/tc.toml" tc1)"
+
 # A '#' or '=' inside a quoted string is DATA. Both are ordinary in real
 # values (op:// refs, URLs with fragments, query strings).
 cat > "$WORK/punct.toml" <<'EOF'
@@ -182,6 +186,8 @@ reject() {
     contains "$1" "$2" "$out"
 }
 
+reject "a double trailing comma is rejected" "arrays of strings"             'a = ["x",,]'
+reject "a lone comma array is rejected" "arrays of strings"                    'a = [,]'
 reject "arrays of integers are rejected"  "arrays of strings"                   'a = [1, 2]'
 reject "an unterminated array is rejected" "arrays of strings"                  'a = ["x"'
 reject "trailing junk after an array is rejected" "trailing junk"               'a = ["x"] y'

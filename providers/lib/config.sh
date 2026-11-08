@@ -136,7 +136,7 @@ _nw_config_awk() {
                 while (i <= n) {
                     ch = substr(raw, i, 1)
                     if (ch == " " || ch == "\t") { i++; continue }
-                    if (state == "item" && ch == "]" && nitems == 0) { ok = i; break }
+                    if (state == "item" && ch == "]") { ok = i; break }
                     if (state == "sep") {
                         if (ch == "]") { ok = i; break }
                         if (ch != ",") { break }
