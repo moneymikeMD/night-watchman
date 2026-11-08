@@ -121,7 +121,7 @@ Ported from pstack `principle-encode-lessons-in-structure`, 2026-09-14.
 ## Reflect at wrap-up
 
 Corrections happen inside a session — owner pushback, a retracted claim, a
-`verify` that came back NOT MET — and memorygraph can store the fact, but the
+`verify` that came back NOT MET — and the memory provider can store the fact, but the
 skill that caused it stays wrong unless something closes the loop. At
 session wrap-up, if the session had a correction worth generalizing (not a
 one-off), dispatch `agents/reflector.md` over the session's corrections.

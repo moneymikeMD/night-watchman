@@ -29,9 +29,8 @@ cite this timebox.
 Before reporting that something is broken, unexplained, failing, or missing —
 in a progress comment, a PR body, or this ticket's hand-back — check the two
 stores that may already know: `grep -ril '<symptom>' docs/known-issues/` and
-`memorygraph recall --query "<symptom or question>"`, the whole symptom as
-one query (falkordb and falkordblite backends only: one noun per call, since
-a multi-word query matches nothing there). A hit is the answer — cite it
+`lampl recall --query "<symptom or question>"`, the whole symptom as one
+query. A hit is the answer — cite it
 instead of re-deriving or re-testing it. This applies to a failure you
 reproduced yourself: reproducing it proves it is real, not that it is new.
 

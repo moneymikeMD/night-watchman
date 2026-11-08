@@ -79,7 +79,7 @@ cat > "$WORK/good.toml" <<'EOF'
 tracker  = "jira"
 secrets  = 'op'          # a literal string, and a trailing comment
 dispatch = "herdr"
-memory   = "memorygraph"
+memory   = "lamplighter"
 
 [tracker.jira]
 host    = "example.atlassian.net"

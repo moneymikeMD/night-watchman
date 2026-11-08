@@ -6,7 +6,7 @@
 tracker  = "jira"
 secrets  = "op"
 dispatch = "workflow"
-memory   = "memorygraph"
+memory   = "lamplighter"
 publish  = "atlassian"
 
 [tracker.jira]
@@ -17,8 +17,8 @@ publish  = "atlassian"
 # as the template does.
 project = "NWM"
 
-[memory.memorygraph]
-tag = "night-watchman"
+[memory.lamplighter]
+project = "night-watchman"
 
 [publish.atlassian]
 # The site identifiers below are deliberately absent, exactly like

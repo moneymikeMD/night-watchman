@@ -30,7 +30,7 @@
 #     dispatch/workflow/provider.sh
 #     dispatch/herdr/provider.sh
 #     dispatch/prime-agent/provider.sh
-#     memory/memorygraph/provider.sh
+#     memory/lamplighter/provider.sh
 #     publish/atlassian/provider.sh
 #
 # SELECTION, highest priority first:
@@ -96,7 +96,7 @@ nw_default_impl() {
         tracker)  echo "jira" ;;
         secrets)  echo "op" ;;
         dispatch) echo "workflow" ;;
-        memory)   echo "memorygraph" ;;
+        memory)   echo "lamplighter" ;;
         publish)  echo "atlassian" ;;
         *)        return 1 ;;
     esac

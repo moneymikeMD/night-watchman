@@ -23,7 +23,7 @@ python3 "$ISSUES_PY" next  issues/                                     # startab
 python3 "$ISSUES_PY" board issues/                                     # what is where
 head -60 docs/known-issues.md                                          # severity table only, if it exists
 git log -1 --format=%B                                                 # last session's commit body
-memorygraph recall --query "<project> open work" --limit 8             # if memorygraph is installed as an optional layer; falkordb backends: one keyword
+lampl recall --query "<project> open work" --limit 8                   # if lamplighter is installed as an optional layer
 ```
 
 Swap `issues/` for `--source jira` (or whatever adapter is configured) if

@@ -40,7 +40,7 @@ description: Generated from templates/night-watchman.config.toml, rendered as a 
 tracker  = "jira"
 secrets  = "op"
 dispatch = "workflow"
-memory   = "memorygraph"
+memory   = "lamplighter"
 publish  = "atlassian"
 
 [tracker.jira]
@@ -93,10 +93,10 @@ forbidden = ["do not touch paths outside the ticket's touches"]
 # line. Uncomment and fill in if agents reach Jira through the connector.
 # cloud_id = "00000000-0000-0000-0000-000000000000"
 
-[memory.memorygraph]
-# Every memory this repo stores is tagged with this, so a single global
-# graph shared across repos can still be recalled per project.
-tag = "night-watchman"
+[memory.lamplighter]
+# The lamplighter project every memory this repo stores and recalls is
+# scoped to, so one store shared across repos still recalls per project.
+project = "PROJ"
 
 [publish.atlassian]
 # Where the owner-facing wave brief is written (a Confluence page) and
