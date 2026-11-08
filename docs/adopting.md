@@ -52,7 +52,7 @@ A terse runbook for wiring an existing repo up as a night-watchman adopter.
 ## Jira-native gates
 
 Once the tracker is Jira (company-managed project), three ticket gates are enforced by the workflow itself and one by an Automation rule. work-order owns that workflow: its
-`plugins/work-order-jira/universal-apply.sh` provisions the shared Universal Managed workflows once per site, and `plugins/work-order-jira/universal-switch.sh` moves a project onto them. The rules
+`plugins/work-order-jira/provision.sh` creates a Space (project, custom fields, shared workflows) in one run; underneath it, `universal-apply.sh` provisions the shared Universal Managed workflows once per site and `universal-switch.sh` moves a project onto them. The rules
 are:
 
 | Transition | Rule | Message |
@@ -71,13 +71,13 @@ Jira exposes no public API for Automation rules on the plans this plugin targets
 a Deferred ticket with a past date is simply invisible until someone notices.
 
 **One global rule is enough.** Create it under Jira Settings → System → Global automation, scoped to all software projects, with no `project =` clause in the JQL (`status = Deferred AND
-"defer_until" <= now()`). Every project on the Universal Managed workflows has the Deferred status, and `jira-space-create.sh` adds the `defer_until` field, so the rule covers projects created later
+"defer_until" <= now()`). Every project on the Universal Managed workflows has the Deferred status, and work-order-jira's `provision.sh` adds the `defer_until` field, so the rule covers projects created later
 with no further work. A global rule counts against the site-wide Automation execution allowance; at one run a day that is about 30 executions a month. Per-project rules (the steps below, or the import
 template) are the fallback when a site wants the allowance untouched.
 
 1. Project settings → Automation → Create rule.
 2. Trigger: **Scheduled**. Run daily. Tick "Run a JQL search and execute actions for each issue in the query". JQL, with your project key and the field's display name (`defer_until` on a project
-   bootstrapped by `jira-space-create.sh`):
+   provisioned by `provision.sh`):
 
    ```
    project = PROJ AND status = Deferred AND "defer_until" <= now()
@@ -119,8 +119,7 @@ providers/tracker/jira/jira-api.sh --yes write PUT /field/<customfield id> \
   '{"searcherKey":"com.atlassian.jira.plugin.system.customfieldtypes:daterange"}'
 ```
 
-`GET /rest/api/3/field` keeps reporting `searcherKey: null` afterwards; prove it with a JQL search on the field instead. `jira-space-create.sh` does this probe-and-repair for every field it creates or
-finds (its step 4); the manual form above is the fallback for a field it did not touch.
+`GET /rest/api/3/field` keeps reporting `searcherKey: null` afterwards; prove it with a JQL search on the field instead. `provision.sh` does this probe-and-repair for the fields it creates; the manual form above is the fallback for a field it did not touch.
 
 ## Snags
 
