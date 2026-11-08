@@ -553,6 +553,31 @@ scenario_watch_finished() {
     rm -rf "$d"
 }
 
+# W5 — --since replaces requested_at as the finished reference: a closing-state
+# from an earlier round predates it, so finished stays false until rewritten.
+scenario_watch_since() {
+    local d out rc cs
+    d=$(started) || { echo "FAIL: W5 setup" >&2; FAIL=1; return; }
+    cs="$d/wt-wo-026/.night-watchman/closing-state.md"
+    serve "$d" sessions 1 sessions-idle.json nw-probe-001 wo-026 "$d/wt-wo-026"
+    mkdir -p "$d/wt-wo-026/.night-watchman"
+    echo round1 > "$cs"; touch -t 203001010000 "$cs"
+    out=$(run_json "$d" watch wo-026)
+    assert_eq "W5 without --since the round-1 closing-state is finished" "true" "$(jf "$out" .finished)"
+    out=$(run_json "$d" watch wo-026 --since 2030-06-01T00:00:00Z)
+    assert_eq "W5 a closing-state predating --since is not finished" "false" "$(jf "$out" .finished)"
+    out=$(run_json "$d" watch wo-026 --since 2029-06-01T00:00:00Z)
+    assert_eq "W5 a closing-state after --since is finished" "true" "$(jf "$out" .finished)"
+    out=$(run_sut "$d" watch wo-026 --since yesterday) && rc=0 || rc=$?
+    assert_eq "W5 a non-ISO --since is refused" "1" "$rc"
+    out=$(run_sut "$d" watch --help) && rc=0 || rc=$?
+    assert_eq "W5 watch --help exits 0" "0" "$rc"
+    case "$out" in *--since*) ;; *) echo "FAIL: W5 watch --help names --since" >&2; FAIL=1 ;; esac
+    out=$(run_sut "$d" watch -h) && rc=0 || rc=$?
+    assert_eq "W5 watch -h exits 0" "0" "$rc"
+    rm -rf "$d"
+}
+
 scenario_start_happy
 scenario_start_thinking
 scenario_start_model
@@ -567,6 +592,7 @@ scenario_watch_not_live
 scenario_watch_until
 scenario_watch_errors
 scenario_watch_finished
+scenario_watch_since
 scenario_stop
 scenario_stop_refusals
 scenario_usage

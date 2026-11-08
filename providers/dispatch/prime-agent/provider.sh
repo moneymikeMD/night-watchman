@@ -2,8 +2,8 @@
 #
 # provider.sh — the `prime-agent` implementation of the `dispatch` provider
 # kind (verbs: start, watch, stop — see ../../README.md for the contract and
-# for where these semantics differ from workflow's and herdr's). Selected per
-# run with NW_DISPATCH=prime-agent; it is not the committed default.
+# how these differ from workflow's and herdr's). Selected per run with
+# NW_DISPATCH=prime-agent; it is not the committed default.
 #
 # The dispatcher is a Prime Agent daemon. A daemon-backed session can only be
 # created from inside a TOP-LEVEL Prime Agent session, by calling
@@ -30,7 +30,7 @@
 #                     [--model PROVIDER/MODEL] [--thinking LEVEL]
 #                     [--worktree PATH] [--base BRANCH] [--timebox TEXT]
 #                     [--forbidden TEXT]... [--dry-run]
-#   provider.sh watch <ticket-id> [--until STATE]... [--timeout MS]
+#   provider.sh watch <ticket-id> [--until STATE]... [--timeout MS] [--since TIME]
 #   provider.sh stop  <ticket-id> [--reason TEXT]
 #
 # The executor gate, the brief template, the MIXED TICKET section and the
@@ -45,18 +45,17 @@
 # ...), `archived` once only a stopped session matches, and `not-started`
 # when none matches — the launch call has not been made yet. `idle` is not
 # finished; `finished` (JSON key, also `--until finished`) is: closing-state.md
-# in the worktree modified at or after requested_at.
+# in the worktree modified at or after requested_at, or --since (ISO-8601 UTC)
+# when given: a review round passes when it sent the follow-up.
 #
 # A session name is unique only among one parent's children, so a name alone
-# could match another orchestrator's worker; the cwd (the worktree, as a
-# physical path, because the daemon reports one) disambiguates. More than one
-# live match is exit 2.
+# could match another orchestrator's worker; the cwd (the worktree, as the
+# daemon's physical path) disambiguates. More than one live match is exit 2.
 #
 # State: $NW_DISPATCH_PRIME_AGENT_STATE, else [dispatch.prime-agent]
 # state_dir, else $XDG_STATE_HOME/night-watchman/dispatch-prime-agent
 # (falling back to ~/.local/state). One `<branch>.json` journal and one
-# `<branch>.brief.md` per ticket, outside the repo for the reason workflow's
-# header gives.
+# `<branch>.brief.md` per ticket, outside the repo (see workflow's header).
 #
 # Env:
 #   NW_DISPATCH_PRIME_AGENT_STATE  the state directory (wins over config).
@@ -460,11 +459,17 @@ run by a person after landing, not before."
         printf '%s\n' "$REQUEST"
         ;;
     watch)
+        case "${1:-}" in
+            --help|-h)
+                echo "usage: provider.sh watch <ticket-id> [--until STATE]... [--timeout MS] [--since TIME]"
+                exit 0 ;;
+        esac
         TICKET_ID="${1:-}"
-        [ -n "$TICKET_ID" ] || die "usage: provider.sh watch <ticket-id> [--until STATE]... [--timeout MS]"
+        [ -n "$TICKET_ID" ] || die "usage: provider.sh watch <ticket-id> [--until STATE]... [--timeout MS] [--since TIME]"
         shift
         UNTIL=""
         TIMEOUT_MS=""
+        SINCE=""
         while [ $# -gt 0 ]; do
             case "$1" in
                 --until)
@@ -474,6 +479,10 @@ run by a person after landing, not before."
                     [ -n "${2:-}" ] || die "--timeout needs milliseconds"
                     case "$2" in *[!0-9]*) die "--timeout takes whole milliseconds (got '$2')" ;; esac
                     TIMEOUT_MS="$2"; shift 2 ;;
+                --since)
+                    [ -n "${2:-}" ] || die "--since needs an ISO-8601 UTC time (2026-11-08T14:43:04Z)"
+                    printf '%s' "$2" | jq -rR 'fromdateiso8601' >/dev/null 2>&1 || die "--since takes an ISO-8601 UTC time like 2026-11-08T14:43:04Z (got '$2')"
+                    SINCE="$2"; shift 2 ;;
                 *) die "unknown option to 'watch': $1" ;;
             esac
         done
@@ -486,6 +495,7 @@ run by a person after landing, not before."
         CWD=$(printf '%s' "$JOURNAL_JSON" | jq -r '.worktree // empty')
         [ -n "$NAME" ] && [ -n "$CWD" ] || stop2 "the run journal for '$TICKET_ID' names no session_name or worktree"
         REQUESTED_AT=$(printf '%s' "$JOURNAL_JSON" | jq -r '.requested_at // empty')
+        [ -z "$SINCE" ] || REQUESTED_AT="$SINCE"
 
         POLL_S="${NW_PRIME_AGENT_POLL_S:-5}"
         START_S=$(date +%s)
