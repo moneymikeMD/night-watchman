@@ -151,10 +151,11 @@ output".
 
 ## Transition commits
 
-Move a ticket **in the same commit as the work that moved it — or alone**.
-Never batched with unrelated work: stage paths deliberately, since a broad
-`git add -A` sweeps a stale ticket into an unrelated commit and forges a false
-connection in the history. A lone transition still gets its own message
+Move a ticket **in its own commit**, never folded into the work and never
+batched with anything else, so the history answers "when did this actually
+ship?" `land-branch.sh` makes these commits itself. Committing one by hand,
+stage only the ticket's path, since a broad `git add -A` sweeps a stale ticket
+into an unrelated commit and forges a false connection in the history
 (`chore(issues): PROJ-006 -> completed`).
 
 ## Ticket body and progress

@@ -3,7 +3,7 @@
 ## What this repo is
 
 `moneymikeMD/night-watchman` is a public Claude Code plugin. It owns unattended execution — dispatch, waves, session-start, the `land-branch.sh` lifecycle, the closing-state handoff, wave-trail — plus
-the write guard and cheap-reader hooks in `hooks/`, and the provider seam in `providers/`. A session runs with no human in it; everything here exists to make that survivable.
+the advisory token-saving hooks in `hooks/`, and the provider seam in `providers/`. A session runs with no human in it; everything here exists to make that survivable.
 
 That scope is deliberately narrow, and `docs/ethos.md` argues why. A ticket in this repo's backlog that assigns it work outside that scope predates the boundary and is stale.
 

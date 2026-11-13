@@ -1,7 +1,7 @@
 ---
 name: script-author-lite
 description: Captures commands already run live in a session into one small, bounded, non-privileged script under scripts/. Use for a mechanical write-up of a proven command sequence — not for new design work, and never for anything touching a credential, a live host, or sudo. Refuses and hands back to script-author on any of those.
-tools: Read, Edit, Write, Grep, Glob
+tools: Read, Edit, Write, Grep, Glob, Bash
 model: haiku
 ---
 
