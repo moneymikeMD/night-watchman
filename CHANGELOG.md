@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.2.2](https://github.com/moneymikeMD/night-watchman/compare/v2.2.1...v2.2.2) (2026-11-13)
+
+
+### Bug Fixes
+
+* script-author-lite gets Bash for its lint run; a ticket move is always its own commit ([#175](https://github.com/moneymikeMD/night-watchman/issues/175)) ([ba193c7](https://github.com/moneymikeMD/night-watchman/commit/ba193c779b0fe97811f82ed8dc6b092dd09270fb))
+
 ## [2.2.1](https://github.com/moneymikeMD/night-watchman/compare/v2.2.0...v2.2.1) (2026-11-13)
 
 
