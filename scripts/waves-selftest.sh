@@ -249,6 +249,46 @@ else
     bad "waves: different repos' same path split into two waves (rc=$RC): $OUT"
 fi
 
+# --- 4c. work-order [MUST-49]: a folder claim is guidance, never a block ---
+
+pair_dir folder 'docs/**' 'docs/network.md'
+run python3 "$SUT" waves "$PAIR"
+if [ "$RC" -eq 0 ] && [[ "$OUT" != *"Wave 2"* ]]; then
+    ok "waves: 'docs/**' and 'docs/network.md' share one wave"
+else
+    bad "waves: a folder claim pushed a ticket into a later wave (rc=$RC): $OUT"
+fi
+for landing in serial parallel; do
+    run python3 "$SUT" preflight "$PAIR" --landing "$landing"
+    if [ "$RC" -eq 0 ] && [[ "$OUT" == *"guidance"* ]] && [[ "$OUT" != *"COLLISION"* ]]; then
+        ok "preflight: 'docs/**' vs 'docs/network.md' is guidance under $landing landing"
+    else
+        bad "preflight: folder claim treated as a collision under $landing landing (rc=$RC): $OUT"
+    fi
+done
+
+pair_dir folderbare 'docs/' 'docs/network.md'
+run python3 "$SUT" preflight "$PAIR"
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"guidance"* ]]; then
+    ok "preflight: a bare 'docs/' reads as 'docs/**' and is guidance"
+else
+    bad "preflight: bare 'docs/' not reported as guidance (rc=$RC): $OUT"
+fi
+
+pair_dir exact 'docs/network.md' 'docs/network.md'
+run python3 "$SUT" waves "$PAIR"
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Wave 2"* ]]; then
+    ok "waves: two exact claims on one file still land in separate waves"
+else
+    bad "waves: two exact claims on one file shared a wave (rc=$RC): $OUT"
+fi
+run python3 "$SUT" preflight "$PAIR"
+if [ "$RC" -eq 1 ] && [[ "$OUT" == *"COLLISION"* ]]; then
+    ok "preflight: two exact claims on one file are a hard COLLISION"
+else
+    bad "preflight: two exact claims on one file not a collision (rc=$RC): $OUT"
+fi
+
 # --- 5. independence: strip waves/preflight/_plan_waves/_claims out of a
 # copy of the resolved issues.py and confirm waves.py's own output is
 # unchanged — proves this file does not call back into work-order's planner ---

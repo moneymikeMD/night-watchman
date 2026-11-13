@@ -92,6 +92,20 @@ load_files = ISSUES.load_files
 load_jira = ISSUES.load_jira
 
 
+def _is_folder_claim(path):
+    """Does a touches entry name a whole folder (work-order [MUST-49])?"""
+    return path.endswith(("/", "/*", "/**")) or path in ("*", "**")
+
+
+def _folder_overlap(a, b):
+    """overlap() with a bare `dir/` read as `dir/**`, for folder claims."""
+    return overlap(a + "**" if a.endswith("/") else a, b + "**" if b.endswith("/") else b)
+
+
+is_folder_claim = getattr(ISSUES, "is_folder_claim", _is_folder_claim)
+folder_overlap = getattr(ISSUES, "folder_overlap", _folder_overlap)
+
+
 _COLON_FORM = re.compile(r"^([^:*?\[\]\s]{2,}):(?![/\\])(.+)$")
 
 
@@ -139,11 +153,12 @@ def _norm(glob, ident):
 def _claims(t, landing, ident=()):
     """The paths a ticket claims for a wave slot. Under `serial` landing only
     `touches` claims one; under `parallel` an `appends` path does too,
-    because no lock serialises the merges that made appending safe."""
+    because no lock serialises the merges that made appending safe. A folder
+    claim is guidance ([MUST-49]) and claims no slot."""
     paths = list(t.get("touches") or [])
     if landing == "parallel":
         paths += list(t.get("appends") or [])
-    return [_norm(p, ident) for p in paths]
+    return [n for n in (_norm(p, ident) for p in paths) if not is_folder_claim(n)]
 
 
 def _plan_waves(tickets, landing="serial", ident=()):
@@ -293,13 +308,18 @@ def preflight(tickets, root, landing="serial"):
         for b in ready[i + 1:]:
             for x, kx in _decl_paths(a):
                 for y, ky in _decl_paths(b):
-                    if not overlap(_norm(x, ident), _norm(y, ident)):
+                    nx, ny = _norm(x, ident), _norm(y, ident)
+                    folder = is_folder_claim(nx) or is_folder_claim(ny)
+                    if not (folder_overlap if folder else overlap)(nx, ny):
                         continue
                     h = hotspots.setdefault(
                         _hotspot_key(x, y),
-                        {"ids": set(), "kinds": set(), "hard": False})
+                        {"ids": set(), "kinds": set(), "hard": False, "firm": False})
                     h["ids"].update((a["id"], b["id"]))
                     h["kinds"].update((kx, ky))
+                    if folder:
+                        continue
+                    h["firm"] = True
                     if kx == "touches" and ky == "touches":
                         h["hard"] = True
 
@@ -317,11 +337,12 @@ def preflight(tickets, root, landing="serial"):
     collisions = 0
     for key in sorted(hotspots):
         h = hotspots[key]
-        blocking = h["hard"] or landing == "parallel"
+        blocking = h["hard"] or (landing == "parallel" and h["firm"])
         collisions += 1 if blocking else 0
         kinds = "+".join(sorted(h["kinds"]))
         ids = ", ".join(sorted(h["ids"], key=_numeric_id))
-        print(f"  {'COLLISION' if blocking else 'warn     '}  {key}  "
+        label = "COLLISION" if blocking else "warn     " if h["firm"] else "guidance "
+        print(f"  {label}  {key}  "
               f"via {kinds} — {ids}")
     if not hotspots:
         print("  no file is written by more than one startable ticket")
