@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.2.1](https://github.com/moneymikeMD/night-watchman/compare/v2.2.0...v2.2.1) (2026-11-13)
+
+
+### Bug Fixes
+
+* **waves:** treat folder claims in touches as guidance, not a wave or preflight block (work-order MUST-49) (NWM-227) ([8bdcf74](https://github.com/moneymikeMD/night-watchman/commit/8bdcf74834a5b6443ec9e9f05e1dc96c3aec5a43))
+
 ## [2.2.0](https://github.com/moneymikeMD/night-watchman/compare/v2.1.0...v2.2.0) (2026-11-08)
 
 
