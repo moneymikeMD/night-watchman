@@ -179,6 +179,21 @@ When the reports come back:
   pushes, and moves the ticket to Completed (file-mode directory moves, or
   tracker transitions if one is configured) — or stops at the first failure
   and reverts the merge. See the script's own header for the full contract.
+- **More than one branch ready at once: land them as one train**,
+  `land-branch.sh --batch <branch> <ticket-id> [<branch> <ticket-id>]...`.
+  It pays for one lint and one push however many branches it carries, and
+  ends with a `Batch result:` table naming each branch's fate; a ticket
+  that did not land stays open (in jira mode: back to In Progress, with a
+  note naming why). List a ticket's pair after the pair of any ticket in
+  the train that blocks it. A ticket that needs `--no-complete`,
+  `--already-merged`, `--note` or an outcome lands on its own. Before
+  landing one ready branch, check whether another is ready or one review
+  away, and land them together.
+- **A repo that lands through its own script uses that script's command
+  and batch syntax** wherever this skill says `land-branch.sh` (one such
+  script takes `--batch <branch>:<ticket>` items). The repo's CLAUDE.md
+  names both, and the orchestrator passes them to `wave-supervisor` as its
+  Landing input.
 - **A branch merged in the GitHub UI still needs the lifecycle run.** A PR
   squash-merged for a code-owner review skips `land-branch.sh` entirely, so
   the ticket stays In Progress and the worker's closing state never reaches
@@ -353,8 +368,9 @@ starts — see `wave-trail`. Log the dispatch decision as the first row.
 **A wave dispatched through `herdr` or `prime-agent`: launch
 `wave-supervisor` once, in the background, right after the first `start`**,
 with the rest of the queue, the machines it may start workers on, and the
-`land-branch.sh` flags. It blocks on `dispatch watch`, reviews and lands
-each finished worker, closes its workspace, and starts the next ticket, so
+landing command with its batch syntax and flags. It blocks on `dispatch
+watch`, reviews finished workers, lands the ready ones as one train, closes
+their workspaces, and starts the next tickets, so
 the orchestrator neither polls nor lands by hand. It returns only for a
 decision or when the wave has settled; answer it and continue it with
 SendMessage. Under `workflow` dispatch the Workflow's own completion
@@ -374,10 +390,10 @@ probes are its job; the orchestrator asking "is it landed yet?" means it was
 not launched. Ported from pstack orchestrate
 playbook, 2026-09-14.
 
-Land each branch on the target branch once its `verify` passes, via
-`${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh <branch> <ticket-id>` —
-`wave-supervisor` does this when it is running, the orchestrating thread
-otherwise.
+Land each branch on the target branch once its `verify` passes, through the
+landing command of step 4, as one `--batch` train whenever more than one is
+ready — `wave-supervisor` does this when it is running, the orchestrating
+thread otherwise.
 
 ## Why this is a skill and not a script
 

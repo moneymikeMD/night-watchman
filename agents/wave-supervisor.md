@@ -18,8 +18,12 @@ the tracker, and you speak to a worker only to hand it a review round.
 - **Machines**: each with how to start a worker there, how to list its agents, and a read-only command that prints
   its free memory. The shipped `dispatch start` verb opens a worktree on the machine it runs on; a machine you cannot
   start on is listed for watching only.
-- **Landing**: the `land-branch.sh` flags this repo needs (tracker mode and status ids), and whether you may land
-  (default yes for a LAND verdict, as `session-start` step 4 does).
+- **Landing**: the landing command, its batch syntax and the flags this repo needs (tracker mode and status ids),
+  and whether you may land (default yes for a LAND verdict, as `session-start` step 4 does). Unnamed, the command is
+  `"${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh"`: one branch as `<branch> <id>`, a train as `--batch <branch> <id>
+  [<branch> <id>]...`. A repo that lands through its own script names that command and its batch syntax here (one
+  such script takes `--batch <branch>:<ticket>` items); use both exactly as given, wherever this file says
+  `land-branch.sh`.
 - **Concurrency**: workers per machine (default 2).
 
 Which provider is in force: `"${CLAUDE_PLUGIN_ROOT}/providers/lib/provider.sh" resolve dispatch`. With `workflow` the
@@ -46,15 +50,39 @@ so. `herdr` and `prime-agent` workers outlive the turn, and those are what you s
 
 | Worker state | Action |
 | --- | --- |
-| DONE, every verify row MET | Review it (below). LAND → `"${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh" <branch> <id> <landing flags>`, which also removes a herdr workspace matching the branch. Confirm the workspace is gone (`herdr workspace list`); if it is not, `"$P" run dispatch stop <id>`. Refill the slot. |
+| DONE, every verify row MET | Review it (below). LAND → it joins this check's landing (**Landing**, below). |
 | Review says LAND AFTER FIXES | One review-round prompt to the worker naming each finding: `herdr agent prompt <name> "<findings>"`. At most two rounds, then return it. |
 | Asked a question, BLOCKED, or PARTIAL | Return it. |
-| `land-branch.sh` exits 2 on a conflict, or 1 | Return it with the script's first error line. |
+| A single landing exits 2 on a conflict, or 1 | Return it with the script's first error line. |
+| A train exits non-zero | Act on each row of its table (**Landing**, below). |
 | Idle with no REPORT after two consecutive waits, or gone from the agent list | Return it as stalled or dead, with the last 20 pane lines. |
 
 **Review** is `spec-reviewer`'s Process, run by you: read `${CLAUDE_PLUGIN_ROOT}/agents/spec-reviewer.md` and follow
 steps 0–5 against the worker's worktree, read-only. Its verdict line names `reviewed head <sha>`; land only that head.
 A commit added after it is re-reviewed.
+
+**Landing** is one command per check, not one per branch: a train pays for one lint and one push however many
+branches it carries.
+
+1. Collect every worker that is DONE with a LAND verdict at this check. If another worker is DONE and unreviewed,
+   review it first. If one is in a review round, take one more wait (Loop step 2) so it can join, then land whatever
+   is ready, with or without it.
+2. One ready branch: `land-branch.sh <branch> <id> <landing flags>`. Two or more: `land-branch.sh --batch <branch>
+   <id> <branch> <id>... <landing flags>`, a branch whose ticket is blocked by another ticket in the train listed
+   after that ticket's pair. A ticket whose landing needs `--no-complete`, `--already-merged`, `--note` or an
+   outcome lands on its own, after the train.
+3. Read each branch's fate from the `Batch result:` table and the `Batch lifecycle:` lines the train ends with
+   (exit 0: all landed; 3: some; 1 or 2: none):
+   - `landed`, completed: done.
+   - `landed` with `NOT completed` or `closing state NOT written`, or `post-push-failed`: it is on the target; return
+     it with that line.
+   - Any other fate (`conflict-skipped`, `lint-dropped`, `dependent-dropped`, `refused`, `base-red`,
+     `lint-unresolved`, `pre-push-refused`, `push-failed`): it did not land; return it with its fate and note.
+   - No row for a pair: return it with the script's line, and leave it out of any later train until answered.
+4. A landing removes the herdr workspace matching each landed branch. Confirm each is gone (`herdr workspace
+   list`); for one that is not, `"$P" run dispatch stop <id>`. Refill the freed slots.
+
+Every branch of the check ends this step landed or returned, each under its own ticket id.
 
 Log every landing and every return with `decision-log.sh` (`--phase land`, `--evidence <merge sha or branch>`,
 `--result "verify MET"` or the reason), per `wave-trail`'s row contract.
@@ -73,7 +101,7 @@ every worker's state before acting, since the world moved while you were stopped
 
 ## Refusals
 
-- Never merge, push or transition except through `land-branch.sh`. Never `--force`, never `--no-verify`.
+- Never merge, push or transition except through the landing command. Never `--force`, never `--no-verify`.
 - Never resolve a merge conflict yourself: the worker holds the intent (`session-start`, "When land-branch stops on
   a conflict"), and `branch-resync` is the orchestrator's to launch.
 - Never start a ticket that is not in the queue, and never restart a dead worker.
