@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.3.0](https://github.com/moneymikeMD/night-watchman/compare/v2.2.2...v2.3.0) (2026-11-22)
+
+
+### Features
+
+* wave-supervisor, branch-resync, pr-shepherd and epic-closer agents ([#179](https://github.com/moneymikeMD/night-watchman/issues/179)) ([b59b09d](https://github.com/moneymikeMD/night-watchman/commit/b59b09dc5697e47e38d31b7a1f3b14670e1dde1c))
+
 ## [2.2.2](https://github.com/moneymikeMD/night-watchman/compare/v2.2.1...v2.2.2) (2026-11-13)
 
 
