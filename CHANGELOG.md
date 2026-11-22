@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.4.0](https://github.com/moneymikeMD/night-watchman/compare/v2.3.0...v2.4.0) (2026-11-22)
+
+
+### Features
+
+* wave-supervisor and session-start land ready branches as one --batch train (NWM-232) ([#181](https://github.com/moneymikeMD/night-watchman/issues/181)) ([57f3301](https://github.com/moneymikeMD/night-watchman/commit/57f3301afcd4d7b667972e5d55c5578c6f61a13b))
+
 ## [2.3.0](https://github.com/moneymikeMD/night-watchman/compare/v2.2.2...v2.3.0) (2026-11-22)
 
 
