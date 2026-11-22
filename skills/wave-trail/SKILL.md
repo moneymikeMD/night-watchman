@@ -15,7 +15,8 @@ that gap for waves nobody is watching.
 Open `.night-watchman/wave-trail.tsv` at the start of any wave dispatched
 through a dispatch provider (see `session-start`'s "Dispatching a wave
 through a worktree-dispatch tool"), or any run the owner has said they will
-not be watching live. A wave worked entirely on the main thread with the
+not be watching live. A running `wave-supervisor` appends its own start,
+landing and return rows to the same trail. A wave worked entirely on the main thread with the
 owner present does not need one — `docs/decisions.d/` already covers that
 case at project grain.
 

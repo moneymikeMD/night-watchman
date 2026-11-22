@@ -62,6 +62,11 @@ drop the stale row.
 
 ## 2. Verify awaiting-deployment (delegate, read-only)
 
+**An epic with tickets in triage, missing fields, or awaiting verification:
+launch `epic-closer` on it** instead of this step's hand-built brief. It
+runs the same read-only verify, transitions what the evidence supports, and
+returns the residue each ticket waits on.
+
 Every ticket in `awaiting-deployment/` (or its tracker equivalent) has a
 `verify` block and, if `executor: mixed`, `human_steps`. Hand the whole set
 to one read-only-briefed agent (the cheapest model that can follow
@@ -94,6 +99,7 @@ finish without asking questions, and launch them all in **one** message:
 | New or changed script | `script-author` → `script-reviewer` | mid-tier / top-tier for review judgement |
 | Write up a proven, non-privileged command sequence as a script | `script-author-lite` (refuses and hands back to `script-author` on ssh/op/sudo/live-host) | cheapest available |
 | Ticket moves, decisions, known-issues, wrap-up | `librarian` | cheapest available |
+| Take an epic (or the backlog) to Completed: fill derivable fields, verify, transition | `epic-closer` | mid-tier |
 | Domain-specific work (infra, deploy, a particular stack) | whatever domain agents the project itself defines — this plugin ships none; a project wires its own | project-specific |
 
 A ticket whose next step is a decision only the user can make is still
@@ -157,6 +163,17 @@ When the reports come back:
   with an enumerated list answers every question asked and misses the
   unasked one. Ask about what is peculiar to this ticket; never about the
   gates.
+- **A branch that lands through a pull request: launch `pr-shepherd`** with
+  the branch and whether the repo's landing policy lets it merge. It runs
+  the required checks locally before the first push, opens the PR, fixes a
+  red check inside the branch's scope, and merges on green through
+  `pr-land.sh`. A PR whose CI went red goes to it too, not to the main
+  thread.
+- **Main moved while branches are open: launch `branch-resync`** with the
+  new base and every open worktree, before the next landing rather than
+  after a conflict. It merges the base in (never a rebase), resolves what
+  is mechanical, reports any contract the landed work imposes on each
+  branch, and pushes. Each landing in a wave moves main.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh` lands a finished branch:
   moves the ticket to Awaiting Deployment, merges, lints the merged tree,
   pushes, and moves the ticket to Completed (file-mode directory moves, or
@@ -186,6 +203,8 @@ When the reports come back:
   or to complete one landed with `--no-complete`, and says so in a dated
   note on the ticket.
 - Ticket verify fully MET → `librarian` completes it.
+- **The last open child of an epic just landed, or the owner asks what is
+  left on an epic: launch `epic-closer`** on that epic.
 - PARTIAL → post a dated note saying exactly which human steps remain;
   touch the ticket body only if the acceptance criteria moved; it stays put.
 - New fact about the project → the matching `docs/` topic file, updated in
@@ -202,8 +221,11 @@ from pstack orchestrate playbook, 2026-09-14.
 
 ### When land-branch stops on a conflict
 
-The worker that wrote the branch resolves it, in its own worktree — it
-holds the intent, not the orchestrator. Before touching a hunk, read both
+The worker that wrote the branch resolves it, in its own worktree, while it
+is still live — it holds the intent, not the orchestrator. **A worker that
+has already exited: launch `branch-resync` on that worktree**, which follows
+the rules below and stops on a conflict whose resolution is a product
+decision. Before touching a hunk, read both
 tickets' Decisions and Out of scope sections plus the conflicting commits'
 messages.
 
@@ -328,6 +350,16 @@ merge without conflict.
 Open `.night-watchman/wave-trail.tsv` at dispatch, before the first ticket
 starts — see `wave-trail`. Log the dispatch decision as the first row.
 
+**A wave dispatched through `herdr` or `prime-agent`: launch
+`wave-supervisor` once, in the background, right after the first `start`**,
+with the rest of the queue, the machines it may start workers on, and the
+`land-branch.sh` flags. It blocks on `dispatch watch`, reviews and lands
+each finished worker, closes its workspace, and starts the next ticket, so
+the orchestrator neither polls nor lands by hand. It returns only for a
+decision or when the wave has settled; answer it and continue it with
+SendMessage. Under `workflow` dispatch the Workflow's own completion
+notification does this job, and no supervisor is launched.
+
 In-process subagents in plain worktrees are the fallback ONLY after a
 recorded `start` failure — never a judgement call made in advance. When
 `start` fails, put the failure text (verbatim, first line) in the
@@ -337,12 +369,15 @@ Never resume or restart a dispatched agent just to check on it — a resume
 restarts an idle agent rather than observing it. Probe read-only instead:
 the branch, the ticket's progress note, or the provider's `dispatch watch`
 verb. If a dispatched agent shows no progress for 5 minutes, check in
-read-only rather than waiting longer. Ported from pstack orchestrate
+read-only rather than waiting longer. With `wave-supervisor` running, these
+probes are its job; the orchestrator asking "is it landed yet?" means it was
+not launched. Ported from pstack orchestrate
 playbook, 2026-09-14.
 
-Land each branch on the target branch from the orchestrating thread once
-its `verify` passes, via
-`${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh <branch> <ticket-id>`.
+Land each branch on the target branch once its `verify` passes, via
+`${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh <branch> <ticket-id>` —
+`wave-supervisor` does this when it is running, the orchestrating thread
+otherwise.
 
 ## Why this is a skill and not a script
 
