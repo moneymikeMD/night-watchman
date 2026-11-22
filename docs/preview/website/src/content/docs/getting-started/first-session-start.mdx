@@ -78,6 +78,7 @@ finish without asking questions, and launch them all in **one** message:
 | Research a fact outside the repo (a version, a maturity check, a licence) | `researcher` | mid-tier |
 | New or changed script | `script-author` → `script-reviewer` | mid-tier / top-tier for review judgement |
 | Ticket moves, decisions, known-issues, wrap-up | `librarian` | cheapest available |
+| Take an epic (or the backlog) to Completed | `epic-closer` | mid-tier |
 | Domain-specific work (infra, deploy, a particular stack) | whatever domain agents the project itself defines — this plugin ships none; a project wires its own | project-specific |
 
 A ticket whose next step is a decision only the user can make is still
@@ -105,12 +106,22 @@ interrupting per agent.
 
 When the reports come back:
 
+- A wave dispatched through `herdr` or `prime-agent`: launch
+  `wave-supervisor` once, in the background, right after the first start.
+  It lands each finished worker and starts the next ticket, returning only
+  for a decision.
+- A branch that lands through a pull request: launch `pr-shepherd`. A PR
+  whose CI went red goes to it too.
+- Main moved while branches are open: launch `branch-resync` on every open
+  worktree before the next landing.
 - `${CLAUDE_PLUGIN_ROOT}/scripts/land-branch.sh` lands a finished branch:
   merges it, lints the merged tree, completes the ticket (file-mode
   directory move, or a tracker transition if one is configured), and
   pushes — or stops at the first failure and reverts the merge. See the
   script's own header for the full contract.
 - Ticket verify fully MET → `librarian` completes it.
+- The last open child of an epic landed, or someone asks what is left on
+  it: launch `epic-closer` on that epic.
 - PARTIAL → post a dated note saying exactly which human steps remain;
   touch the ticket body only if the acceptance criteria moved; it stays put.
 - New fact about the project → the matching `docs/` topic file, updated in

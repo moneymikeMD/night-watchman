@@ -15,6 +15,19 @@ exception. Before the task is called done, author the missing piece so the next 
 model costs a fraction of any model reasoning through the same steps from a skill, every time it runs, and its behavior is fixed and reviewable once. See the `capability-ladder` skill for the full
 reasoning behind this ordering.
 
+## Named agents take the recurring follow-ups
+
+Each of these replaces a message an owner otherwise types again and again during a wave. Launch it at its trigger, before anyone asks; typing the follow-up yourself is the signal it was missed.
+
+| When | Agent |
+| --- | --- |
+| A wave was dispatched through a provider whose workers outlive the turn (`herdr`, `prime-agent`) | `wave-supervisor`, once, in the background |
+| Main moved while branches are open, or a landing stopped on a conflict and its worker has exited | `branch-resync` |
+| A finished branch lands through a pull request, or a PR's CI is red | `pr-shepherd` |
+| An epic has children in triage or awaiting verification, its last child landed, or someone asks what is left on it | `epic-closer` |
+| A finished ticket branch, before it lands | `spec-reviewer` |
+| A named ticket move, decision, known-issue or wrap-up capture | `librarian` |
+
 ## Delegation and claim rules
 
 - You own every subagent's work: review the diff, write your own summary, don't pass through what it said.

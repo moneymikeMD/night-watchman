@@ -60,6 +60,15 @@ Moved from README.md's "What's in the box" section.
 
 **Agents**
 - `librarian` — maintains `docs/` and tickets per the knowledge protocol.
+- `wave-supervisor` — watches a dispatched wave, lands each finished
+  worker, closes its workspace and starts the next ticket, returning only
+  for a decision.
+- `branch-resync` — merges a moved base into open branches, resolves what
+  is mechanical, and reports the contracts the incoming work imposes.
+- `pr-shepherd` — takes a branch from local green to a merged PR, fixing
+  red checks inside its scope and never bypassing one.
+- `epic-closer` — drives an epic to Completed, or to a residue list naming
+  what each remaining ticket waits on.
 - `researcher` — finds external facts (versions, upgrade paths, licence
   terms) with a sourced table and a verified/UNVERIFIED confidence mark.
 - `script-reviewer` — reviews scripts before they touch anything real,
