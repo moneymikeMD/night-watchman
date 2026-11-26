@@ -68,7 +68,7 @@ compare against the row for the same version.
 
 ## evals/script-reviewer
 
-One case, `nwm8-round1-five-bugs`. The prompt inlines a reconstructed
+`nwm8-round1-five-bugs`. The prompt inlines a reconstructed
 "round 1" snapshot of the Jira workflow provisioner this plugin shipped before
 work-order took it over (and its selftest), with
 five real bugs from that history still present:
@@ -99,7 +99,9 @@ project with `--dry-run`, recorded, with nothing POSTed. script-reviewer
 refuses a first round on an API-facing script with no recorded live run, so
 a prompt saying it never ran made about half the runs refuse correctly and
 score 0.444 to 0.667 (nine runs, 2026-11-25). Its baseline row was re-taken
-over six runs after that change (NWM-274).
+over six runs after that change (NWM-274). Before NWM-250 the reviewer
+refused such a round outright; it now reports the missing run as a blocking
+first finding and reviews on (`script-reviewer-live-run-gate/`).
 
 Graders are deterministic `regex` checks against the review's final
 response, not `llm` judges: the default (haiku) judge model fails
@@ -110,7 +112,7 @@ line) is reliable across repeated runs.
 
 ## evals/script-author
 
-One case, `nwm8-brief-chr-no-rule-strip`. Gives script-author the same
+`nwm8-brief-chr-no-rule-strip`. Gives script-author the same
 shell-library recipe for a second target project (ADOPT) and asks for a prose design
 plan — not code, not files, no fenced code blocks — covering two
 properties from real incidents on this exact recipe:
@@ -131,13 +133,52 @@ The case asks for this plan as prose in the final response (no fenced
 code blocks), and grades that response text with the same style of
 deterministic `regex` checks as script-reviewer.
 
-## evals/script-author-lite
+## evals/script-author-capture, evals/script-author-hardened: the lanes
 
-One case, `ssh-op-sudo-brief-refused`. Hands script-author-lite a brief
-to write up a proven command sequence that touches `ssh`, `op` and `sudo`;
-`allowed_tools` is `Read`/`Grep`/`Glob` only. Regex graders check the
-response refuses, names all three triggers, hands back to `script-author`,
-and contains no fenced code block.
+Two cases guard the lane rule in `skills/shell-scripting/SKILL.md` (NWM-250). Both are prose plans with
+`Read`/`Grep`/`Glob` only and regex graders.
+
+- `capture-lane-ssh-op-restart` (`script-author-capture/`, converted from script-author-lite's
+  `ssh-op-sudo-brief-refused` when that agent was deleted): commands already run live read a key with
+  `op` and restart nginx over `ssh` and `sudo`, run by hand. No lane is named and no hardened trigger
+  holds, so the response must say capture, name a vault for the `op` call, keep the key in a cleaned
+  tempfile, take the host as `--host`, check with `shellcheck` and `bash -n`, and plan no selftest or review.
+- `unnamed-lane-cron-delete-takes-hardened` (`script-author-hardened/`, ported from homelab LAB-854):
+  a nightly cron job deleting artifacts through an API. The response must say hardened, name the
+  unattended and destructive triggers, and plan a selftest on fixtures, a dry-run and a
+  `script-reviewer` round.
+
+## evals/script-reviewer-shipped-bugs, evals/script-reviewer-live-run-gate
+
+- `reviewer-finds-shipped-bug-rules` (ported from homelab LAB-854): an inlined read-only API client
+  whose spike is recorded, carrying six shipped-bug rule violations (no vault, `die` in `$( )`, the
+  bearer token in curl argv, `declare -A`, unredacted `raw`, no `pipe_ok` ahead of `[ -s ]`). Graders
+  also require the `FINDINGS:` tally line.
+- `live-run-gate-is-a-blocking-finding`: an inlined write script that has never run live. The missing
+  recorded run must be a finding and the review must go on to the token in `curl -u` argv, the
+  `${LEVEL^^}`, a verdict and the tally. Homelab's first thin reviewer made this gate a refusal of the
+  whole round (LAB-854); this case keeps it a blocking first finding.
+
+## Old body against new body (NWM-250)
+
+The lanes replaced script-author's and script-reviewer's bodies with thin ones over the skill. Each
+case's old-body score was taken first, with the same harness and flags, three runs:
+
+| Case | Old body | New body |
+| --- | --- | --- |
+| `nwm8-brief-chr-no-rule-strip` | 1.000 (baseline row) | 1.000 |
+| `capture-lane-ssh-op-restart` | 0.636 | 1.000 |
+| `unnamed-lane-cron-delete-takes-hardened` | 0.500 | 1.000 |
+| `nwm8-round1-five-bugs` | 0.926 (baseline row) | 0.963 |
+| `reviewer-finds-shipped-bug-rules` | 1.000 | 1.000 |
+| `live-run-gate-is-a-blocking-finding` | 0.778 | 1.000 |
+
+The old script-author never named a lane; the old script-reviewer refused the whole round at the
+live-run gate. The first thin reviewer scored 0.296 on `nwm8-round1-five-bugs`: the reviewer cases
+grant only `Agent`, the eval's don't-ask mode applies that list to the subagent too, and its Read of
+`references/review-checklist.md` was refused, so it handed back unreviewed. The body now falls back to
+the preloaded skill and reviews; the reviewer rows above are from that body. `baseline.tsv` holds the
+new-body rows.
 
 ## evals/librarian
 
