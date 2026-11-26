@@ -2,6 +2,32 @@
 
 All notable changes to this project are documented here.
 
+## [2.8.0](https://github.com/moneymikeMD/night-watchman/compare/v2.7.0...v2.8.0) (2026-11-26)
+
+
+### Features
+
+* baseline rows for the two new diagnose-and-pr skill cases (NWM-244) ([2ee39f7](https://github.com/moneymikeMD/night-watchman/commit/2ee39f75049895383475a7f8e77690bdd67a5530))
+* branch-resync is a thin agent over a resync-branches skill (NWM-249) ([8fa21e2](https://github.com/moneymikeMD/night-watchman/commit/8fa21e20c7271e2cd237c146f823dfd63dcf0d3c))
+* claude-cost.py review appends the wave's row and prints compare, spread and model-compare in one command (NWM-245) ([3b67d93](https://github.com/moneymikeMD/night-watchman/commit/3b67d9392a20de86af48425730e22dd8e058faee))
+* close-epic baseline rows and an unambiguous open count (NWM-243) ([eda03ac](https://github.com/moneymikeMD/night-watchman/commit/eda03ac3602781245d7fd06fb780373f06b48c3b))
+* cost-review is a forked skill over claude-cost.py review; the cost-reviewer agent is removed (NWM-245) ([6544964](https://github.com/moneymikeMD/night-watchman/commit/65449649cbb890896d68443ab3bbb307d59711eb))
+* diagnose-and-pr is one forked skill, its agent folded in (NWM-244) ([0af9f29](https://github.com/moneymikeMD/night-watchman/commit/0af9f2912ceb0f75817893a2d370dd6532611d99))
+* epic-closer becomes the forked close-epic skill (NWM-243) ([e900950](https://github.com/moneymikeMD/night-watchman/commit/e900950c261c3e9d7688fd3fec28c042e96bf013))
+* **evals:** baseline rows for the two new librarian cases, thin body (NWM-247) ([4b4195f](https://github.com/moneymikeMD/night-watchman/commit/4b4195fa0bde7a593c56ab9d0686d9ccf1a564e0))
+* **evals:** two librarian cases, script retirement and the provider seam (NWM-247) ([9af4d94](https://github.com/moneymikeMD/night-watchman/commit/9af4d949170664c8f86f291c81ff83e8f6102bbf))
+* librarian is a thin agent; its rules and script retirement live in tickets-protocol (NWM-247) ([76c7bf2](https://github.com/moneymikeMD/night-watchman/commit/76c7bf27a5a15c187145958de9e5fc11f2c12c3b))
+* pr-shepherd is a thin agent over a land-a-pr skill (NWM-248) ([ac39ef3](https://github.com/moneymikeMD/night-watchman/commit/ac39ef3628359e5c0af26443a2a6d2667c660270))
+* script-author takes a capture lane by default over the shell-scripting skill; script-author-lite is deleted (NWM-250) ([3bfa86e](https://github.com/moneymikeMD/night-watchman/commit/3bfa86ebb160fabb2632546be8ded57cee013aed))
+* spec-reviewer is a thin agent over a spec-review skill that wave-supervisor also loads (NWM-246) ([eff3777](https://github.com/moneymikeMD/night-watchman/commit/eff377714253c1f1c22d6548cc7f90c9922ac319))
+
+
+### Bug Fixes
+
+* close-epic runs board.sh as its first step, not at load (NWM-243) ([e86a86d](https://github.com/moneymikeMD/night-watchman/commit/e86a86d195615361aebed31e1852190143097b3f))
+* **evals:** retirement case accepts 'retired folder' as well as 'retired/' (NWM-247) ([2d2a8d2](https://github.com/moneymikeMD/night-watchman/commit/2d2a8d2f3215905bba934783142163b44e590a7f))
+* script-reviewer reviews from the preloaded skill when its checklist Read is refused; baseline rows for the lane cases (NWM-250) ([1f4ebec](https://github.com/moneymikeMD/night-watchman/commit/1f4ebecfb5843c0b5a56f112d920503bc23960be))
+
 ## [2.7.0](https://github.com/moneymikeMD/night-watchman/compare/v2.6.0...v2.7.0) (2026-11-26)
 
 
