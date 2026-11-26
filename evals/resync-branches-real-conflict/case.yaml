@@ -1,0 +1,96 @@
+schema_version: '1'
+name: resync-branches-real-conflict
+description: 'branch-resync, given a recorded fixture repo whose merge conflicts because the base removed a mode
+  the branch extends, must treat it as a product decision: merge --abort, report both sides intent, and not push.
+  The repo state is inlined, so no --scaffold or --allow-tools grant.'
+tags:
+- branch-resync
+- resync-branches
+execution:
+  prompt: |
+    Launch the night-watchman:branch-resync agent with the Agent tool (subagent_type night-watchman:branch-resync) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.
+
+    --- task for night-watchman:branch-resync ---
+    Base origin/main moved; bring branch nwm-320 (worktree /work/wt/nwm-320) up to date. land-branch.sh stopped on a conflict against the current base.
+
+    You cannot run commands in this session. The fixture repo's recorded output for every command you would run so far is below, in order. Reply with (1) the exact commands you run next, in order, one per line, and (2) your standard report.
+
+    $ git -C /work/wt/nwm-320 status --porcelain
+    (empty)
+    $ git -C /work/wt/nwm-320 rev-parse --short HEAD
+    5d2a7e1
+    $ git -C /work/wt/nwm-320 fetch origin
+    $ git -C /work/wt/nwm-320 log --oneline HEAD..origin/main
+    c9e4b37 feat: remove land-branch.sh --tracker none; file is the zero-account default (NWM-300)
+    $ git -C /work/wt/nwm-320 log --oneline origin/main..HEAD
+    81f3c0a feat: --tracker none writes the landed ticket key to .night-watchman/landed.log (NWM-320)
+    $ git -C /work/wt/nwm-320 merge --no-ff --no-edit origin/main
+    Auto-merging scripts/land-branch.sh
+    CONFLICT (content): Merge conflict in scripts/land-branch.sh
+    Automatic merge failed; fix conflicts and then commit the result.
+    $ git -C /work/wt/nwm-320 diff scripts/land-branch.sh
+    <<<<<<< HEAD
+        none)
+            printf '%s\n' "$TICKET" >> .night-watchman/landed.log
+            ;;
+    =======
+        none)
+            die 64 "--tracker none was removed; use --tracker file (NWM-300)"
+            ;;
+    >>>>>>> origin/main
+    $ git -C /work/wt/nwm-320 show -s --format=%b c9e4b37
+    Decisions: one zero-account backend is enough; a tracker that records nothing is not a tracker. Out of scope: keeping none as an alias.
+    $ git -C /work/wt/nwm-320 show -s --format=%b 81f3c0a
+    Decisions: users without a tracker still want a record of what landed. Out of scope: file mode.
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: aborts-the-merge
+  target: last_message
+  pattern: merge --abort
+  match: contains
+  weight: 3
+- type: regex
+  name: reports-base-side-intent
+  target: last_message
+  pattern: (NWM-300|c9e4b37)
+  match: contains
+  weight: 1
+- type: regex
+  name: reports-branch-side-intent
+  target: last_message
+  pattern: landed\.log
+  match: contains
+  weight: 1
+- type: regex
+  name: names-it-a-decision
+  target: last_message
+  pattern: decision
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: does-not-push
+  target: last_message
+  pattern: (^|\n)\s*(\$ |\d+\. +)?`?git (-C \S+ )?(push|commit)\b
+  match: not_contains
+  weight: 2
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?branch-resync"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

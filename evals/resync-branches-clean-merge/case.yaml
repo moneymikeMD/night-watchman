@@ -1,0 +1,105 @@
+schema_version: '1'
+name: resync-branches-clean-merge
+description: 'branch-resync, given a recorded fixture repo whose base merges cleanly into the branch but
+  renames a flag the branch calls, must merge (never rebase), fix the call site, gate on required-checks.sh,
+  push plainly and report the contract. The repo state is inlined, so no --scaffold or --allow-tools grant.'
+tags:
+- branch-resync
+- resync-branches
+execution:
+  prompt: |
+    Launch the night-watchman:branch-resync agent with the Agent tool (subagent_type night-watchman:branch-resync) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.
+
+    --- task for night-watchman:branch-resync ---
+    Base origin/main moved; bring branch nwm-301 (worktree /work/wt/nwm-301) up to date. Note from the orchestrator: NWM-290 merged; it changes jira-api.sh's flags.
+
+    You cannot run commands in this session. The fixture repo's recorded output for every command you would run up to the merge is below, in order. Reply with (1) the exact commands you run next, in order, one per line, each with the edit it makes where it edits a file, and (2) your standard report table, written as if those commands succeeded: required-checks.sh exits 0 and the PR's required checks go green.
+
+    $ git -C /work/wt/nwm-301 status --porcelain
+    (empty)
+    $ git -C /work/wt/nwm-301 rev-parse --short HEAD
+    7c1e9a2
+    $ git -C /work/wt/nwm-301 rev-parse --abbrev-ref @{u}
+    origin/nwm-301
+    $ gh pr list --head nwm-301 --json number
+    [{"number":42}]
+    $ git -C /work/wt/nwm-301 fetch origin
+    $ git -C /work/wt/nwm-301 log --oneline HEAD..origin/main
+    a1b2c3d feat: jira-api.sh takes --host; --jira-host is removed and now exits 64 (NWM-290)
+    d4e5f6a docs: fix a typo in README (NWM-291)
+    $ git -C /work/wt/nwm-301 diff --name-only origin/main...HEAD
+    scripts/sync-board.sh
+    scripts/sync-board-selftest.sh
+    $ git -C /work/wt/nwm-301 diff --name-only HEAD...origin/main
+    providers/tracker/jira/jira-api.sh
+    README.md
+    $ git -C /work/wt/nwm-301 show a1b2c3d -- providers/tracker/jira/jira-api.sh
+    -    --jira-host) HOST="$2"; shift 2 ;;
+    +    --host) HOST="$2"; shift 2 ;;
+    +    --jira-host) die 64 "--jira-host was removed; pass --host" ;;
+    $ git -C /work/wt/nwm-301 grep -n 'jira-api.sh' -- scripts/sync-board.sh
+    scripts/sync-board.sh:41:  "$JIRA_API" --jira-host "$HOST" raw GET "/board/$BOARD"
+    $ git -C /work/wt/nwm-301 merge --no-ff --no-edit origin/main
+    Merge made by the 'ort' strategy.
+     README.md                          | 2 +-
+     providers/tracker/jira/jira-api.sh | 3 ++-
+     2 files changed, 3 insertions(+), 2 deletions(-)
+    $ git -C /work/wt/nwm-301 rev-parse --short HEAD
+    9f0d4b1
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: names-renamed-flag-contract
+  target: last_message
+  pattern: (--jira-host[\s\S]{0,300}--host\b|--host\b[\s\S]{0,300}--jira-host)
+  match: contains
+  weight: 2
+- type: regex
+  name: fixes-sync-board-call-site
+  target: last_message
+  pattern: sync-board\.sh
+  match: contains
+  weight: 1
+- type: regex
+  name: gates-on-required-checks
+  target: last_message
+  pattern: required-checks\.sh
+  match: contains
+  weight: 2
+- type: regex
+  name: pushes-plainly
+  target: last_message
+  pattern: git (-C \S+ )?push(?! +(-f|--force))
+  match: contains
+  weight: 1
+- type: regex
+  name: never-runs-rebase-or-force
+  target: last_message
+  pattern: (^|\n)\s*(\$ |\d+\. +)?`?git (-C \S+ )?(rebase|reset --hard|push +(-f|--force))
+  match: not_contains
+  weight: 1
+- type: regex
+  name: report-table-has-new-head
+  target: last_message
+  pattern: New head
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?branch-resync"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1
