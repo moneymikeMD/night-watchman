@@ -5,7 +5,8 @@ __pycache__/
 *.pyc
 .DS_Store
 .idea/
-evals/results/
+evals/results/*
+!evals/results/baseline.tsv
 
 # docs/preview/website (Astro Starlight docs scaffold)
 docs/preview/website/node_modules/

@@ -12,7 +12,7 @@ tags:
 - jira
 - regression
 execution:
-  prompt: "The nightly check for this repo just failed. Here is the whole of what fired:\n\n  check: providers/tracker/jira/jira-backfill-selftest.sh\n\
+  prompt: "Launch the night-watchman:diagnose-and-pr agent with the Agent tool (subagent_type night-watchman:diagnose-and-pr) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:diagnose-and-pr ---\nThe nightly check for this repo just failed. Here is the whole of what fired:\n\n  check: providers/tracker/jira/jira-backfill-selftest.sh\n\
     \  exit code: 1\n  log (last 6 lines):\n    assertion 6: field emptied locally must PUT an explicit\
     \ JSON null, not omit the key\n    expected PUT body for SPK-1 to include \"human_steps\":null\n \
     \   got: PUT body for SPK-1 has no \"human_steps\" key at all\n    FAIL: null-field-not-omitted (SPK-1,\
@@ -48,7 +48,8 @@ execution:
   - Read
   - Grep
   - Glob
-runs: 2
+  - Agent
+runs: 3
 graders:
 - type: regex
   name: creates-a-branch
@@ -85,3 +86,15 @@ graders:
   match: contains
   weight: 2
   flags: i
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?diagnose-and-pr"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1
