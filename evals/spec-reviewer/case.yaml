@@ -8,7 +8,7 @@ tags:
 - spec-reviewer
 - capability-ladder
 execution:
-  prompt: "You are reviewing ticket PROJ-201 (branch proj-201, base ref main) against its own diff. Do not\
+  prompt: "Launch the night-watchman:spec-reviewer agent with the Agent tool (subagent_type night-watchman:spec-reviewer) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:spec-reviewer ---\nYou are reviewing ticket PROJ-201 (branch proj-201, base ref main) against its own diff. Do not\
     \ run any command — everything you need is inlined below.\n\n--- issues.py scope PROJ-201 main output\
     \ ---\nscripts/rotate-logs.sh: touches (declared)\nscripts/lib/kit.sh: UNDECLARED\nexit 1\n--- end scope\
     \ output ---\n\n--- Ticket PROJ-201 ---\n## Problem\nrotate-logs.sh has no retry on a failed upload.\n\
@@ -26,7 +26,8 @@ execution:
   - Read
   - Grep
   - Glob
-runs: 2
+  - Agent
+runs: 3
 graders:
 - type: regex
   name: flags-undeclared-kit-sh-path
@@ -51,5 +52,17 @@ graders:
   name: rejects-plain-land-verdict
   target: last_message
   pattern: ^\*\*LAND\*\*
+  match: not_contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?spec-reviewer"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
   match: not_contains
   weight: 1

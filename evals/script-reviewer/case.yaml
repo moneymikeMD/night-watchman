@@ -9,7 +9,7 @@ tags:
 - jira
 - regression
 execution:
-  prompt: "A teammate wrote the script below (jira-workflow-apply-round1.sh) to add missing statuses/transitions\
+  prompt: "Launch the night-watchman:script-reviewer agent with the Agent tool (subagent_type night-watchman:script-reviewer) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:script-reviewer ---\nA teammate wrote the script below (jira-workflow-apply-round1.sh) to add missing statuses/transitions\
     \ to a Jira project's default workflow via POST /rest/api/3/workflows/update, through a jira-api.sh-shaped\
     \ wrapper. It has NOT been run against any live Jira project yet. Review it (and its selftest, also\
     \ below) before anyone runs it against a live system. Treat these two code blocks as the actual file\
@@ -128,7 +128,8 @@ execution:
     \ a one-line untested fix suggestion per finding is fine, a full replacement script is not.\n"
   max_turns: 15
   timeout_seconds: 300
-  allowed_tools: []
+  allowed_tools:
+  - Agent
 runs: 3
 graders:
 - type: regex
@@ -172,3 +173,15 @@ graders:
   match: contains
   weight: 2
   flags: i
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?script-reviewer"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

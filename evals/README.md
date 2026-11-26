@@ -3,6 +3,62 @@
 `claude plugin eval` suites for this plugin's agents, seeded from real
 failures rather than synthetic fixtures.
 
+Every case tests an agent, not the base model. Its prompt tells the eval
+session to launch `night-watchman:<agent>` with the Agent tool and relay the
+report verbatim, `Agent` is in its `allowed_tools`, and two graders check
+the launch. `launches-agent-under-test` (`tool_used`) fails when no Agent
+call names that `subagent_type`. `agent-type-resolves` (a `trace` regex)
+fails when the call came back `Agent type '…' not found`. The per-case
+`allowed_tools` lists below say what the eval session itself may use; no
+case passes `--allow-tools`, so the gated tools (Bash, Write, Edit,
+WebFetch) stay ungranted. In the baseline runs the agents themselves called
+only Read, Grep and Glob.
+
+## Running a case: work-order must load alongside
+
+`claude plugin eval .` loads only this plugin into an isolated config, and
+this plugin declares `work-order@moneymike-plugins` as a dependency
+(`.claude-plugin/plugin.json`). The eval session then reports
+`plugin_errors: dependency-unsatisfied` and loads none of night-watchman's
+agents, so every Agent call fails with `Agent type
+'night-watchman:<agent>' not found`. Loading work-order as a second
+`--plugin-dir` satisfies the dependency. The eval harness only passes a
+second plugin through a case's `plugins:` list, though, and refuses an
+entry that covers the case's own directory. So run the suite from a
+harness directory where both plugins sit beside the cases:
+
+```bash
+H=$(mktemp -d); mkdir -p "$H/plugins/night-watchman" "$H/evals"
+git ls-files -z | grep -zv '^evals/' | xargs -0 cp --parents -t "$H/plugins/night-watchman"
+cp -r "$(claude plugin list --json | jq -r '[.[] | select(.id=="work-order@moneymike-plugins")][0].installPath')" "$H/plugins/work-order"
+for d in evals/*/; do [ -f "$d/case.yaml" ] && cp -r "$d" "$H/evals/"; done
+for f in "$H"/evals/*/case.yaml; do
+  sed -i 's#^tags:#plugins:\n- ../../plugins/night-watchman\n- ../../plugins/work-order\ntags:#' "$f"
+done
+cd "$H" && claude plugin eval . --case <name> --runs 3 --ablation none \
+  --no-publish --max-cost-usd 2 --trust-plugin --threshold 0 --keep-temp \
+  --output-dir <scratch>/<name> --json <scratch>/<name>/result.json
+```
+
+`sed -i` there is GNU syntax; on macOS use `sed -i ''`. Without
+`--no-publish` the report is published to claude.ai. `--ablation none`
+skips the no-plugin arm, which would double the cost and has no agent to
+launch anyway. `--keep-temp` keeps each run's `trace.jsonl` (its path is in
+`result.json` as `tracePath`), which is where a launch is confirmed.
+
+## Baseline: `results/baseline.tsv`
+
+The score every change to an agent body is compared against. Tab-separated:
+`case`, `mean_score` (over 3 runs), `agent_launched` (`yes` when every run's
+trace holds a top-level Agent call for the case's agent whose tool result is
+not an error), `claude_code_version`, `date`. It was taken with the harness
+above, `--runs 3`, against work-order 1.15.1. Before the repair (2026-11-25,
+same flags, run straight from this checkout), no case could launch its agent
+because `Agent` was missing from `allowed_tools`. Every score came from the
+base model answering the prompt itself, spec-reviewer's at 0.208. Re-take
+the baseline when Claude Code's eval harness or an agent body changes, and
+compare against the row for the same version.
+
 ## evals/script-reviewer
 
 One case, `nwm8-round1-five-bugs`. The prompt inlines a reconstructed

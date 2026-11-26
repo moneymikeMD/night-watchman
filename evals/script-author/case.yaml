@@ -9,7 +9,7 @@ tags:
 - jira
 - regression
 execution:
-  prompt: "Plan (do not write) a one-shot fixup script for a Jira company-managed project created from\
+  prompt: "Launch the night-watchman:script-author agent with the Agent tool (subagent_type night-watchman:script-author) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:script-author ---\nPlan (do not write) a one-shot fixup script for a Jira company-managed project created from\
     \ the \"simplified scrum classic\" template: that template ships a workflow with only To Do/In Progress/Done,\
     \ but this plugin's stage set needs six more (Open, Triage, Awaiting Deployment, Deferred, Completed,\
     \ Cancelled), each reachable from any status via a GLOBAL transition with a caller-assigned id (51/41/61/71/81/91,\
@@ -79,7 +79,8 @@ execution:
   - Read
   - Grep
   - Glob
-runs: 2
+  - Agent
+runs: 3
 graders:
 - type: regex
   name: response-has-main-script-label
@@ -124,4 +125,16 @@ graders:
   pattern: (?=[\s\S]*existing transition)(?=[\s\S]*(forward|verbatim|in full|preserved|carried))
   flags: i
   match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?script-author"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
   weight: 1
