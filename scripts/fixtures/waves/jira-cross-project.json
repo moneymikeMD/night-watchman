@@ -1,0 +1,175 @@
+{
+  "issues": [
+    {
+      "key": "XP-101",
+      "fields": {
+        "summary": "startable, no blockers",
+        "status": {
+          "name": "Open"
+        },
+        "labels": [],
+        "issuelinks": [],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {
+          "name": "Task"
+        },
+        "description": "",
+        "customfield_10043": "reference/a.py",
+        "customfield_10044": "test -f reference/a.py",
+        "customfield_10045": "",
+        "customfield_10046": "",
+        "customfield_10047": "agent",
+        "customfield_10048": null,
+        "customfield_10049": null
+      }
+    },
+    {
+      "key": "XP-102",
+      "fields": {
+        "summary": "behind an open blocker in another project",
+        "status": {
+          "name": "Open"
+        },
+        "labels": [],
+        "issuelinks": [
+          {
+            "type": {
+              "name": "Blocks"
+            },
+            "inwardIssue": {
+              "key": "OTHER-5",
+              "fields": {
+                "summary": "",
+                "status": {
+                  "name": "Open",
+                  "statusCategory": {
+                    "key": "new"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {
+          "name": "Task"
+        },
+        "description": "",
+        "customfield_10043": "reference/b.py",
+        "customfield_10044": "test -f reference/b.py",
+        "customfield_10045": "",
+        "customfield_10046": "",
+        "customfield_10047": "agent",
+        "customfield_10048": null,
+        "customfield_10049": null
+      }
+    },
+    {
+      "key": "XP-103",
+      "fields": {
+        "summary": "behind XP-102",
+        "status": {
+          "name": "Open"
+        },
+        "labels": [],
+        "issuelinks": [
+          {
+            "type": {
+              "name": "Blocks"
+            },
+            "inwardIssue": {
+              "key": "XP-102"
+            }
+          }
+        ],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {
+          "name": "Task"
+        },
+        "description": "",
+        "customfield_10043": "reference/c.py",
+        "customfield_10044": "test -f reference/c.py",
+        "customfield_10045": "",
+        "customfield_10046": "",
+        "customfield_10047": "agent",
+        "customfield_10048": null,
+        "customfield_10049": null
+      }
+    },
+    {
+      "key": "XP-104",
+      "fields": {
+        "summary": "behind a finished blocker in another project",
+        "status": {
+          "name": "Open"
+        },
+        "labels": [],
+        "issuelinks": [
+          {
+            "type": {
+              "name": "Blocks"
+            },
+            "inwardIssue": {
+              "key": "OTHER-6",
+              "fields": {
+                "summary": "",
+                "status": {
+                  "name": "Done",
+                  "statusCategory": {
+                    "key": "done"
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {
+          "name": "Task"
+        },
+        "description": "",
+        "customfield_10043": "reference/d.py",
+        "customfield_10044": "test -f reference/d.py",
+        "customfield_10045": "",
+        "customfield_10046": "",
+        "customfield_10047": "agent",
+        "customfield_10048": null,
+        "customfield_10049": null
+      }
+    },
+    {
+      "key": "XP-105",
+      "fields": {
+        "summary": "waits on blocked_by_external",
+        "status": {
+          "name": "Open"
+        },
+        "labels": [],
+        "issuelinks": [],
+        "created": "2026-01-01T00:00:00.000Z",
+        "updated": "2026-01-01T00:00:00.000Z",
+        "parent": {},
+        "issuetype": {
+          "name": "Task"
+        },
+        "description": "",
+        "customfield_10043": "reference/e.py",
+        "customfield_10044": "test -f reference/e.py",
+        "customfield_10045": "",
+        "customfield_10046": "",
+        "customfield_10047": "agent",
+        "customfield_10048": null,
+        "customfield_10049": "OTHER-7 reaching Completed"
+      }
+    }
+  ],
+  "isLast": true
+}

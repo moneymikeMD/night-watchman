@@ -92,6 +92,18 @@ load_files = ISSUES.load_files
 load_jira = ISSUES.load_jira
 
 
+def _external_blockers(t):
+    v = t.get("blocked_by_external")
+    if not v:
+        return []
+    if isinstance(v, str):
+        return [v.strip()] if v.strip() else []
+    return [str(x).strip() for x in v if str(x).strip()]
+
+
+external_blockers = getattr(ISSUES, "external_blockers", _external_blockers)
+
+
 def _is_folder_claim(path):
     """Does a touches entry name a whole folder (work-order [MUST-49])?"""
     return path.endswith(("/", "/*", "/**")) or path in ("*", "**")
@@ -161,16 +173,56 @@ def _claims(t, landing, ident=()):
     return [n for n in (_norm(p, ident) for p in paths) if not is_folder_claim(n)]
 
 
+def _dispatchable(t):
+    return (t["_stage"] in WORKABLE and not is_deferred(t) and not t.get("_is_epic")
+            and has_executor(t))
+
+
+def _outside_reason(dep):
+    stage = dep.get("_stage") or ""
+    status = stage.split(":", 1)[1] if stage.startswith("jira-external:") else stage
+    return f"{dep['id']} ({status})"
+
+
+def held_outside(tickets):
+    """The dispatchable tickets that wait on work outside this ticket set, as
+    {id: [reason, ...]}, the way `issues.py next` reads it: an unfinished
+    blocker in another project, a non-empty blocked_by_external, or a blocker
+    that is itself held."""
+    by_id = {t["id"]: t for t in tickets if t.get("id")}
+    held = {}
+    candidates = [t for t in tickets if t.get("id") and _dispatchable(t)]
+    for t in candidates:
+        reasons = [_outside_reason(by_id[d]) for d in (t.get("blocked_by") or [])
+                   if by_id.get(d, {}).get("_external")
+                   and by_id[d]["_stage"] not in RESOLVING]
+        reasons += external_blockers(t)
+        if reasons:
+            held[t["id"]] = reasons
+    changed = True
+    while changed:
+        changed = False
+        for t in candidates:
+            if t["id"] in held:
+                continue
+            via = [d for d in (t.get("blocked_by") or []) if d in held]
+            if via:
+                held[t["id"]] = [f"work outside this set via {', '.join(via)}"]
+                changed = True
+    return held
+
+
 def _plan_waves(tickets, landing="serial", ident=()):
     """Group the dispatchable tickets into waves, without printing anything.
-    Returns {waves, stalled, unresolvable, no_progress, deferred_ids, by_id}.
+    Returns {waves, stalled, unresolvable, no_progress, deferred_ids, by_id,
+    held, held_reasons}; a held ticket waits outside the set and is in no wave.
     waves() renders this and preflight() counts it, so the two can never
     disagree about what a wave is."""
     by_id = {t["id"]: t for t in tickets if t.get("id")}
     deferred_ids = {t["id"] for t in tickets if is_deferred(t)}
-    pending = [t for t in tickets
-               if t["_stage"] in WORKABLE and not is_deferred(t) and not t.get("_is_epic")
-               and has_executor(t)]
+    held_reasons = held_outside(tickets)
+    held = sorted((by_id[i] for i in held_reasons), key=lambda t: _numeric_id(t["id"]))
+    pending = [t for t in tickets if _dispatchable(t) and t["id"] not in held_reasons]
 
     def resolved(dep):
         return by_id.get(dep, {}).get("_stage") in RESOLVING
@@ -221,7 +273,8 @@ def _plan_waves(tickets, landing="serial", ident=()):
         remaining = deferred + [t for t in remaining if t not in wave and t not in deferred]
 
     return {"waves": plan, "stalled": stalled, "unresolvable": unresolvable,
-            "no_progress": no_progress, "deferred_ids": deferred_ids, "by_id": by_id}
+            "no_progress": no_progress, "deferred_ids": deferred_ids, "by_id": by_id,
+            "held": held, "held_reasons": held_reasons}
 
 
 def waves(tickets, root, landing="serial"):
@@ -240,6 +293,13 @@ def waves(tickets, root, landing="serial"):
             print("\n    worktrees:")
             for t in agents:
                 print(f"      git worktree add ../wt-{t['id'].lower()} -b {t['id'].lower()}")
+
+    if plan["held"]:
+        print("\nBlocked outside this ticket set (not a cycle — resolves once "
+              "that work is done):")
+        for t in plan["held"]:
+            print(f"    {t['id']}  {t.get('title','')}  waits on "
+                  + ", ".join(plan["held_reasons"][t["id"]]))
 
     if plan["no_progress"]:
         print("  no progress possible")
@@ -289,9 +349,9 @@ def startable_now(tickets):
     would be if nothing collided."""
     by_id = {t["id"]: t for t in tickets if t.get("id")}
     done = {t["id"] for t in tickets if t["_stage"] in DONE}
+    held = held_outside(tickets)
     return [t for t in tickets
-            if t["_stage"] in WORKABLE and not is_deferred(t)
-            and not t.get("_is_epic") and has_executor(t)
+            if _dispatchable(t) and t["id"] not in held
             and all(d in done or by_id.get(d, {}).get("_stage") in RESOLVING
                     for d in (t.get("blocked_by") or []))]
 
@@ -349,6 +409,9 @@ def preflight(tickets, root, landing="serial"):
 
     print(f"\n  waves: {len(plans['serial']['waves'])} under serial landing, "
           f"{len(plans['parallel']['waves'])} under parallel")
+    if plans["serial"]["held"]:
+        print(f"  {len(plans['serial']['held'])} ticket(s) held behind work "
+              f"outside this set, in no wave")
     print(f"\n{len(hotspots)} shared file(s), {collisions} collision(s) under "
           f"{landing} landing")
     return 1 if collisions else 0
