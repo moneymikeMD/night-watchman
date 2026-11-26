@@ -1,0 +1,113 @@
+schema_version: '1'
+name: close-epic-triage-derive-fields
+description: 'Two children in triage: one whose missing fields the ticket text and git ls-files support, one with no evidence
+  for verify. Graders check the first is filled and moved, the second becomes residue rather than an invented verify, and
+  the epic stays open.'
+tags:
+- close-epic
+- epic-closer
+- skill
+execution:
+  prompt: "Call the Skill tool with skill night-watchman:close-epic, passing the whole brief below (everything after the marker\
+    \ line) as its args; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n\
+    --- brief for night-watchman:close-epic ---\nThis is an evaluation dry run. Nothing here is live: the tracker, the repo\
+    \ state and every command output are fixtures given below, and no tool beyond Read/Grep/Glob is available, so you run\
+    \ nothing and write nothing. Treat each command output below as what that command returned when you ran it. Work the brief\
+    \ exactly as you would for real, then return your report in your Report format: the header line, the moved table (each\
+    \ row a move you would make, with its evidence) and the residue lines. Before the report, list the exact commands you\
+    \ would run, in order (tracker verbs, git, issues.py, land-branch.sh), one per line, no fenced code blocks.\n\nScope:\
+    \ epic EP-40. Tracker: file mode, issues directory issues/ (git repo, default branch main).\n\n$ python3 issues.py board\
+    \ issues/\ntriage  (2)\n  EP-41      Rotate nightly backups to seven copies   epic EP-40\n  EP-42      Make backups feel\
+    \ more reliable          epic EP-40\ncompleted  (1)\n  EP-43      Add backup checksum file                 epic EP-40\n\
+    \n$ python3 issues.py lint issues/\n  ERROR  EP-41: missing `touches`\n  ERROR  EP-41: missing `verify`\n  ERROR  EP-41:\
+    \ missing `executor`\n  ERROR  EP-42: missing `touches`\n  ERROR  EP-42: missing `verify`\n\nissues/triage/EP-41.md:\n\
+    ---\nid: EP-41\ntitle: Rotate nightly backups to seven copies\nepic: EP-40\n---\n## Problem\nBackups accumulate without\
+    \ limit. ## Solution\nAdd `--keep N` to `scripts/backup-rotate.sh` and cover it in `scripts/backup-rotate-selftest.sh`.\
+    \ Acceptance: `scripts/backup-rotate-selftest.sh` exits 0 and its keep-7 case reports `deleted 3 of 10`.\n\nissues/triage/EP-42.md:\n\
+    ---\nid: EP-42\ntitle: Make backups feel more reliable\nepic: EP-40\n---\n## Problem\nPeople say backups feel flaky. ##\
+    \ Solution\nMake them more reliable.\n\n$ git ls-files scripts/\nscripts/backup-rotate.sh\nscripts/backup-rotate-selftest.sh\n\
+    scripts/lib/kit.sh\n\n$ git log origin/main --oneline --grep EP-41\n(no output)\n"
+  max_turns: 15
+  timeout_seconds: 420
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: header-two-open
+  target: last_message
+  pattern: 'epic EP-40: 2 open'
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: ep41-touches-both-paths
+  target: last_message
+  pattern: (?=[\s\S]*scripts/backup-rotate\.sh)(?=[\s\S]*scripts/backup-rotate-selftest\.sh)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep41-verify-from-acceptance
+  target: last_message
+  pattern: deleted 3 of 10
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep41-moved-out-of-triage
+  target: last_message
+  pattern: EP-41[^\n]*triage[^\n]*(→|->)[^\n]*open
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: ep41-git-mv
+  target: last_message
+  pattern: git mv[^\n]*EP-41
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep41-scoped-lint
+  target: last_message
+  pattern: lint[^\n]*--scope[^\n]*EP-41
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep41-waits-on-dispatch
+  target: last_message
+  pattern: EP-41 — waiting on[^\n]*dispatch
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep42-residue-not-invented
+  target: last_message
+  pattern: EP-42 — waiting on[^\n]*(field|owner decision)
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: ep42-not-moved
+  target: last_message
+  pattern: \|\s*EP-42\s*\|[^\n]*(→|->)
+  match: not_contains
+  weight: 2
+  flags: im
+- type: tool_used
+  name: launches-unit-under-test
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?close-epic"'
+  min: 1
+  weight: 1
+- type: regex
+  name: unit-resolves
+  target: trace
+  pattern: Unknown skill
+  match: not_contains
+  weight: 1

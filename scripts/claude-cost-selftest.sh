@@ -3,8 +3,8 @@
 # Selftest for claude-cost.py. Exercises the ledger's own invariants
 # against a scratch TSV file: header creation, duplicate-wave refusal,
 # stale-schema refusal, the crash-mid-append (missing trailing newline)
-# repair-hint path, --dry-run writing nothing, and compare's delta/
-# direction math.
+# repair-hint path, --dry-run writing nothing, compare's delta/
+# direction math, and review's append-then-report in one command.
 #
 # Usage: scripts/claude-cost-selftest.sh [path-to-claude-cost.py]
 # Defaults to the sibling scripts/claude-cost.py.
@@ -223,6 +223,51 @@ if printf '%s\n' "$OUT" | grep -q "^m1	claude-fable-5-1" && printf '%s\n' "$OUT"
     ok "model-compare finds the most recent earlier row on a different orchestrator model"
 else
     bad "expected m1/fable vs m2/opus rows in model-compare output (got: $OUT)"
+fi
+
+# ---- test 14 (NWM-245): review on an empty ledger appends and says there is nothing to compare.
+RV="$WORK/review.tsv"
+OUT=$(run review --ledger "$RV" --wave r1 --cost 10 --turns 100 --orchestrator-model opus 2>&1)
+if [ "$(wc -l <"$RV" | tr -d ' ')" = "2" ] && printf '%s\n' "$OUT" | grep -q "is the first row" \
+    && printf '%s\n' "$OUT" | grep -q "no EARLIER wave"; then
+    ok "review appends the first row and reports nothing to compare"
+else
+    bad "expected a first-row review (got: $OUT)"
+fi
+
+# ---- test 15: review's spread flags a delta beyond every earlier adjacent pair.
+run review --ledger "$RV" --wave r2 --cost 11 --turns 90 --orchestrator-model opus >/dev/null
+run review --ledger "$RV" --wave r3 --cost 12 --turns 95 --orchestrator-model opus >/dev/null
+OUT=$(run review --ledger "$RV" --wave r4 --cost 6 --turns 96 --orchestrator-model sonnet --format tsv 2>&1)
+if printf '%s\n' "$OUT" | grep -q $'^cost_usd\t2\t9.55\t10.00\t50.00\tyes$' \
+    && printf '%s\n' "$OUT" | grep -q $'^turns\t2\t7.78\t10.00\t1.05\tno$' \
+    && printf '%s\n' "$OUT" | grep -q $'^cost_usd\t12.0000\t6.0000\t-6.0000\t-50.00\tdown$' \
+    && printf '%s\n' "$OUT" | grep -q "^# model-compare: r3 (opus) -> r4 (sonnet)"; then
+    ok "review prints compare, spread with outside_spread, and model-compare"
+else
+    bad "expected compare/spread/model-compare rows for r4 (got: $OUT)"
+fi
+
+# ---- test 16: review --dry-run reports against the held row and writes nothing.
+BEFORE=$(cat "$RV")
+OUT=$(run review --ledger "$RV" --wave r5 --cost 6 --turns 96 --dry-run --format tsv 2>&1)
+if [ "$(cat "$RV")" = "$BEFORE" ] && printf '%s\n' "$OUT" | grep -q "^# compare: r4 -> r5"; then
+    ok "review --dry-run reports and leaves the ledger untouched"
+else
+    bad "review --dry-run should not write (got: $OUT)"
+fi
+
+# ---- test 17: a ledger review cannot compare is not appended to.
+BADRV="$WORK/review-bad.tsv"
+run append --ledger "$BADRV" --wave b1 --cost 1 --turns 1 >/dev/null
+sed -i.bak $'2s/\t1\t1.0000\t/\tx\t1.0000\t/' "$BADRV"
+BEFORE=$(cat "$BADRV")
+if run review --ledger "$BADRV" --wave b2 --cost 2 --turns 2 >/dev/null 2>"$WORK/err"; then
+    bad "review over a non-numeric earlier row should fail"
+elif [ "$(cat "$BADRV")" = "$BEFORE" ] && grep -q "non-numeric 'turns'" "$WORK/err"; then
+    ok "review that cannot compare refuses before writing the row"
+else
+    bad "review wrote a row or gave the wrong error ($(cat "$WORK/err"))"
 fi
 
 echo

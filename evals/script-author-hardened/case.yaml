@@ -1,0 +1,87 @@
+schema_version: '1'
+name: unnamed-lane-cron-delete-takes-hardened
+description: 'script-author, given a brief that names no lane for a script that runs from cron with nobody watching and
+  deletes artifacts through an API, plans the hardened lane (selftest on recorded fixtures, a dry-run before the delete,
+  a script-reviewer round) and names both triggers: unattended and destructive. Ported from homelab AVS-L04 (LAB-854)
+  for NWM-250. Read/Grep/Glob only, prose response, regex graders.'
+tags:
+- script-author
+- lane-choice
+- hardened
+execution:
+  prompt: |
+    Launch the night-watchman:script-author agent with the Agent tool (subagent_type night-watchman:script-author) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.
+
+    --- task for night-watchman:script-author ---
+    I need a script for the build server: every night at 03:15 a cron job should delete release artifacts from our artifact store's API (DELETE /api/v1/artifacts/<id>) that are older than a retention period (default 30 days), always keeping the newest 7 per project whatever their age. It goes in scripts/artifact-prune.sh. Before you write anything, send me your plan: what you will produce, what it will go through before it ships, and why that much and not more or less.
+
+    Read/Grep/Glob only are available in this evaluation (no Bash/Edit/Write), so do not write files and do not run anything. Reply in prose only, with no fenced code blocks anywhere in your response.
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: takes-hardened-lane
+  target: last_message
+  pattern: \bhardened\b
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: names-unattended-trigger
+  target: last_message
+  pattern: (unattended|(nobody|no one|no-one) (is )?watching)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: names-destructive-trigger
+  target: last_message
+  pattern: (destructive|hard[- ]to[- ]reverse|irreversib)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: plans-selftest-with-fixtures
+  target: last_message
+  pattern: (?=[\s\S]*selftest)(?=[\s\S]*fixture)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: plans-review-round
+  target: last_message
+  pattern: script-reviewer
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: plans-dry-run-before-delete
+  target: last_message
+  pattern: dry[- ]run
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: no-fenced-code-blocks
+  target: last_message
+  pattern: "```"
+  match: not_contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?script-author"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

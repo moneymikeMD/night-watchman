@@ -1,0 +1,5 @@
+date	wave	turns	cost_usd	model_mix	orchestrator_model	orchestrator_effort	orchestrator_turns	orchestrator_usd	worker_turns	worker_usd	notes
+2026-10-26	2026-w44	300	38.0000	-	claude-opus-5-5	high	100	15.2000	200	22.8000	-
+2026-11-02	2026-w45	340	41.0000	-	claude-opus-5-5	high	113	16.4000	227	24.6000	-
+2026-11-09	2026-w46	296	37.5000	-	claude-opus-5-5	high	98	15.0000	198	22.5000	-
+2026-11-16	2026-w47	350	40.1000	-	claude-opus-5-5	high	116	16.0400	234	24.0600	-

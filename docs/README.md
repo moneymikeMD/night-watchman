@@ -6,7 +6,7 @@
 - `adopting.md` — the runbook for wiring an existing repo up as an adopter.
 - `known-issues.md` — generated index of `known-issues/` (use ai-toolkit's `known-issue.sh`, resolved by `scripts/ai-toolkit-root.sh --known-issue`).
 - `decisions.d/` — one dated file per decision and why, written with ai-toolkit's `decisions.sh` (resolved by `scripts/ai-toolkit-root.sh --decisions`). Lookup is grep.
-- `cost.md` — cost ledger schema, the session-cost and script-events hooks, and the cost-reviewer agent.
+- `cost.md` — cost ledger schema, the session-cost and script-events hooks, and the cost-review skill.
 - `scripts.md` — where `script-retire.sh` records a retired script.
 - `open-questions.md` — guesses marked `UNVERIFIED` until checked live.
 - `testing-philosophy.md` — why selftests are structurally offline.

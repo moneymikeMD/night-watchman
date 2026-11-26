@@ -68,7 +68,7 @@ compare against the row for the same version.
 
 ## evals/script-reviewer
 
-One case, `nwm8-round1-five-bugs`. The prompt inlines a reconstructed
+`nwm8-round1-five-bugs`. The prompt inlines a reconstructed
 "round 1" snapshot of the Jira workflow provisioner this plugin shipped before
 work-order took it over (and its selftest), with
 five real bugs from that history still present:
@@ -99,7 +99,9 @@ project with `--dry-run`, recorded, with nothing POSTed. script-reviewer
 refuses a first round on an API-facing script with no recorded live run, so
 a prompt saying it never ran made about half the runs refuse correctly and
 score 0.444 to 0.667 (nine runs, 2026-11-25). Its baseline row was re-taken
-over six runs after that change (NWM-274).
+over six runs after that change (NWM-274). Before NWM-250 the reviewer
+refused such a round outright; it now reports the missing run as a blocking
+first finding and reviews on (`script-reviewer-live-run-gate/`).
 
 Graders are deterministic `regex` checks against the review's final
 response, not `llm` judges: the default (haiku) judge model fails
@@ -110,7 +112,7 @@ line) is reliable across repeated runs.
 
 ## evals/script-author
 
-One case, `nwm8-brief-chr-no-rule-strip`. Gives script-author the same
+`nwm8-brief-chr-no-rule-strip`. Gives script-author the same
 shell-library recipe for a second target project (ADOPT) and asks for a prose design
 plan — not code, not files, no fenced code blocks — covering two
 properties from real incidents on this exact recipe:
@@ -131,13 +133,52 @@ The case asks for this plan as prose in the final response (no fenced
 code blocks), and grades that response text with the same style of
 deterministic `regex` checks as script-reviewer.
 
-## evals/script-author-lite
+## evals/script-author-capture, evals/script-author-hardened: the lanes
 
-One case, `ssh-op-sudo-brief-refused`. Hands script-author-lite a brief
-to write up a proven command sequence that touches `ssh`, `op` and `sudo`;
-`allowed_tools` is `Read`/`Grep`/`Glob` only. Regex graders check the
-response refuses, names all three triggers, hands back to `script-author`,
-and contains no fenced code block.
+Two cases guard the lane rule in `skills/shell-scripting/SKILL.md` (NWM-250). Both are prose plans with
+`Read`/`Grep`/`Glob` only and regex graders.
+
+- `capture-lane-ssh-op-restart` (`script-author-capture/`, converted from script-author-lite's
+  `ssh-op-sudo-brief-refused` when that agent was deleted): commands already run live read a key with
+  `op` and restart nginx over `ssh` and `sudo`, run by hand. No lane is named and no hardened trigger
+  holds, so the response must say capture, name a vault for the `op` call, keep the key in a cleaned
+  tempfile, take the host as `--host`, check with `shellcheck` and `bash -n`, and plan no selftest or review.
+- `unnamed-lane-cron-delete-takes-hardened` (`script-author-hardened/`, ported from homelab LAB-854):
+  a nightly cron job deleting artifacts through an API. The response must say hardened, name the
+  unattended and destructive triggers, and plan a selftest on fixtures, a dry-run and a
+  `script-reviewer` round.
+
+## evals/script-reviewer-shipped-bugs, evals/script-reviewer-live-run-gate
+
+- `reviewer-finds-shipped-bug-rules` (ported from homelab LAB-854): an inlined read-only API client
+  whose spike is recorded, carrying six shipped-bug rule violations (no vault, `die` in `$( )`, the
+  bearer token in curl argv, `declare -A`, unredacted `raw`, no `pipe_ok` ahead of `[ -s ]`). Graders
+  also require the `FINDINGS:` tally line.
+- `live-run-gate-is-a-blocking-finding`: an inlined write script that has never run live. The missing
+  recorded run must be a finding and the review must go on to the token in `curl -u` argv, the
+  `${LEVEL^^}`, a verdict and the tally. Homelab's first thin reviewer made this gate a refusal of the
+  whole round (LAB-854); this case keeps it a blocking first finding.
+
+## Old body against new body (NWM-250)
+
+The lanes replaced script-author's and script-reviewer's bodies with thin ones over the skill. Each
+case's old-body score was taken first, with the same harness and flags, three runs:
+
+| Case | Old body | New body |
+| --- | --- | --- |
+| `nwm8-brief-chr-no-rule-strip` | 1.000 (baseline row) | 1.000 |
+| `capture-lane-ssh-op-restart` | 0.636 | 1.000 |
+| `unnamed-lane-cron-delete-takes-hardened` | 0.500 | 1.000 |
+| `nwm8-round1-five-bugs` | 0.926 (baseline row) | 0.963 |
+| `reviewer-finds-shipped-bug-rules` | 1.000 | 1.000 |
+| `live-run-gate-is-a-blocking-finding` | 0.778 | 1.000 |
+
+The old script-author never named a lane; the old script-reviewer refused the whole round at the
+live-run gate. The first thin reviewer scored 0.296 on `nwm8-round1-five-bugs`: the reviewer cases
+grant only `Agent`, the eval's don't-ask mode applies that list to the subagent too, and its Read of
+`references/review-checklist.md` was refused, so it handed back unreviewed. The body now falls back to
+the preloaded skill and reviews; the reviewer rows above are from that body. `baseline.tsv` holds the
+new-body rows.
 
 ## evals/librarian
 
@@ -164,6 +205,16 @@ response:
    if `verify` is empty;
 5. states it never marks a ticket completed from a read-only `verify`.
 
+## evals/librarian-script-retirement and evals/librarian-provider-seam
+
+Two more prose-plan cases for `librarian`, same `allowed_tools` as above. `retirement-candidates-dry-run-and-unlisted-refusal` hands it cost-reviewer's candidate list plus one script the
+list does not name; graders check the dry run comes before `--yes`, `--ticket`, `script-analytics` cross-check, one at a time, the unlisted script refused, prose references edited by hand,
+delete rather than a retired folder, and the `docs/handoffs/` wave note. `tracker-moves-through-provider-seam` asks for a transition, a comment, a reassignment and a direct `curl`; graders check
+the tracker verbs, `${CLAUDE_PLUGIN_ROOT}`, the refused `curl`, the reassignment reported as a provider-contract gap, and `issues.py lint`.
+
+Their baseline rows are the thin agent's scores (NWM-247). The old 1,181-word body scored 0.833 and 0.727 on them over three runs each; the thin body 0.806 and 0.758, and 1.000 on
+`chat-pasted-ticket-file-and-refuse`, as before.
+
 ## evals/researcher
 
 One case, `herdr-and-adf-one-source-unfetchable`. Design-plan /
@@ -180,27 +231,19 @@ fetched successfully. Graders check the response:
 3. carries the fetched row's real source URL;
 4. never invents a version number for the unfetchable (Herdr) row.
 
-## evals/diagnose-and-pr
+## evals/diagnose-and-pr*
 
-One case, `backfill-selftest-null-field-regression-plan`.
-Design-plan / prose-response case, ethos default applied as above —
-`allowed_tools` is `Read`/`Grep`/`Glob` only, so the agent cannot actually
-create the branch, edit anything, or open the PR it describes. The prompt
-hands the agent a failing check (a `jira-backfill-selftest.sh` exit 1 and a
-six-line log) plus the inlined fixture code path it exercises — a trimmed,
-reproduced snapshot of the custom-field loop, not the real file on disk,
-following the same self-contained-fixture pattern as `evals/script-reviewer`
-— and asks for the plan it would execute, not code. Graders check the
-response:
+diagnose-and-pr is a forked skill (`context: fork`), not an agent, so its three cases tell the eval session to call `Skill(skill: "night-watchman:diagnose-and-pr", args: <task>)` and relay the result.
+Their launch graders are `calls-skill-under-test` (`tool_used` on `Skill`) and `skill-resolves` (a `trace` regex that fails on `Unknown skill`). `allowed_tools` is `Read`/`Grep`/`Glob`/`Skill`, so
+nothing the plan describes is created. Each prompt inlines its fixture.
 
-1. says it would create a branch;
-2. says it would open a draft PR;
-3. states "I never push to main.";
-4. states "I never touch a live host.";
-5. diagnoses that the reproduced `*)` case-statement branch has no `else`,
-   so an emptied field never gets a `custom_parts` entry at all (unlike the
-   `executor`/`defer_until` branches next to it, which each null the field
-   explicitly).
+- `evals/diagnose-and-pr/`, `backfill-selftest-null-field-regression-plan`: a `jira-backfill-selftest.sh` exit 1 and its log plus a reproduced snapshot of the custom-field loop. Graders: it would
+  create a branch and open a draft PR, states "I never push to main." and "I never touch a live host.", and diagnoses that the `*)` branch has no `else`, so an emptied field never gets a
+  `custom_parts` entry (unlike `executor`/`defer_until`, which null it explicitly).
+- `evals/diagnose-and-pr-existing-fix-insufficient/`: the same failure with an open PR #41 that already claims the fix but emits an empty string, not a JSON null. Graders: `VERDICT: insufficient`,
+  names the null/empty-string gap, names PR #41, and does not open a competing PR.
+- `evals/diagnose-and-pr-signal-missing-when/`: a vague signal with no check name, log or timestamp. Graders: it names the missing time and the missing check/output, and neither plans a branch nor
+  states a root cause.
 
 ## evals/spec-reviewer
 

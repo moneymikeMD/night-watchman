@@ -1,0 +1,151 @@
+schema_version: '1'
+name: spec-review-partial-and-unrequested
+description: 'From NWM-168 (2026-09-22): its Solution asked for an absence assertion because the earlier
+  LAB-211 review checked only the prose it had rewritten, and said to report on a shared dispatch-brief
+  block without building it. Scope and checks are clean, so the findings are the ticket''s own: the selftest
+  asserts the new heading but not the absence of ''Awaiting Deployment'' (Missing or Partial), and the
+  shared block was built when only a report was asked for (Unrequested). Self-contained: everything is
+  inlined, no --scaffold or --allow-tools grant.'
+tags:
+- spec-reviewer
+- spec-review
+execution:
+  prompt: 'Launch the night-watchman:spec-reviewer agent with the Agent tool (subagent_type night-watchman:spec-reviewer)
+    and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim
+    and add nothing.
+
+
+    --- task for night-watchman:spec-reviewer ---
+
+    You are reviewing ticket PROJ-168 (branch proj-168, base ref main) against its own diff. Do not run
+    any command: everything you need is inlined below, including the output of the repo''s required-checks
+    script and issues.py scope, both already run against the branch worktree.
+
+
+    --- required-checks.sh --repo-root <worktree> output ---
+
+    discovered from branch ruleset: selftests docs-site comment-lint
+
+    selftests: PASS
+
+    docs-site: PASS
+
+    comment-lint: PASS
+
+    exit 0
+
+    --- end required-checks output ---
+
+
+    --- issues.py scope PROJ-168 main output ---
+
+    providers/dispatch/herdr/herdr-ticket-start.sh: touches (declared)
+
+    providers/dispatch/herdr/herdr-ticket-start-selftest.sh: touches (declared)
+
+    templates/dispatch-brief.md: appends (declared)
+
+    exit 0
+
+    --- end scope output ---
+
+
+    --- Ticket PROJ-168 ---
+
+    ## Problem
+
+    herdr-ticket-start.sh appends a mixed-ticket section to the worker brief headed "## MIXED TICKET —
+    STOP AT AWAITING DEPLOYMENT". The body under it was corrected by an earlier review; the heading still
+    tells the worker to stop at a state it never reaches.
+
+
+    ## Solution
+
+    1. Change the heading to "## MIXED TICKET" and leave the body as it is.
+
+    2. Assert the absence, not just the new text: the selftest must check that the composed brief does
+    not contain the string "Awaiting Deployment" at all, mirroring T13 in the workflow provider''s selftest.
+
+    3. Check whether the two providers'' mixed sections should be one shared block in templates/dispatch-brief.md,
+    and report the answer. Do not widen this ticket into doing it without the owner.
+
+
+    ## Out of scope
+
+    - Any change to executor gating or to what land-branch.sh does with a mixed ticket.
+
+
+    ## verify
+
+    providers/dispatch/herdr/herdr-ticket-start-selftest.sh passes.
+
+    --- end ticket ---
+
+
+    --- git diff main...HEAD (summary) ---
+
+    providers/dispatch/herdr/herdr-ticket-start.sh: heading changed to "## MIXED TICKET"; the inline mixed
+    section removed and replaced by a read of a new MIXED block in templates/dispatch-brief.md
+
+    providers/dispatch/herdr/herdr-ticket-start-selftest.sh: +T9 asserts the composed brief contains "##
+    MIXED TICKET"
+
+    templates/dispatch-brief.md: +MIXED block, now shared by both providers
+
+    --- end diff ---
+
+
+    Head of the branch: 3e80cea6b1d2c3f4a5b6c7d8e9f0a1b2c3d4e5f6. Produce your standard report and verdict
+    for this branch now.'
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: flags-missing-absence-assertion
+  target: last_message
+  pattern: (?=[\s\S]*Awaiting Deployment)(?=[\s\S]*\b(Missing|Partial)\b)
+  match: contains
+  weight: 3
+- type: regex
+  name: flags-unrequested-shared-block
+  target: last_message
+  pattern: (?=[\s\S]*dispatch-brief)(?=[\s\S]*(Unrequested|Wrong-impl))
+  match: contains
+  weight: 3
+  flags: i
+- type: regex
+  name: does-not-land-clean
+  target: last_message
+  pattern: (LAND AFTER FIXES|DO NOT LAND)
+  match: contains
+  weight: 3
+- type: regex
+  name: rejects-plain-land-verdict
+  target: last_message
+  pattern: ^\*\*LAND\*\*
+  match: not_contains
+  weight: 1
+- type: regex
+  name: names-reviewed-head
+  target: last_message
+  pattern: reviewed head 3e80cea6b1d2c3f4a5b6c7d8e9f0a1b2c3d4e5f6
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?spec-reviewer"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

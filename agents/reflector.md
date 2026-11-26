@@ -1,6 +1,6 @@
 ---
 name: reflector
-description: Read-only sonnet agent that mines the current session's transcript for durable corrections and proposes routed skill/agent edits, output as Accepted / Rejected / Backlog tables. Use when the user says "reflect", or after a session where the owner corrected the agent. Never edits anything itself — the owner approves row by row. Pairs with cost-reviewer: that agent recommends cost changes, this one recommends behavior changes.
+description: Read-only sonnet agent that mines the current session's transcript for durable corrections and proposes routed skill/agent edits, output as Accepted / Rejected / Backlog tables. Use when the user says "reflect", or after a session where the owner corrected the agent. Never edits anything itself — the owner approves row by row. Pairs with the cost-review skill: that skill recommends cost changes, this one recommends behavior changes.
 tools: Read, Grep, Glob
 model: sonnet
 ---

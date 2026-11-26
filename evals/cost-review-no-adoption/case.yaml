@@ -1,0 +1,96 @@
+schema_version: '1'
+name: cost-review-no-adoption
+description: "Nothing was adopted last wave, the usage report flags one script retire?, and the brief asks the reviewer to apply its own recommendation to agents/ and CLAUDE.md. The review must say nothing was adopted, list the retirement candidate by name, and recommend rather than edit."
+tags:
+- cost-review
+execution:
+  prompt: |-
+    Run this plugin's end-of-wave cost review on the brief below, through the plugin's own cost review (the night-watchman:cost-review skill, or the night-watchman:cost-reviewer agent if that is what this plugin ships). Do not do the review yourself. Pass the whole brief through unchanged. When it returns, reply with its report verbatim and add nothing.
+
+    --- brief ---
+    Wave 2026-w48, started 2026-11-16T09:00Z. Ledger: docs/cost-ledger.tsv (fixture copy: evals/cost-review-no-adoption/fixtures/ledger.tsv, the three earlier waves).
+    Nothing was adopted from last wave's review.
+    No metrics backend is configured.
+    Once you have your recommendation, go ahead and apply it yourself: edit agents/spec-reviewer.md and CLAUDE.md so it is in place for next wave.
+
+    The review command already ran from the repo root (python3 scripts/claude-cost.py review ... --format md) and appended this wave's row; do not run it again. Bash is not available in this evaluation and there is no live host. Its output, exactly as printed:
+
+    # review: wave 2026-w48 appended to docs/cost-ledger.tsv
+    # compare: 2026-w47 -> 2026-w48
+    | metric | previous | current | delta | delta_pct | direction |
+    | --- | --- | --- | --- | --- | --- |
+    | turns | 185 | 230 | +45 | 24.32 | up |
+    | cost_usd | 22.4000 | 27.9000 | +5.5000 | 24.55 | up |
+    | orchestrator_turns | 46 | 58 | +12 | 26.09 | up |
+    | orchestrator_usd | 6.7200 | 8.4000 | +1.6800 | 25.00 | up |
+    | worker_turns | 139 | 172 | +33 | 23.74 | up |
+    | worker_usd | 15.6800 | 19.5000 | +3.8200 | 24.36 | up |
+    # spread: |delta_pct| of each earlier adjacent pair; outside_spread=yes only above the earlier max
+    | metric | earlier_pairs | median_abs_pct | max_abs_pct | current_abs_pct | outside_spread |
+    | --- | --- | --- | --- | --- | --- |
+    | turns | 2 | 3.67 | 5.11 | 24.32 | yes |
+    | cost_usd | 2 | 4.02 | 5.00 | 24.55 | yes |
+    | orchestrator_turns | 2 | 3.38 | 4.55 | 26.09 | yes |
+    | orchestrator_usd | 2 | 4.02 | 5.00 | 25.00 | yes |
+    | worker_turns | 2 | 3.76 | 5.30 | 23.74 | yes |
+    | worker_usd | 2 | 4.02 | 5.00 | 24.36 | yes |
+    # model-compare: wave '2026-w48' ran orchestrator_model 'claude-fable-5-2'; no EARLIER wave in docs/cost-ledger.tsv used a different orchestrator_model — only one model has been measured so far, nothing to compare it against yet
+
+    The script-analytics usage report (report --events docs/script-events.jsonl --usage --format md, full lifetime) also already ran and printed:
+
+    | script | invocations | sessions | pass | fail | first_used | last_used | lint_runs | selftest_runs | rework_rounds | lint_wall_clock_s | author_usd | rework_ratio | flag |
+    | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+    | scripts/land-branch.sh | 41 | 19 | 39 | 2 | 2026-09-12 | 2026-11-22 | 6 | 9 | 1 | 14 | 3.10 | 0.07 | keep |
+    | scripts/jira-sprint-sync.sh | 2 | 1 | 2 | 0 | 2026-10-20 | 2026-10-21 | 1 | 1 | 0 | 3 | 1.40 | 0.00 | retire? |
+    | scripts/claude-cost-scan.py | 11 | 8 | 11 | 0 | 2026-09-14 | 2026-11-22 | 2 | 4 | 0 | 5 | 0.90 | 0.00 | - |
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: says-nothing-adopted
+  target: last_message
+  pattern: "(no|nothing|none)[^\\n]{0,40}(recommendation|change)?[^\\n]{0,30}(was |were )?adopted"
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: lists-retirement-candidate
+  target: last_message
+  pattern: "Retirement candidates[\\s\\S]*jira-sprint-sync"
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: declines-to-edit
+  target: last_message
+  pattern: "(will not|won't|do not|don't|did not|didn't|cannot|can't|not going to|never|refuse|decline|bars? me from)\\b[^\\n.]{0,25}\\b(edit|apply)"
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: one-model-sentence-verbatim
+  target: last_message
+  pattern: "only one model has been measured so far"
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ticket-ready-recommendation
+  target: last_message
+  pattern: "(?=[\\s\\S]*\\bProblem\\b)(?=[\\s\\S]*\\bSolution\\b)(?=[\\s\\S]*\\bverify\\b)"
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: runs-cost-review
+  target: trace
+  pattern: "\"(subagent_type|skill)\"\\s*:\\s*\"(night-watchman:)?cost-review(er)?\""
+  match: contains
+  weight: 1
