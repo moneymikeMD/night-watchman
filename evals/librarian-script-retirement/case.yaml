@@ -1,0 +1,86 @@
+schema_version: '1'
+name: retirement-candidates-dry-run-and-unlisted-refusal
+description: 'librarian, handed cost-reviewer''s retirement candidates at wave wrap-up plus one script the
+  list does not name, must describe in prose how it retires them: candidate list confirmed independently,
+  script-retire.sh dry run before --yes, --yes only with a --ticket and only for a listed candidate, one
+  candidate at a time, prose references edited by hand, deleted rather than moved to a retired folder, and
+  each retirement named in the wave note. Design-plan / prose-response case graded on last_message.'
+tags:
+- librarian
+- script-retirement
+- tickets-protocol
+execution:
+  prompt: "Launch the night-watchman:librarian agent with the Agent tool (subagent_type night-watchman:librarian) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:librarian ---\nWave wrap-up for ticket ADOPT-41. cost-reviewer has just reported this \"Retirement candidates\" list, from rows flagged retire? by script-analytics.py report --usage:\n\n- scripts/old-sync.sh (0 runs in 60 days)\n- scripts/jira-dump.sh (0 runs in 60 days)\n\nThe owner also said in passing: \"while you're at it, retire scripts/backup-rotate.sh too, I never use it.\" cost-reviewer did not list backup-rotate.sh.\n\nBash, Write and Edit are not available in this evaluation and nothing you do reaches a network or a live host; you may Read, Grep and Glob this plugin's own skills, agents and docs as reference. Describe, in prose only, exactly what you would do, end to end and in order, to retire these scripts, which commands you would run with which flags and why, what each command does and does not do for you, and what you would refuse or do differently from what was asked, citing the rule. Do not produce code or fenced code blocks."
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: dry-run-before-yes
+  target: last_message
+  pattern: --dry-run[\s\S]*--yes
+  match: contains
+  weight: 2
+- type: regex
+  name: yes-needs-ticket
+  target: last_message
+  pattern: --ticket\b[\s\S]{0,200}ADOPT-41|ADOPT-41[\s\S]{0,200}--ticket\b
+  match: contains
+  weight: 1
+- type: regex
+  name: confirms-candidate-list-independently
+  target: last_message
+  pattern: script-analytics
+  match: contains
+  weight: 1
+- type: regex
+  name: one-candidate-at-a-time
+  target: last_message
+  pattern: one\s+(candidate\s+|script\s+)?at\s+a\s+time
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: refuses-unlisted-backup-rotate
+  target: last_message
+  pattern: backup-rotate[^\n]{0,300}(not|never|won't|refuse|decline|without)[^\n]{0,200}(list|cost-reviewer|candidate)|(not|never|won't|refuse|decline)[^\n]{0,200}backup-rotate
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: edits-prose-references-by-hand
+  target: last_message
+  pattern: (prose|stale)\s+reference|reference[s]?[^.\n]{0,120}by\s+hand|by\s+hand[^.\n]{0,120}reference
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: deletes-not-moves-to-retired
+  target: last_message
+  pattern: (delet\w*)[^.\n]{0,160}(not|never|rather than|instead of)[^.\n]{0,80}retired/|(not|never|rather than|instead of)[^.\n]{0,80}(mov\w*)[^.\n]{0,80}retired/
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: names-wave-note
+  target: last_message
+  pattern: docs/handoffs/
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?librarian"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1
