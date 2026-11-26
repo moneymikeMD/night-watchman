@@ -219,7 +219,7 @@ fixed precedence, evaluated in order:
 This flags/proposes only — it does not retire anything by itself. ai-toolkit's `script-retire.sh`, resolved by `scripts/ai-toolkit-root.sh --script-retire`, is the mechanism that turns a `retire?` row
 into an actual retirement: dry-run by default (prints the plan — script, selftest, and `docs/scripts.md` row it would remove, plus the `## Retired` line it would add — without touching anything), and
 `--yes --ticket NWM-nnn` creates branch `retire-<name>`, deletes the script/selftest/doc row, appends the `## Retired` entry, commits, and lands via `scripts/land-branch.sh`. The `cost-review` skill lists
-`retire?` rows in its wave review under "Retirement candidates"; `librarian` runs the retirement at wrap-up (see that agent's "Script retirement" section). Deletion, never a
+`retire?` rows in its wave review under "Retirement candidates"; `librarian` runs the retirement at wrap-up (by `skills/tickets-protocol/references/script-retirement.md`). Deletion, never a
 `scripts/retired/`/`docs/retired/` folder — an LLM-readable graveyard of dead scripts costs tokens on every future read for no benefit `git log` doesn't already give.
 
 Every already-recorded `script`/`scripts` value is resolved to its CURRENT repo-relative path by basename lookup against the real `scripts/`/`hooks/` trees on disk, both going forward (at

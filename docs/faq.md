@@ -23,10 +23,10 @@ A workflow has no opinion about any of that, because a workflow has no next time
 
 ## Is it an agent team?
 
-No. It ships thirteen agents and none of them orchestrates.
+No. It ships ten agents and none of them orchestrates.
 
-`librarian`, `script-author`, `script-reviewer`, `spec-reviewer`, `reflector`, `researcher`, `diagnose-and-pr`, `script-author-lite`, `wave-supervisor`, `branch-resync`,
-`pr-shepherd` and `epic-closer` are leaves. They are dispatched; they do not dispatch. `wave-supervisor` comes closest: it starts the next queued ticket through the `dispatch` provider, but it
+`librarian`, `script-author`, `script-reviewer`, `spec-reviewer`, `reflector`, `researcher`, `script-author-lite`, `wave-supervisor`, `branch-resync` and
+`pr-shepherd` are leaves. They are dispatched; they do not dispatch. `wave-supervisor` comes closest: it starts the next queued ticket through the `dispatch` provider, but it
 spawns no agent, and the queue, the machines and the landing flags are the orchestrator's. The orchestration lives in the skills — `session-start`, `tickets-protocol`, `wave-trail` — and, more tellingly, in the hooks.
 
 The hooks are the part neither a workflow nor an agent roster can reproduce, because they change the economics of the session they run inside rather than the plan the session is following:

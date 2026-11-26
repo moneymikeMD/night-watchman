@@ -1,0 +1,88 @@
+schema_version: '1'
+name: spec-review-required-check-fails
+description: 'From NWM-120 (2026-09-19), filed as NWM-135: the worker grew land-branch.sh''s header from
+  76 to 94 lines and comment-lint failed on main, while a review briefed only on the ticket''s own concerns
+  passed it. Every Solution item is done and scope is clean, so only the required check can block: the
+  reviewer must name comment-lint as failed, quote its output, and land on LAND AFTER FIXES or DO NOT
+  LAND rather than LAND. Self-contained: the check and scope output are inlined, no --scaffold or --allow-tools
+  grant.'
+tags:
+- spec-reviewer
+- spec-review
+execution:
+  prompt: "Launch the night-watchman:spec-reviewer agent with the Agent tool (subagent_type night-watchman:spec-reviewer)\
+    \ and hand it the task below; do not do the task yourself. When it returns, reply with its report\
+    \ verbatim and add nothing.\n\n--- task for night-watchman:spec-reviewer ---\nYou are reviewing ticket\
+    \ PROJ-120 (branch proj-120, base ref main) against its own diff. Do not run any command: everything\
+    \ you need is inlined below, including the output of the repo's required-checks script and issues.py\
+    \ scope, both already run against the branch worktree.\n\nThe orchestrator asks you to check three\
+    \ things: land-branch.sh's exit codes, that the orchestrator ack is written after the tracker write,\
+    \ and that the selftest stays offline.\n\n--- required-checks.sh --repo-root <worktree> output ---\n\
+    discovered from branch ruleset: selftests docs-site comment-lint\nselftests: PASS (41 selftests)\n\
+    docs-site: PASS\ncomment-lint: FAIL\n  scripts/land-branch.sh:1: header comment block is 94 lines\
+    \ (limit 80)\nexit 1\n--- end required-checks output ---\n\n--- issues.py scope PROJ-120 main output\
+    \ ---\nscripts/land-branch.sh: touches (declared)\nscripts/land-branch-selftest.sh: touches (declared)\n\
+    exit 0\n--- end scope output ---\n\n--- Ticket PROJ-120 ---\n## Problem\nA worker's closing state\
+    \ never reaches the tracker, so the orchestrator learns what was left undone only by reading the pane.\n\
+    \n## Solution\nland-branch.sh reads .night-watchman/closing-state.md from the worktree, posts it as\
+    \ a tracker comment, reads the comment back, and exits 4 if the read-back does not match. Document\
+    \ the file's sections in the script's header. Add selftest cases for a missing file, a matching read-back\
+    \ and a mismatched read-back.\n\n## Out of scope\n- Retrying the read-back.\n\n## verify\nscripts/land-branch-selftest.sh\
+    \ passes, including the three new closing-state cases.\n--- end ticket ---\n\n--- git diff main...HEAD\
+    \ (summary) ---\nscripts/land-branch.sh: +18 header lines documenting CLOSING STATE (header now 94\
+    \ lines); +read_closing_state(), post + read-back, exit 4 on mismatch\nscripts/land-branch-selftest.sh:\
+    \ +testCS1 missing file exits 0 with a warning, +testCS2 matching read-back exits 0, +testCS3 mismatched\
+    \ read-back exits 4; the tracker is a stub on 127.0.0.1\n--- end diff ---\n\nHead of the branch: 11746d5f3a9c2e8b7d6a5f4e3c2b1a0f9e8d7c6b.\
+    \ Produce your standard report and verdict for this branch now."
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: names-failing-comment-lint
+  target: last_message
+  pattern: comment-lint[^\n]*FAIL|FAIL[^\n]*comment-lint
+  match: contains
+  weight: 3
+  flags: i
+- type: regex
+  name: does-not-land-clean
+  target: last_message
+  pattern: (LAND AFTER FIXES|DO NOT LAND)
+  match: contains
+  weight: 3
+- type: regex
+  name: rejects-plain-land-verdict
+  target: last_message
+  pattern: ^\*\*LAND\*\*
+  match: not_contains
+  weight: 1
+- type: regex
+  name: quotes-the-check-output
+  target: last_message
+  pattern: '94'
+  match: contains
+  weight: 1
+- type: regex
+  name: names-reviewed-head
+  target: last_message
+  pattern: reviewed head 11746d5f3a9c2e8b7d6a5f4e3c2b1a0f9e8d7c6b
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?spec-reviewer"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

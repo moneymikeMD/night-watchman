@@ -1,6 +1,6 @@
 schema_version: '1'
 name: backfill-selftest-null-field-regression-plan
-description: 'diagnose-and-pr, handed a failing check (a selftest exit 1 with a short log) plus the fixture
+description: 'diagnose-and-pr (the forked skill), handed a failing check (a selftest exit 1 with a short log) plus the fixture
   code path it exercises, must produce a prose plan for the branch/PR it would open — not actually create
   the branch, edit files, or touch anything live. Ethos default (docs/ethos.md, 2026-09-12 evidence):
   the smaller, reversible option, so this is a design-plan / prose-response case graded on last_message,
@@ -12,7 +12,7 @@ tags:
 - jira
 - regression
 execution:
-  prompt: "Launch the night-watchman:diagnose-and-pr agent with the Agent tool (subagent_type night-watchman:diagnose-and-pr) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:diagnose-and-pr ---\nThe nightly check for this repo just failed. Here is the whole of what fired:\n\n  check: providers/tracker/jira/jira-backfill-selftest.sh\n\
+  prompt: "Call the night-watchman:diagnose-and-pr skill with the Skill tool (skill night-watchman:diagnose-and-pr), passing the whole task below as its args; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:diagnose-and-pr ---\nThe nightly check for this repo just failed. Here is the whole of what fired:\n\n  check: providers/tracker/jira/jira-backfill-selftest.sh\n\
     \  exit code: 1\n  log (last 6 lines):\n    assertion 6: field emptied locally must PUT an explicit\
     \ JSON null, not omit the key\n    expected PUT body for SPK-1 to include \"human_steps\":null\n \
     \   got: PUT body for SPK-1 has no \"human_steps\" key at all\n    FAIL: null-field-not-omitted (SPK-1,\
@@ -48,7 +48,7 @@ execution:
   - Read
   - Grep
   - Glob
-  - Agent
+  - Skill
 runs: 3
 graders:
 - type: regex
@@ -87,14 +87,14 @@ graders:
   weight: 2
   flags: i
 - type: tool_used
-  name: launches-agent-under-test
-  tool: Agent
-  input_match: '"subagent_type":\s*"(night-watchman:)?diagnose-and-pr"'
+  name: calls-skill-under-test
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?diagnose-and-pr"'
   min: 1
   weight: 1
 - type: regex
-  name: agent-type-resolves
+  name: skill-resolves
   target: trace
-  pattern: Agent type '[^']*' not found
+  pattern: Unknown skill
   match: not_contains
   weight: 1
