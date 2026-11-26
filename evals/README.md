@@ -68,7 +68,7 @@ compare against the row for the same version.
 
 ## evals/script-reviewer
 
-One case, `nwm8-round1-five-bugs`. The prompt inlines a reconstructed
+`nwm8-round1-five-bugs`. The prompt inlines a reconstructed
 "round 1" snapshot of the Jira workflow provisioner this plugin shipped before
 work-order took it over (and its selftest), with
 five real bugs from that history still present:
@@ -110,7 +110,7 @@ line) is reliable across repeated runs.
 
 ## evals/script-author
 
-One case, `nwm8-brief-chr-no-rule-strip`. Gives script-author the same
+`nwm8-brief-chr-no-rule-strip`. Gives script-author the same
 shell-library recipe for a second target project (ADOPT) and asks for a prose design
 plan — not code, not files, no fenced code blocks — covering two
 properties from real incidents on this exact recipe:
@@ -131,13 +131,38 @@ The case asks for this plan as prose in the final response (no fenced
 code blocks), and grades that response text with the same style of
 deterministic `regex` checks as script-reviewer.
 
-## evals/script-author-lite
+## evals/script-author-capture, evals/script-author-hardened: the lanes
 
-One case, `ssh-op-sudo-brief-refused`. Hands script-author-lite a brief
-to write up a proven command sequence that touches `ssh`, `op` and `sudo`;
-`allowed_tools` is `Read`/`Grep`/`Glob` only. Regex graders check the
-response refuses, names all three triggers, hands back to `script-author`,
-and contains no fenced code block.
+Two cases guard the lane rule in `skills/shell-scripting/SKILL.md` (NWM-250). Both are prose plans with
+`Read`/`Grep`/`Glob` only and regex graders.
+
+- `capture-lane-ssh-op-restart` (`script-author-capture/`, converted from script-author-lite's
+  `ssh-op-sudo-brief-refused` when that agent was deleted): commands already run live read a key with
+  `op` and restart nginx over `ssh` and `sudo`, run by hand. No lane is named and no hardened trigger
+  holds, so the response must say capture, name a vault for the `op` call, keep the key in a cleaned
+  tempfile, take the host as `--host`, check with `shellcheck` and `bash -n`, and plan no selftest or review.
+- `unnamed-lane-cron-delete-takes-hardened` (`script-author-hardened/`, ported from homelab LAB-854):
+  a nightly cron job deleting artifacts through an API. The response must say hardened, name the
+  unattended and destructive triggers, and plan a selftest on fixtures, a dry-run and a
+  `script-reviewer` round.
+
+## evals/script-reviewer-shipped-bugs, evals/script-reviewer-live-run-gate
+
+- `reviewer-finds-shipped-bug-rules` (ported from homelab LAB-854): an inlined read-only API client
+  whose spike is recorded, carrying six shipped-bug rule violations (no vault, `die` in `$( )`, the
+  bearer token in curl argv, `declare -A`, unredacted `raw`, no `pipe_ok` ahead of `[ -s ]`). Graders
+  also require the `FINDINGS:` tally line.
+- `live-run-gate-is-a-blocking-finding`: an inlined write script that has never run live. The missing
+  recorded run must be a finding and the review must go on to the token in `curl -u` argv, the
+  `${LEVEL^^}`, a verdict and the tally. Homelab's first thin reviewer made this gate a refusal of the
+  whole round (LAB-854); this case keeps it a blocking first finding.
+
+## Old body against new body (NWM-250)
+
+The lanes replaced script-author's and script-reviewer's bodies with thin ones over the skill. Each
+case's old-body score was taken first, with the same harness and flags, three runs:
+
+OLD_BODY_TABLE
 
 ## evals/librarian
 

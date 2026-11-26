@@ -1,0 +1,107 @@
+schema_version: '1'
+name: live-run-gate-is-a-blocking-finding
+description: 'script-reviewer, handed an API-facing write script that has never run live, reports the missing recorded
+  run as a blocking finding and goes on with the review: it still finds the token in curl argv and the bash 3.2
+  ${var^^}, and ends on a verdict and the FINDINGS tally. Guards the LAB-854 lesson that a thin reviewer body turned
+  this gate into a refusal of the whole round. NWM-250. Fixture inlined, no tools beyond Agent, regex graders.'
+tags:
+- script-reviewer
+- live-run-gate
+execution:
+  prompt: |
+    Launch the night-watchman:script-reviewer agent with the Agent tool (subagent_type night-watchman:script-reviewer) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.
+
+    --- task for night-watchman:script-reviewer ---
+    Review this new script; it is meant for the next real incident. It would live at scripts/status-incident.sh and sources scripts/lib/kit.sh (die, warn, show_help). Nobody has run any part of it against the status page API yet, not even --dry-run, and nothing is recorded. The block below is the whole file; it is not on disk, so review it as given and do not run it or anything it calls. Report findings in your usual format, most severe first, and finish with your verdict.
+
+    ```bash
+    #!/bin/bash
+    # status-incident.sh — open an incident on the status page through its API.
+    #
+    # Usage: status-incident.sh --component NAME --message TEXT [--dry-run]
+
+    set -euo pipefail
+    # shellcheck source=lib/kit.sh
+    . "$(cd "$(dirname "$0")" && pwd)/lib/kit.sh"
+
+    STATUS_HOST="${STATUS_HOST:-status.example.invalid}"
+    COMPONENT=""
+    MESSAGE=""
+    DRY_RUN=0
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help) show_help ;;
+            --component) COMPONENT="$2"; shift 2 ;;
+            --message) MESSAGE="$2"; shift 2 ;;
+            --dry-run) DRY_RUN=1; shift ;;
+            *) die "unknown argument '$1'" ;;
+        esac
+    done
+    [ -n "$COMPONENT" ] || die "--component is required"
+
+    TOKEN=$(op read "op://ops/status-page/token") || die "could not read the status page token"
+    LEVEL="${SEVERITY:-major}"
+    BODY=$(jq -n --arg c "$COMPONENT" --arg m "$MESSAGE" --arg l "${LEVEL^^}" \
+        '{component: $c, message: $m, impact: $l}')
+
+    if [ "$DRY_RUN" = 1 ]; then
+        printf '%s\n' "$BODY"
+        exit 0
+    fi
+
+    curl -fsS -u "api:$TOKEN" -X POST -H 'Content-Type: application/json' \
+        -d "$BODY" "https://$STATUS_HOST/api/v1/incidents"
+    echo "incident opened"
+    ```
+  max_turns: 15
+  timeout_seconds: 300
+  allowed_tools:
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: gate-is-a-finding
+  target: last_message
+  pattern: (live run|recorded run|live read-only run|spike)
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: finds-token-in-argv
+  target: last_message
+  pattern: (curl -u|argv)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-bash32-uppercase
+  target: last_message
+  pattern: (\^\^|bash 3\.2)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: states-verdict
+  target: last_message
+  pattern: (SHIP|DO NOT RUN)
+  match: contains
+  weight: 1
+- type: regex
+  name: review-goes-on-to-tally
+  target: last_message
+  pattern: 'FINDINGS: CRITICAL=\d+ HIGH=\d+ MEDIUM=\d+ LOW=\d+'
+  match: contains
+  weight: 2
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?script-reviewer"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

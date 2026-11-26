@@ -38,7 +38,6 @@ scripts/dev/issues-to-jira-selftest.sh	-
 .claude/agents/script-author.md	agents/script-author.md
 .claude/agents/script-reviewer.md	agents/script-reviewer.md
 .claude/agents/lab-librarian.md	agents/librarian.md
-.claude/agents/script-author-lite.md	-
 .claude/agents/compose-editor.md	-
 .claude/agents/deploy-operator.md	-
 .claude/agents/iac-author.md	-
