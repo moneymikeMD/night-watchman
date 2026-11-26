@@ -100,8 +100,8 @@ The other six jobs run on Ubuntu:
 - **no-personal-paths** — ai-toolkit's `actions/no-personal-paths@v1`; exceptions are declared in `.github/personal-paths-allow`.
 - **skill-routing** — gates every push and PR on `evals/routing/`: each positive prompt must rank its own skill first (rank-1 floor `1.0`).
 - **docs-site** — frozen `bun install` + `astro build` for `docs/preview/website`, catching a desynced lockfile before the real deploy does.
-- **agent-skill-lint** — ai-toolkit's `actions/agent-skill-lint@v1` over `agents/` and `skills/`: an agent body over 200 words, a body that loads a skill its
-  `skills:` frontmatter does not list, or an invalid `SKILL.md` fails it. Agents kept whole are named, each with its reason, in `.agent-skill-lint.json`.
+- **agent-skill-lint** — ai-toolkit's `actions/agent-skill-lint@v1` over `agents/` and `skills/` (its rules are in that action's header). Agents kept whole are named, each with its reason,
+  in `.agent-skill-lint.json`.
 
 Only `selftests`, `docs-site` and `comment-lint` are in `protect_main-2`'s required-status-checks list; the other three run on every push and PR but aren't ruleset-required (they still gate a PR
 merged through the UI, since GitHub blocks on any check the PR shows as failing, required or not — they just don't independently block a bypassed push).
