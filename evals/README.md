@@ -164,6 +164,16 @@ response:
    if `verify` is empty;
 5. states it never marks a ticket completed from a read-only `verify`.
 
+## evals/librarian-script-retirement and evals/librarian-provider-seam
+
+Two more prose-plan cases for `librarian`, same `allowed_tools` as above. `retirement-candidates-dry-run-and-unlisted-refusal` hands it cost-reviewer's candidate list plus one script the
+list does not name; graders check the dry run comes before `--yes`, `--ticket`, `script-analytics` cross-check, one at a time, the unlisted script refused, prose references edited by hand,
+delete rather than a retired folder, and the `docs/handoffs/` wave note. `tracker-moves-through-provider-seam` asks for a transition, a comment, a reassignment and a direct `curl`; graders check
+the tracker verbs, `${CLAUDE_PLUGIN_ROOT}`, the refused `curl`, the reassignment reported as a provider-contract gap, and `issues.py lint`.
+
+Their baseline rows are the thin agent's scores (NWM-247). The old 1,181-word body scored 0.833 and 0.727 on them over three runs each; the thin body 0.806 and 0.758, and 1.000 on
+`chat-pasted-ticket-file-and-refuse`, as before.
+
 ## evals/researcher
 
 One case, `herdr-and-adf-one-source-unfetchable`. Design-plan /
@@ -180,27 +190,19 @@ fetched successfully. Graders check the response:
 3. carries the fetched row's real source URL;
 4. never invents a version number for the unfetchable (Herdr) row.
 
-## evals/diagnose-and-pr
+## evals/diagnose-and-pr*
 
-One case, `backfill-selftest-null-field-regression-plan`.
-Design-plan / prose-response case, ethos default applied as above —
-`allowed_tools` is `Read`/`Grep`/`Glob` only, so the agent cannot actually
-create the branch, edit anything, or open the PR it describes. The prompt
-hands the agent a failing check (a `jira-backfill-selftest.sh` exit 1 and a
-six-line log) plus the inlined fixture code path it exercises — a trimmed,
-reproduced snapshot of the custom-field loop, not the real file on disk,
-following the same self-contained-fixture pattern as `evals/script-reviewer`
-— and asks for the plan it would execute, not code. Graders check the
-response:
+diagnose-and-pr is a forked skill (`context: fork`), not an agent, so its three cases tell the eval session to call `Skill(skill: "night-watchman:diagnose-and-pr", args: <task>)` and relay the result.
+Their launch graders are `calls-skill-under-test` (`tool_used` on `Skill`) and `skill-resolves` (a `trace` regex that fails on `Unknown skill`). `allowed_tools` is `Read`/`Grep`/`Glob`/`Skill`, so
+nothing the plan describes is created. Each prompt inlines its fixture.
 
-1. says it would create a branch;
-2. says it would open a draft PR;
-3. states "I never push to main.";
-4. states "I never touch a live host.";
-5. diagnoses that the reproduced `*)` case-statement branch has no `else`,
-   so an emptied field never gets a `custom_parts` entry at all (unlike the
-   `executor`/`defer_until` branches next to it, which each null the field
-   explicitly).
+- `evals/diagnose-and-pr/`, `backfill-selftest-null-field-regression-plan`: a `jira-backfill-selftest.sh` exit 1 and its log plus a reproduced snapshot of the custom-field loop. Graders: it would
+  create a branch and open a draft PR, states "I never push to main." and "I never touch a live host.", and diagnoses that the `*)` branch has no `else`, so an emptied field never gets a
+  `custom_parts` entry (unlike `executor`/`defer_until`, which null it explicitly).
+- `evals/diagnose-and-pr-existing-fix-insufficient/`: the same failure with an open PR #41 that already claims the fix but emits an empty string, not a JSON null. Graders: `VERDICT: insufficient`,
+  names the null/empty-string gap, names PR #41, and does not open a competing PR.
+- `evals/diagnose-and-pr-signal-missing-when/`: a vague signal with no check name, log or timestamp. Graders: it names the missing time and the missing check/output, and neither plans a branch nor
+  states a root cause.
 
 ## evals/spec-reviewer
 

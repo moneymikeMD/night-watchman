@@ -10,7 +10,7 @@ Decide where repeated work's knowledge is kept and where it runs, as two separat
 
 ## diagnose-and-pr
 
-Wiring guidance for dispatching a failure signal (an alert, a failed check) to the diagnose-and-pr agent and handling its output. Use when a project wants to turn monitoring findings into draft PRs instead of manual triage, when deciding what counts as in-scope for that agent, or when the owner asks to diagnose/debug a specific failing behaviour and wants the disciplined loop (a red command before any theory), not a one-line question.
+Diagnose one firing failure signal (an alert, a failed check, a monitoring finding) against this repo with the disciplined loop (a red command before any theory), then open a draft PR fixing it on a feature branch. Never pushes to main, never remediates a live host. Use when a sweep, webhook or the owner hands over a concrete failure to debug and fix, or when the owner wants a failing behaviour diagnosed rather than a one-line answer. Pass the signal as the argument - what fired, when, and any first-pass triage.
 
 ## grill
 
