@@ -1,0 +1,5 @@
+{
+  "agents/researcher.md": "Web output floods a context and several run at once; its three-tool allowlist is what prevents repo writes.",
+  "agents/wave-supervisor.md": "A long-lived background loop that is resumed, so it is kept whole rather than thinned over a skill.",
+  "agents/reflector.md": "It reads a whole transcript as untrusted input behind a read-only allowlist."
+}

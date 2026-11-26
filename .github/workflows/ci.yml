@@ -163,8 +163,18 @@ jobs:
         run: bunx --bun astro build
 
 
+  agent-skill-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: moneymikeMD/ai-toolkit/actions/agent-skill-lint@v1
+        with:
+          agent-roots: agents
+          skill-roots: skills
+          allow: .agent-skill-lint.json
+
   notify-failure:
-    needs: [selftests, comment-lint, no-personal-paths, skill-routing, docs-site]
+    needs: [selftests, comment-lint, no-personal-paths, skill-routing, docs-site, agent-skill-lint]
     if: >-
       always() && contains(needs.*.result, 'failure') && (
         github.event_name == 'push' ||
