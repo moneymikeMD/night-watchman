@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [2.5.0](https://github.com/moneymikeMD/night-watchman/compare/v2.4.1...v2.5.0) (2026-11-26)
+
+
+### Features
+
+* wrap-up skill chooses which session-end mechanism runs (NWM-252) ([aa29d16](https://github.com/moneymikeMD/night-watchman/commit/aa29d162f66fe24226992dc73375dbb3e73b1fa1))
+
+
+### Bug Fixes
+
+* **evals:** every agent case launches its agent, with a baseline on record (NWM-238) ([caab88f](https://github.com/moneymikeMD/night-watchman/commit/caab88f55dd2f756ba503755aa3644ba9697e763))
+
 ## [2.4.1](https://github.com/moneymikeMD/night-watchman/compare/v2.4.0...v2.4.1) (2026-11-26)
 
 
