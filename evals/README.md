@@ -94,6 +94,13 @@ no `--scaffold` or `--allow-tools` grant to run under the plain
 also live under `fixtures/` for human reading; the case doesn't read them
 at eval time.)
 
+The prompt says the script's read-only paths ran once against the live
+project with `--dry-run`, recorded, with nothing POSTed. script-reviewer
+refuses a first round on an API-facing script with no recorded live run, so
+a prompt saying it never ran made about half the runs refuse correctly and
+score 0.444 to 0.667 (nine runs, 2026-11-25). Its baseline row was re-taken
+over six runs after that change (NWM-274).
+
 Graders are deterministic `regex` checks against the review's final
 response, not `llm` judges: the default (haiku) judge model fails
 objectively-correct reviews. Regex against stable code-identifiers the
