@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.8.1](https://github.com/moneymikeMD/night-watchman/compare/v2.8.0...v2.8.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* **known-issues:** delete fixed entries with remove instead of marking them resolved ([#189](https://github.com/moneymikeMD/night-watchman/issues/189)) ([eab771c](https://github.com/moneymikeMD/night-watchman/commit/eab771cc1486da2c0d55ed59b416e6c8e234c85f))
+
 ## [2.8.0](https://github.com/moneymikeMD/night-watchman/compare/v2.7.0...v2.8.0) (2026-11-26)
 
 
