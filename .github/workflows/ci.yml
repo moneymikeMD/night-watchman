@@ -134,8 +134,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # report-only until the two misses in evals/routing/README.md are fixed;
-      # a gate that reddens every branch gets disabled rather than obeyed.
       - uses: moneymikeMD/ai-toolkit/actions/skill-routing@v1
         with:
           roots: night-watchman=skills
@@ -143,7 +141,7 @@ jobs:
           allow: evals/routing/allowed-collisions.json
           rank1-floor: "1.0"
           top-k: "1"
-          report-only: "true"
+          report-only: "false"
 
   docs-site:
     # Mirrors website-deploy.yml's frozen install: catches a desynced

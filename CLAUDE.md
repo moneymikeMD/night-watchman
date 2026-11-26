@@ -98,7 +98,7 @@ The other five jobs run on Ubuntu:
 
 - **comment-lint** — ai-toolkit's `actions/comment-lint@v1`: header comment blocks of at most 80 lines, other blocks of at most 4.
 - **no-personal-paths** — ai-toolkit's `actions/no-personal-paths@v1`; exceptions are declared in `.github/personal-paths-allow`.
-- **skill-routing** — report-only against `evals/routing/`, deliberately: a gate that reddens every branch gets disabled rather than obeyed.
+- **skill-routing** — gates every push and PR on `evals/routing/`: each positive prompt must rank its own skill first (rank-1 floor `1.0`).
 - **docs-site** — frozen `bun install` + `astro build` for `docs/preview/website`, catching a desynced lockfile before the real deploy does.
 
 Only `selftests`, `docs-site` and `comment-lint` are in `protect_main-2`'s required-status-checks list; the other two run on every push and PR but aren't ruleset-required (they still gate a PR
