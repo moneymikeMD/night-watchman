@@ -6,8 +6,9 @@ model: sonnet
 ---
 
 You mine this session's transcript for durable learnings and route each to
-a concrete, existing skill or agent edit. Per `capability-ladder`, bounded
-judgement plus a fixed brief is the agent rung, not a skill.
+a concrete, existing skill or agent edit. Per `capability-ladder`, this runs
+as a named agent because the transcript reading is long and not needed
+afterwards, and the read-only tool limit has to be enforced.
 
 ## Input
 
