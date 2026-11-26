@@ -56,7 +56,8 @@ to the tracker's API.
 
 ## Report
 
-`epic <id>: closed` or `epic <id>: <n> open`, then what you moved:
+`epic <id>: closed` or `epic <id>: <n> open`, where `<n>` counts the children still not Completed or Cancelled
+after your own moves, then what you moved:
 
 | Ticket | From → to | Evidence |
 | --- | --- | --- |
