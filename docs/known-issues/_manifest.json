@@ -2,11 +2,7 @@
   "bash-result-shunt-sh-split-segments-tokenize-scale-o-n-2-on-large-non-heredoc-commands": "65dcd1715b84624275fc36914d2af048ff02141f026c2a81b3eba132587dc40f",
   "dispatch-herdr-start-a-cold-claude-code-boot-plugin-marketplace-refresh-swallows-the-brief-herdr-reports-interactive-ready-before-the-agent-can-accept-input": "14ae32ad97c31d85686473c03e2c97c58cb161cecaeda625184efb7a6b8dce4c",
   "dispatch-herdr-start-the-60s-reached-working-wait-fails-when-several-agents-are-started-back-to-back-agent-left-idle-with-no-brief": "979addc5d0aac5c690dd2972392b8483cc996a6ebcff82031dc3f5e2713439c0",
-  "guard-fs-writes-selftest-sh-test-16-escape-exits-1-not-2": "47bfb956896c40fffaf17f507620174e687c83d0f80c19cb19d1570ae10b31de",
-  "guard-fs-writes-sh-at-user-scope-blocks-git-stash-in-every-repo-s-main-worktree-not-just-this-plugin-s": "074cbc1c79fb6672ab9d0235eacaeb7a05fabbe7b04d1341b7f69b11ff795e21",
   "land-branch-selftest-sh-needs-pyyaml-but-neither-declares-nor-checks-for-it": "2d6fed73124c694b8036fcc1fa0313b025a5e8f1d572c775d312a59431b70ac5",
-  "memory-push-selftest-sh-assertion-31-get-called-for-exactly-the-top-3-fails-intermittently-on-linux": "7560c05cd46efa8ed48a8635653646145a8173f24f54d6af82dad7994ab0d674",
   "memorygraph-link-rejects-supersedes-and-relates-to-so-a-memory-cannot-be-superseded-by-an-edge": "9c35c07d18b5b7a15cead84b286fb1f10a2200c94067df05308fa989bf08b9e9",
-  "providers-config-selftest-sh-an-implementation-name-differing-only-in-case-jira-is-accepted": "6db86fcc137eae8ce2a398162a0598d2a219af59682991d29994f64a9b28d0bb",
   "subagentstop-hook-wiring-for-script-events-hook-sh-not-yet-observed-live": "1915cc28226341d96c17c5e65323994b08327b40963c24c7b0ef8221ec22ec95"
 }

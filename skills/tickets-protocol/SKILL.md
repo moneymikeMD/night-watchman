@@ -20,9 +20,9 @@ Authoritative sources for the tickets themselves: whatever `to-issues` created
 | A problem found, not fixed | `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" add` to create an entry under `docs/known-issues/` with severity (HIGH/MEDIUM/LOW/COSMETIC) by blast radius, not effort. **Never hand-edit the generated index** — it must never drift from the entries it indexes. Template: `templates/known-issues.md` |
 | A script doc claim, checked against reality | dated row in `docs/scripts-claims.md`, updated in place on re-check. Template: `templates/scripts-claims.md` |
 
-A known issue whose symptom is gone is closed with
-`"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" resolve <slug>`;
-its body states the current fact. A confident-sounding guess in `docs/` is
+A known issue whose symptom is gone is deleted, once its facts live in the matching `docs/` file, with
+`"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" remove <slug> --root "${CLAUDE_PROJECT_DIR}"`;
+it commits nothing, so commit `docs/known-issues/` and `docs/known-issues.md` together. A confident-sounding guess in `docs/` is
 worse than no entry; future sessions read these files as ground truth.
 `"$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --known-issue)" --root "${CLAUDE_PROJECT_DIR}" lint` verifies entries and the
 index stay in sync.
