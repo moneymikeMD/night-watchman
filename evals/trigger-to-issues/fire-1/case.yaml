@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-to-issues-fire-1
+description: "Should load night-watchman:to-issues through the Skill tool."
+tags:
+- trigger
+- to-issues
+- fire
+execution:
+  prompt: "OK, that's settled: cache keyed on commit SHA, 24h TTL, evict on push to main, no Redis. Turn this into tickets so I can close this session."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?to-issues"'
+  min: 1

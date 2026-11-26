@@ -7,3 +7,11 @@ nwm8-brief-chr-no-rule-strip	1.000	yes	2.1.332	2026-11-25
 nwm8-round1-five-bugs	0.963	yes	2.1.332	2026-11-25
 ssh-op-sudo-brief-refused	1.000	yes	2.1.332	2026-11-25
 undeclared-path-and-hollow-verify	1.000	yes	2.1.332	2026-11-25
+trigger-grill	1.000	yes	2.1.332	2026-11-25
+trigger-handoff-docs	1.000	yes	2.1.332	2026-11-25
+trigger-session-start	1.000	yes	2.1.332	2026-11-25
+trigger-shell-scripting	0.933	no	2.1.332	2026-11-25
+trigger-tickets-protocol	0.867	no	2.1.332	2026-11-25
+trigger-to-issues	1.000	yes	2.1.332	2026-11-25
+trigger-wave-trail	1.000	yes	2.1.332	2026-11-25
+trigger-wrap-up	1.000	yes	2.1.332	2026-11-25

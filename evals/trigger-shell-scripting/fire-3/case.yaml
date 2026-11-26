@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-shell-scripting-fire-3
+description: "Should load night-watchman:shell-scripting through the Skill tool."
+tags:
+- trigger
+- shell-scripting
+- fire
+execution:
+  prompt: "Add a selftest for scripts/rotate-logs.sh. It must not be able to reach the network."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?shell-scripting"'
+  min: 1

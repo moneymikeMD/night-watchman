@@ -1,0 +1,24 @@
+schema_version: '1'
+name: trigger-tickets-protocol-miss-2
+description: "Near-miss: should not load night-watchman:tickets-protocol."
+tags:
+- trigger
+- tickets-protocol
+- miss
+execution:
+  prompt: "Write a Python function that parses YAML frontmatter out of a Markdown string and returns a dict. Just the code."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-stays-quiet
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?tickets-protocol"'
+  min: 0
+  max: 0

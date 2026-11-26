@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-to-issues-fire-2
+description: "Should load night-watchman:to-issues through the Skill tool."
+tags:
+- trigger
+- to-issues
+- fire
+execution:
+  prompt: "Break this plan into work I can parallelise across worktrees: 1) add a --json flag to doctor, 2) make the hooks honour it, 3) document it."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?to-issues"'
+  min: 1

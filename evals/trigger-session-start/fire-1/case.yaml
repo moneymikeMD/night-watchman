@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-session-start-fire-1
+description: "Should load night-watchman:session-start through the Skill tool."
+tags:
+- trigger
+- session-start
+- fire
+execution:
+  prompt: "Morning. Nothing specific in mind today \u2014 what can be worked on in this repo?"
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?session-start"'
+  min: 1

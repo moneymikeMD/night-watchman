@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-grill-fire-1
+description: "Should load night-watchman:grill through the Skill tool."
+tags:
+- trigger
+- grill
+- fire
+execution:
+  prompt: "Grill me on this plan: we replace Jira with plain Markdown tickets in the repo."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?grill"'
+  min: 1

@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-tickets-protocol-fire-3
+description: "Should load night-watchman:tickets-protocol through the Skill tool."
+tags:
+- trigger
+- tickets-protocol
+- fire
+execution:
+  prompt: "Capture what we just learned somewhere durable in docs/: bash 3.2 has no associative arrays, so scripts/ must not use declare -A."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?tickets-protocol"'
+  min: 1

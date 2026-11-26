@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-to-issues-fire-3
+description: "Should load night-watchman:to-issues through the Skill tool."
+tags:
+- trigger
+- to-issues
+- fire
+execution:
+  prompt: "These three tickets are too coupled for agents to pick up cold, rework them: A adds the cache config key and reads it, B also reads the cache config key, C documents the key and its default."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?to-issues"'
+  min: 1

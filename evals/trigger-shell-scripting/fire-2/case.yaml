@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-shell-scripting-fire-2
+description: "Should load night-watchman:shell-scripting through the Skill tool."
+tags:
+- trigger
+- shell-scripting
+- fire
+execution:
+  prompt: "Review this scripts/ helper before I commit it: declare -A seen; seen[$1]=1; curl -u \"$USER:$TOKEN\" \"$URL\""
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?shell-scripting"'
+  min: 1
