@@ -45,6 +45,25 @@ Rate a claim before routing it, five tiers, reusing the UNVERIFIED marker (Porte
 
 Code is mechanics, not evidence of its own intent. Causal words ("because", "fixes") need a citation next to them.
 
+## Before and after a write
+
+- **Classify before filing.** Check a new ticket, known-issue or decision record against the existing entries first, and update or supersede a match instead of filing a duplicate (ported from
+  pstack).
+- **Compensate a failed follow-on step.** When a lint, a commit or a provider call fails after a write, undo the write or note the partial state in place; never leave it half-done.
+- **Write docs prose to `docs/writing-style.md`.**
+
+## Tracker and memory: through the provider seam
+
+In tracker mode a ticket is filed, moved or annotated with `"${CLAUDE_PLUGIN_ROOT}/providers/lib/provider.sh" run tracker fetch|transition|comment|create`, the same work as a `git mv` in file mode.
+End-of-session knowledge capture, where the project has a memory provider configured, uses `"${CLAUDE_PLUGIN_ROOT}/providers/lib/provider.sh" run memory store|recall`.
+
+Always call through `${CLAUDE_PLUGIN_ROOT}`, never a bare `providers/...`: the working directory is usually the *project's*, and the plugin's providers do not live there. Never call a tracker's API
+or CLI directly instead of the provider. A tracker operation that is not one of the four tracker verbs is a gap in the provider contract to report, not a reason to reach around it.
+
+## Script retirement
+
+Retiring the scripts `cost-reviewer` flags at wave wrap-up follows [references/script-retirement.md](references/script-retirement.md): dry run first, `--yes` only for a listed candidate.
+
 ## When to file a ticket
 
 File a ticket only for work that will outlive the session. Work finished in

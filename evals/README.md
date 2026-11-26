@@ -164,6 +164,16 @@ response:
    if `verify` is empty;
 5. states it never marks a ticket completed from a read-only `verify`.
 
+## evals/librarian-script-retirement and evals/librarian-provider-seam
+
+Two more prose-plan cases for `librarian`, same `allowed_tools` as above. `retirement-candidates-dry-run-and-unlisted-refusal` hands it cost-reviewer's candidate list plus one script the
+list does not name; graders check the dry run comes before `--yes`, `--ticket`, `script-analytics` cross-check, one at a time, the unlisted script refused, prose references edited by hand,
+delete rather than a retired folder, and the `docs/handoffs/` wave note. `tracker-moves-through-provider-seam` asks for a transition, a comment, a reassignment and a direct `curl`; graders check
+the tracker verbs, `${CLAUDE_PLUGIN_ROOT}`, the refused `curl`, the reassignment reported as a provider-contract gap, and `issues.py lint`.
+
+Their baseline rows are the thin agent's scores (NWM-247). The old 1,181-word body scored 0.833 and 0.727 on them over three runs each; the thin body 0.806 and 0.758, and 1.000 on
+`chat-pasted-ticket-file-and-refuse`, as before.
+
 ## evals/researcher
 
 One case, `herdr-and-adf-one-source-unfetchable`. Design-plan /
