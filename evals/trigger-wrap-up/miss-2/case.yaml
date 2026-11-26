@@ -1,0 +1,24 @@
+schema_version: '1'
+name: trigger-wrap-up-miss-2
+description: "Near-miss: should not load night-watchman:wrap-up."
+tags:
+- trigger
+- wrap-up
+- miss
+execution:
+  prompt: "Write a handoff note for whoever continues the migration on the Mac tomorrow: step 3 of 5 is done, branch mig-3."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-stays-quiet
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?wrap-up"'
+  min: 0
+  max: 0

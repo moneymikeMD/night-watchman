@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-tickets-protocol-fire-1
+description: "Should load night-watchman:tickets-protocol through the Skill tool."
+tags:
+- trigger
+- tickets-protocol
+- fire
+execution:
+  prompt: "File a ticket for the flaky docs-site build: it fails on a cold bun cache. Backlog it."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?tickets-protocol"'
+  min: 1

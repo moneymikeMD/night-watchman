@@ -1,0 +1,30 @@
+schema_version: '1'
+name: trigger-wrap-up-fire-moneymike
+description: "Should load night-watchman:wrap-up through the Skill tool."
+tags:
+- trigger
+- wrap-up
+- fire
+- needs-moneymike-skills
+execution:
+  prompt: "let's wrap up"
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?wrap-up"'
+  min: 1
+- type: tool_used
+  name: session-harvest-stays-quiet
+  tool: Skill
+  input_match: '"skill":\s*"(moneymike-skills:)?session-harvest"'
+  min: 0
+  max: 0

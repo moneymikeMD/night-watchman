@@ -1,0 +1,24 @@
+schema_version: '1'
+name: trigger-shell-scripting-miss-1
+description: "Near-miss: should not load night-watchman:shell-scripting."
+tags:
+- trigger
+- shell-scripting
+- miss
+execution:
+  prompt: "Write a Python script that counts the words in a file given on the command line."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-stays-quiet
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?shell-scripting"'
+  min: 0
+  max: 0

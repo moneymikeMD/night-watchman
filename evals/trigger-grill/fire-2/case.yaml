@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-grill-fire-2
+description: "Should load night-watchman:grill through the Skill tool."
+tags:
+- trigger
+- grill
+- fire
+execution:
+  prompt: "Before any work starts, pressure-test my idea of moving every hook into a single dispatcher binary."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?grill"'
+  min: 1

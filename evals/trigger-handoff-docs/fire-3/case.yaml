@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-handoff-docs-fire-3
+description: "Should load night-watchman:handoff-docs through the Skill tool."
+tags:
+- trigger
+- handoff-docs
+- fire
+execution:
+  prompt: "Hand this off to someone else: the migration is half done, step 3 of 5, branch mig-3, step 4 blocked on a DNS change."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?handoff-docs"'
+  min: 1

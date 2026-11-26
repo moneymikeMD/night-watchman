@@ -1,0 +1,24 @@
+schema_version: '1'
+name: trigger-handoff-docs-miss-2
+description: "Near-miss: should not load night-watchman:handoff-docs."
+tags:
+- trigger
+- handoff-docs
+- miss
+execution:
+  prompt: "Summarise in two sentences what a git worktree is."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-stays-quiet
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?handoff-docs"'
+  min: 0
+  max: 0

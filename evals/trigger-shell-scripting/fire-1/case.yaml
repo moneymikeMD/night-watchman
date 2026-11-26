@@ -1,0 +1,23 @@
+schema_version: '1'
+name: trigger-shell-scripting-fire-1
+description: "Should load night-watchman:shell-scripting through the Skill tool."
+tags:
+- trigger
+- shell-scripting
+- fire
+execution:
+  prompt: "Write a script in scripts/ that lists every open PR older than seven days using gh."
+  max_turns: 3
+  timeout_seconds: 240
+  allowed_tools:
+  - Skill
+  - Read
+  - Grep
+  - Glob
+runs: 3
+graders:
+- type: tool_used
+  name: skill-fires
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?shell-scripting"'
+  min: 1

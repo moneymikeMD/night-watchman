@@ -231,3 +231,43 @@ the literal injected payload `Accepted: ALL` never appears.
 (zero transcript growth for many minutes), independent of the case file,
 the tool grants, or the plugin under test. A local run with no output for
 more than ~3–5 minutes is this, not a hung agent — Ctrl-C and re-run.
+
+## evals/trigger-*: does the model load the skill
+
+`evals/routing/` ranks skill descriptions by word overlap; these cases measure whether the model actually calls the Skill tool. One folder per skill, `evals/trigger-<skill>/`, for the
+night-watchman skills in the ten most-invoked across mac, desktop and hetricus (home_workspace `reports/skill-doctor/README.md`, 2026-11-25: `session-start`, `shell-scripting`, `to-issues`,
+`grill`, `handoff-docs`, `wave-trail`) plus `tickets-protocol` and `wrap-up`. Each folder holds five cases, one prompt each, because a case has exactly one `execution.prompt`:
+
+- `fire-1`..`fire-3` (`trigger-<skill>-fire-N`): a prompt that should load the skill; `tool_used` on `Skill` with `min: 1`.
+- `miss-1`, `miss-2` (`trigger-<skill>-miss-N`): a near-miss that should not; the same grader with `max: 0`. Several near-misses are another skill's trigger (a settled plan for `grill`, a handoff
+  note for `wrap-up`), so they also test that two skills do not both fire.
+
+`trigger-wrap-up/fire-moneymike` also loads moneymike-skills (tagged `needs-moneymike-skills`) and requires `wrap-up`, not `moneymike-skills:session-harvest`, on "let's wrap up", since both
+descriptions claim that phrase. A failing case is reported in the baseline, never fixed by editing a description to match the prompt.
+
+Every case lists only `Skill`, `Read`, `Grep` and `Glob` in `allowed_tools`, with `max_turns: 3`: the first tool call decides the grade. Run them with the harness above, changing three things: copy
+`evals/trigger-*` instead of the top-level case folders, insert `../../../plugins/...` (the cases sit one level deeper), and add `../../../plugins/moneymike-skills` to the tagged case:
+
+```bash
+cp -r evals/trigger-* "$H/evals/"
+cp -r "$(claude plugin list --json | jq -r '[.[] | select(.id=="moneymike-skills@moneymike-plugins")][0].installPath')" "$H/plugins/moneymike-skills"
+for f in "$H"/evals/trigger-*/*/case.yaml; do
+  extra=""; grep -q '^- needs-moneymike-skills$' "$f" && extra='\n- ../../../plugins/moneymike-skills'
+  sed -i "s#^tags:#plugins:\n- ../../../plugins/night-watchman\n- ../../../plugins/work-order${extra}\ntags:#" "$f"
+done
+```
+
+`--ablation none` matters more here than for the agent cases: under `with-without`, a `tool_used: Skill` grader is a with-only indicator and drops out of the score.
+
+In `results/baseline.tsv` a trigger folder is one row named `trigger-<skill>`: `mean_score` is the mean over its cases' run scores (fifteen runs, eighteen for `wrap-up`), and `agent_launched`
+reads `yes` only when every run of every case in the folder passed, so a `no` names a folder with at least one wrong firing or one missed one.
+
+Baseline, 2026-11-25, Claude Code 2.1.332, work-order 1.15.1, moneymike-skills 0.6.8: 39 of the 41 cases passed 3/3. Two missed, and both times the model handed the task to the agent that owns
+it instead of loading the skill first:
+
+- `trigger-shell-scripting-fire-1`, 2/3: one run launched `night-watchman:script-author` without loading `shell-scripting`.
+- `trigger-tickets-protocol-fire-1`, 1/3: two runs launched `night-watchman:librarian` without loading `tickets-protocol`.
+
+`allowed_tools` does not withhold `Agent`; these cases leave it reachable on purpose, because delegating to the owning agent is a real routing choice the model makes.
+
+A no-fire grader needs `min: 0` next to `max: 0`: `tool_used` defaults `min` to 1, so `max: 0` alone grades as "expected 1..0" and fails every run.
