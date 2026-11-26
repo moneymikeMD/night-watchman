@@ -12,6 +12,10 @@ Decide where repeated work's knowledge is kept and where it runs, as two separat
 
 Decide what an epic (or the whole backlog) still needs to reach Completed and drive it there — fill ticket fields derivable from the repo and the ticket's own text, move fully filed tickets out of triage, verify awaiting-deployment tickets against reality with read-only checks from their verify blocks, transition what the evidence supports with the evidence in the comment, and close the epic when no child is left. Ends with the epic closed or a residue list naming the single thing each remaining ticket waits on. Use when asked what is left on an epic, why tickets sit in triage, or to get an epic to Completed.
 
+## cost-review
+
+The end-of-wave cost review — record this wave's row in the cost ledger with one `claude-cost.py review` command, read the delta against the previous wave and the earlier spread, judge whether last wave's adopted recommendation moved the number it targeted, and word one recommendation for the next wave. Use at the end of a wave that keeps a cost ledger (docs/cost.md), or when asked whether a wave got cheaper, what it cost, or whether last wave's cost change worked.
+
 ## diagnose-and-pr
 
 Diagnose one firing failure signal (an alert, a failed check, a monitoring finding) against this repo with the disciplined loop (a red command before any theory), then open a draft PR fixing it on a feature branch. Never pushes to main, never remediates a live host. Use when a sweep, webhook or the owner hands over a concrete failure to debug and fix, or when the owner wants a failing behaviour diagnosed rather than a one-line answer. Pass the signal as the argument - what fired, when, and any first-pass triage.

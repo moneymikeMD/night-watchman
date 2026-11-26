@@ -1,0 +1,4 @@
+date	wave	turns	cost_usd	model_mix	orchestrator_model	orchestrator_effort	orchestrator_turns	orchestrator_usd	worker_turns	worker_usd	notes
+2026-11-02	2026-w45	180	22.0000	-	claude-fable-5-2	medium	45	6.6000	135	15.4000	-
+2026-11-09	2026-w46	176	23.1000	-	claude-fable-5-2	medium	44	6.9300	132	16.1700	-
+2026-11-16	2026-w47	185	22.4000	-	claude-fable-5-2	medium	46	6.7200	139	15.6800	-

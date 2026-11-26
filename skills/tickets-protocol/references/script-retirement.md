@@ -1,6 +1,6 @@
 # Script retirement
 
-At wave wrap-up, once `cost-reviewer` has reported its "Retirement candidates" list (rows flagged `retire?` by `script-analytics.py report --usage`), retire each one. Both scripts live in
+At wave wrap-up, once the `cost-review` skill has reported its "Retirement candidates" list (rows flagged `retire?` by `script-analytics.py report --usage`), retire each one. Both scripts live in
 ai-toolkit and are resolved at run time, never by a path in this repo:
 
 ```bash
@@ -10,7 +10,7 @@ python3 "$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --script-analytics)"
 "$(${CLAUDE_PLUGIN_ROOT}/scripts/ai-toolkit-root.sh --script-retire)" --events docs/script-events.jsonl --yes --ticket <KEY>
 ```
 
-Run `--yes` only for a candidate `cost-reviewer` actually listed, and only after the dry run.
+Run `--yes` only for a candidate the `cost-review` skill actually listed, and only after the dry run.
 
 `script-retire.sh --yes` creates branch `retire-<slug>`, deletes the script and its selftest, removes its `docs/scripts.md` row (if the project keeps one), appends a line under
 `docs/scripts.md`'s `## Retired` section, commits, and lands via the project's `scripts/land-branch.sh`, one candidate at a time, so a failure on one never blocks the rest. Use the ticket this

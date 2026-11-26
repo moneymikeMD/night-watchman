@@ -19,6 +19,9 @@ trigger-tickets-protocol	0.867	no	2.1.332	2026-11-25
 trigger-to-issues	1.000	yes	2.1.332	2026-11-25
 trigger-wave-trail	1.000	yes	2.1.332	2026-11-25
 trigger-wrap-up	1.000	yes	2.1.332	2026-11-25
+cost-review-inside-spread	1.000	yes	2.1.332	2026-11-26
+cost-review-moved	1.000	yes	2.1.332	2026-11-26
+cost-review-no-adoption	1.000	yes	2.1.332	2026-11-26
 close-epic-awaiting-verify-proxy	1.000	yes	2.1.332	2026-11-25
 close-epic-jira-already-merged-epic-gate	1.000	yes	2.1.332	2026-11-25
 close-epic-triage-derive-fields	1.000	yes	2.1.332	2026-11-25

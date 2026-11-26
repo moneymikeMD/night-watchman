@@ -8,10 +8,10 @@ committed the wave note.
 **Audit the trail.** Audit the wave-trail against this session's transcript and end the report with its Attention section — see `wave-trail`. Give each unit a fixed status tag, not free text:
 `[landed <sha>]`, `[in flight <branch>]`, `[blocked <on>]`, `[abandoned <why>]`, `[owed-human <step>]`.
 
-**Cost review, if this wave runs one.** If this wave invokes `cost-reviewer` (the optional per-wave review in `docs/cost.md`, distinct from the automatic `SessionEnd` ledger row), first record the
+**Cost review, if this wave runs one.** If this wave runs the `cost-review` skill (the optional per-wave review in `docs/cost.md`, distinct from the automatic `SessionEnd` ledger row), first record the
 `accepted` event for every script whose ticket reached completion this wave — `librarian` or the main thread runs ai-toolkit's `script-analytics.py record --event accepted ...` per script — and
-confirm each row landed by re-reading `docs/script-events.jsonl`. Only once that is confirmed, invoke `cost-reviewer`: an `accepted` event written while `cost-reviewer`'s `extract` runs lands after
-it and is silently missing from that wave's report. Fix the ordering, not the symptom: `cost-reviewer` never polls or retries for a late-arriving event.
+confirm each row landed by re-reading `docs/script-events.jsonl`. Only once that is confirmed, run `cost-review`: an `accepted` event written while its usage report runs lands after
+it and is silently missing from that wave's report. Fix the ordering, not the symptom: `cost-review` never polls or retries for a late-arriving event.
 
 ## After the handoff
 

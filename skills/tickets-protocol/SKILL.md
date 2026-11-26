@@ -62,7 +62,7 @@ or CLI directly instead of the provider. A tracker operation that is not one of 
 
 ## Script retirement
 
-Retiring the scripts `cost-reviewer` flags at wave wrap-up follows [references/script-retirement.md](references/script-retirement.md): dry run first, `--yes` only for a listed candidate.
+Retiring the scripts the `cost-review` skill flags at wave wrap-up follows [references/script-retirement.md](references/script-retirement.md): dry run first, `--yes` only for a listed candidate.
 
 ## When to file a ticket
 

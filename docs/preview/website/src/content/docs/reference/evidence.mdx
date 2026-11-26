@@ -35,7 +35,7 @@ through the same re-verification this document already argues for above; a clean
 
 # Cost ledger
 
-An optional layer (see the README's "Optional layers"): a per-wave record of what a wave of agentic work cost, so `cost-reviewer` (or a human) can ask "did last wave's change actually move the number"
+An optional layer (see the README's "Optional layers"): a per-wave record of what a wave of agentic work cost, so the `cost-review` skill (or a human) can ask "did last wave's change actually move the number"
 without re-deriving it from raw logs each time.
 
 ## Files
@@ -55,7 +55,9 @@ Two scripts, split on purpose — scan is optional, the ledger is not:
   than trusting the order, and a run by hand should do the same. When none exists it exits 2 naming every path it tried.
 - `templates/cost-ledger.tsv` — a header-only starting point. Copy it into the project (a common convention is `docs/cost-ledger.tsv`) and start appending; the header line is the schema contract — see
   below.
-- `agents/cost-reviewer.md` — the agent that runs this at the end of a wave and writes the recommendation.
+- `skills/cost-review/SKILL.md` — the forked skill that runs this at the end of a wave and writes the recommendation. Its arithmetic is one command, `claude-cost.py review`: it appends the
+  wave's row (as `append`, same flags; `--dry-run` holds it in memory) and prints `compare`, a `spread` table of earlier adjacent-wave moves with `outside_spread=yes` when this wave's move
+  exceeds all of them, and `model-compare`.
 
 ## Schema
 
@@ -87,8 +89,8 @@ ledger whose last line has no trailing newline (a crash mid-append), with a repa
 
 `claude-cost.py model-compare --ledger <path> [--wave <wave>]` is a read-only companion to `compare`: instead of the previous row, it finds the most recent EARLIER row whose `orchestrator_model`
 differs from the given (or last) row's, and prints `orchestrator_model`/ `orchestrator_effort`/`orchestrator_turns`/`orchestrator_usd` for both. If no earlier row used a different `orchestrator_model`
-— including the common case where only one model has ever been measured — it prints one explicit sentence saying so and exits 0 with no table. `cost-reviewer`'s Model section (see
-`agents/cost-reviewer.md`) uses this to compare cost; it pairs the result with the quality proxies from other sources (rework ratio and owner-wait from `script-analytics.py`'s `report --usage`,
+— including the common case where only one model has ever been measured — it prints one explicit sentence saying so and exits 0 with no table. The `cost-review` skill's Model section (see
+`skills/cost-review/SKILL.md`) uses this to compare cost; it pairs the result with the quality proxies from other sources (rework ratio and owner-wait from `script-analytics.py`'s `report --usage`,
 reviewer rounds and verify-clause pass rate from the tracker) since the ledger itself holds only cost and turns, never quality signals.
 
 ## Orchestrator model choice is a ledger-visible decision
@@ -96,7 +98,7 @@ reviewer rounds and verify-clause pass rate from the tracker) since the ledger i
 The weekly cap on `claude-fable-5-1` is separate from every other model's: Opus, Sonnet and Haiku draw from a different pool. Fable is the default orchestrator model, so routine dispatch, review
 triage and landing work burn the scarcest budget by default, whether or not the wave needed Fable's quality.
 
-The `orchestrator_model`/`orchestrator_effort` columns above, plus `claude-cost.py model-compare` and `cost-reviewer`'s Model section, make the choice measurable: once two comparable waves have run —
+The `orchestrator_model`/`orchestrator_effort` columns above, plus `claude-cost.py model-compare` and the `cost-review` skill's Model section, make the choice measurable: once two comparable waves have run —
 one orchestrated on Opus at high (or the highest available) effort, one on Fable, workers on Sonnet in both, so only the orchestrator varies — a reviewer can ask whether the cheaper model held quality
 on the ledger's quality proxies (rework ratio, owner-wait, reviewer rounds per ticket, verify failures discovered after landing) instead of asserting it.
 
@@ -107,7 +109,7 @@ does not change until one has — measure first, then decide.
 
 `claude-cost.py` itself never reads a transcript, calls any API, or knows a model's price — that is `claude-cost-scan.py`'s job, and it is optional: a project without local transcripts (or that
 prefers a provider billing export) feeds `claude-cost.py append --cost/--turns` from wherever its own accounting already lives. `claude-cost-scan.py`'s own price table (`templates/claude-prices.tsv`)
-is not cross-checked against a metrics backend — `cost-reviewer`'s optional metrics cross-check (step 3 of its procedure) is the seam for a project that has Grafana, Datadog, or similar wired in; it
+is not cross-checked against a metrics backend — the `cost-review` skill's optional metrics cross-check is the seam for a project that has Grafana, Datadog, or similar wired in; it
 is skipped, not required, when none is configured.
 
 ## Usage
@@ -163,7 +165,7 @@ the `UNVERIFIED` effort fallback.
 
 Every `claude-cost.py append` writes the same row twice: the TSV row described above, and a JSON object with the same field names as one line appended to a sibling file, `<ledger path with .tsv
 swapped for .jsonl>` (e.g. `docs/cost-ledger.jsonl` next to `docs/cost-ledger.tsv`). `ledger.jsonl` is derived and append-only — a convenient tail target for a log shipper (Promtail, Alloy, Fluent
-Bit, or similar) that wants line-delimited JSON rather than a TSV parser. It is **not** the source of truth: `cost-reviewer` and `claude-cost.py list`/`compare` read `ledger.tsv`, never the jsonl
+Bit, or similar) that wants line-delimited JSON rather than a TSV parser. It is **not** the source of truth: the `cost-review` skill and `claude-cost.py list`/`compare`/`review` read `ledger.tsv`, never the jsonl
 twin. Don't "fix" the tsv by regenerating it from the jsonl if the two ever look out of sync — the tsv is what to trust; investigate the jsonl append instead.
 
 This plugin ships no shipper config, pipeline, or dashboard for the jsonl twin — see the README's "Optional layers": the plugin never assumes an observability stack. The jsonl file is the seam; wiring
@@ -183,7 +185,7 @@ On `SessionEnd`, it:
 3. Writes `.night-watchman/last-session-cost.txt` in the session's `cwd`: line one is exactly `cost: $<usd>, <turns> turns` (the ticket-comment convention), line two is the session id and date for a
    human reader. This file is untracked — see `docs/adopting.md`'s gitignore guidance.
 
-Per session, not per wave: a wave spanning several sessions gets one ledger row per session, and `cost-reviewer` (or a human) sums them when comparing waves.
+Per session, not per wave: a wave spanning several sessions gets one ledger row per session, and the `cost-review` skill (or a human) sums them when comparing waves.
 
 Run `hooks/session-cost-selftest.sh` to check it against a fixture transcript under `hooks/fixtures/session-cost/` — structurally offline, using `NW_COST_PROJECT_SLUG`/`NW_COST_PROJECTS_DIR` overrides
 so it never touches the real `~/.claude/projects` tree, and a throwaway working directory it creates and destroys itself.
@@ -251,7 +253,7 @@ fixed precedence, evaluated in order:
 
 This flags/proposes only — it does not retire anything by itself. ai-toolkit's `script-retire.sh`, resolved by `scripts/ai-toolkit-root.sh --script-retire`, is the mechanism that turns a `retire?` row
 into an actual retirement: dry-run by default (prints the plan — script, selftest, and `docs/scripts.md` row it would remove, plus the `## Retired` line it would add — without touching anything), and
-`--yes --ticket NWM-nnn` creates branch `retire-<name>`, deletes the script/selftest/doc row, appends the `## Retired` entry, commits, and lands via `scripts/land-branch.sh`. `cost-reviewer` lists
+`--yes --ticket NWM-nnn` creates branch `retire-<name>`, deletes the script/selftest/doc row, appends the `## Retired` entry, commits, and lands via `scripts/land-branch.sh`. The `cost-review` skill lists
 `retire?` rows in its wave review under "Retirement candidates"; `librarian` runs the retirement at wrap-up (by `skills/tickets-protocol/references/script-retirement.md`). Deletion, never a
 `scripts/retired/`/`docs/retired/` folder — an LLM-readable graveyard of dead scripts costs tokens on every future read for no benefit `git log` doesn't already give.
 

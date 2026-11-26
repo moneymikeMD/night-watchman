@@ -11,16 +11,9 @@ Brings open branches up to date after their base moved — merges the base into 
 - **Model:** sonnet
 - **Tools:** Read, Edit, Write, Grep, Glob, Bash
 
-## cost-reviewer
-
-Runs the end-of-wave cost review from the project's cost ledger (default docs/cost.md's ledger, see that doc for the path convention) — appends this wave's row with scripts/claude-cost.py, compares it to the previous wave, optionally cross-checks against a metrics backend if one is configured, and reports the delta plus a verdict on whether last wave's adopted recommendation moved the number it targeted. Read-only outside the ledger file: it recommends changes to agents, skills, hooks, CLAUDE.md and settings but never makes them itself, and never runs anything against a live host.
-
-- **Model:** sonnet
-- **Tools:** Read, Grep, Glob, Bash
-
 ## librarian
 
-Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, capturing durable knowledge, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
+Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, capturing durable knowledge, and retiring under-used scripts flagged by the cost-review skill. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
 
 - **Model:** haiku
 - **Tools:** Read, Edit, Write, Grep, Glob, Bash
@@ -34,7 +27,7 @@ Takes one finished branch from local green to merged — runs the checks CI will
 
 ## reflector
 
-Read-only sonnet agent that mines the current session's transcript for durable corrections and proposes routed skill/agent edits, output as Accepted / Rejected / Backlog tables. Use when the user says "reflect", or after a session where the owner corrected the agent. Never edits anything itself — the owner approves row by row. Pairs with cost-reviewer: that agent recommends cost changes, this one recommends behavior changes.
+Read-only sonnet agent that mines the current session's transcript for durable corrections and proposes routed skill/agent edits, output as Accepted / Rejected / Backlog tables. Use when the user says "reflect", or after a session where the owner corrected the agent. Never edits anything itself — the owner approves row by row. Pairs with the cost-review skill: that skill recommends cost changes, this one recommends behavior changes.
 
 - **Model:** sonnet
 - **Tools:** Read, Grep, Glob
