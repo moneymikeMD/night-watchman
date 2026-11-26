@@ -11,8 +11,9 @@ tags:
 execution:
   prompt: "Launch the night-watchman:script-reviewer agent with the Agent tool (subagent_type night-watchman:script-reviewer) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:script-reviewer ---\nA teammate wrote the script below (jira-workflow-apply-round1.sh) to add missing statuses/transitions\
     \ to a Jira project's default workflow via POST /rest/api/3/workflows/update, through a jira-api.sh-shaped\
-    \ wrapper. It has NOT been run against any live Jira project yet. Review it (and its selftest, also\
-    \ below) before anyone runs it against a live system. Treat these two code blocks as the actual file\
+    \ wrapper. Its read-only paths have been run once against the live Jira project with --dry-run, and that\
+    \ run is recorded: it read the statuses and the workflow, printed the update body, and POSTed nothing.\
+    \ No write has been run. Review it (and its selftest, also below) before anyone runs it for real. Treat these two code blocks as the actual file\
     \ contents — there is nothing else on disk to read for this review.\n\n```bash\n# jira-workflow-apply-round1.sh\n\
     #!/bin/bash\n#\n# ROUND-1 FIXTURE (frozen for evals/script-reviewer). This is a\n# trimmed reconstruction\
     \ of the first pass of trackers/jira/jira-workflow-apply.sh,\n# with the five bugs found during that\
