@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## [2.7.0](https://github.com/moneymikeMD/night-watchman/compare/v2.6.0...v2.7.0) (2026-11-26)
+
+
+### Features
+
+* eval-weekly-harness.sh builds the eval harness and runs ai-toolkit's eval-weekly.sh against it (NWM-272) ([a90be8d](https://github.com/moneymikeMD/night-watchman/commit/a90be8da30ed9335d93ad28acaf5bf73e0c1137c))
+
+
+### Bug Fixes
+
+* **evals:** the script-reviewer case records a dry run, so the agent's live-run gate no longer refuses it (NWM-274) ([b47eadc](https://github.com/moneymikeMD/night-watchman/commit/b47eadc1653763fe435dae157d3f04fcfe8b5c58))
+
 ## [2.6.0](https://github.com/moneymikeMD/night-watchman/compare/v2.5.0...v2.6.0) (2026-11-26)
 
 
