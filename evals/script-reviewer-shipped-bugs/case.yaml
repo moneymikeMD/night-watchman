@@ -1,0 +1,144 @@
+schema_version: '1'
+name: reviewer-finds-shipped-bug-rules
+description: 'script-reviewer, handed a read-only API client whose spike is recorded, finds the shipped-bug rules it
+  breaks: op with no vault, die inside $( ), the bearer token in curl argv, declare -A on bash 3.2, raw output not
+  redacted, a pipeline with no pipe_ok ahead of its [ -s ] check; and ends on the FINDINGS tally. Ported from homelab
+  AVS-L04 (LAB-854) for NWM-250. Fixture inlined, no tools beyond Agent, regex graders.'
+tags:
+- script-reviewer
+- shipped-bug-rules
+execution:
+  prompt: |
+    Launch the night-watchman:script-reviewer agent with the Agent tool (subagent_type night-watchman:script-reviewer) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.
+
+    --- task for night-watchman:script-reviewer ---
+    Review this new script before anyone runs it. It would live at scripts/backup-age.sh. It sources scripts/lib/kit.sh (die, warn, show_help, tmpfile) and scripts/lib/http.sh, which defines redact_json (strips credential-shaped fields from JSON on stdin), curl_bearer_config (prints a curl config holding the Authorization header, for piping into curl --config -) and pipe_ok. The author's read-only spike against the backup API (GET /api/v1/snapshots with a scoped key) is recorded in the ticket, so a first round is due. The block below is the whole file; it is not on disk, so review it as given and do not run it or anything it calls. Report findings in your usual format, most severe first, and finish with your verdict.
+
+    ```bash
+    #!/usr/bin/env bash
+    # backup-age.sh — list each dataset's newest snapshot and its age, and flag
+    # datasets whose newest snapshot is older than --max-age hours.
+    #
+    # Usage: backup-age.sh [--max-age HOURS] [list|raw]
+
+    set -euo pipefail
+    # shellcheck source=lib/kit.sh
+    . "$(cd "$(dirname "$0")" && pwd)/lib/kit.sh"
+    # shellcheck source=lib/http.sh
+    . "$(cd "$(dirname "$0")" && pwd)/lib/http.sh"
+
+    BACKUP_HOST="${BACKUP_HOST:-backup.example.invalid}"
+    MAX_AGE=26
+    MODE=list
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help) show_help ;;
+            --max-age) MAX_AGE="$2"; shift 2 ;;
+            list|raw) MODE="$1"; shift ;;
+            *) die "unknown argument '$1'" ;;
+        esac
+    done
+
+    api_key() {
+        local k
+        k=$(op item get "Backup API" --fields api-key --reveal) || die "could not read the backup API key"
+        [ -n "$k" ] || die "backup API key is empty"
+        printf '%s' "$k"
+    }
+
+    api() {
+        curl -fsS -H "Authorization: Bearer $(api_key)" "https://$BACKUP_HOST/api/v1$1"
+    }
+
+    declare -A NEWEST
+
+    if [ "$MODE" = raw ]; then
+        api "/snapshots?order_by=-created"
+        exit 0
+    fi
+
+    SNAPS=$(tmpfile)
+    api "/snapshots" | jq -r '.[] | [.dataset, .created_ms] | @tsv' | sort -k1,1 -k2,2nr > "$SNAPS"
+    [ -s "$SNAPS" ] || die "the backup API returned no snapshots"
+
+    while IFS="$(printf '\t')" read -r ds created; do
+        [ -n "${NEWEST[$ds]:-}" ] || NEWEST[$ds]="$created"
+    done < "$SNAPS"
+
+    now_ms=$(( $(date +%s) * 1000 ))
+    stale=0
+    for ds in "${!NEWEST[@]}"; do
+        age_h=$(( (now_ms - NEWEST[$ds]) / 3600000 ))
+        flag=""
+        if [ "$age_h" -gt "$MAX_AGE" ]; then flag=STALE; stale=1; fi
+        printf '%s\t%s\t%s\n' "$ds" "$age_h" "$flag"
+    done | column -t
+
+    exit "$stale"
+    ```
+  max_turns: 15
+  timeout_seconds: 300
+  allowed_tools:
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: finds-vault-omission
+  target: last_message
+  pattern: vault
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-subshell-die
+  target: last_message
+  pattern: (subshell|command substitution)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-secret-in-argv
+  target: last_message
+  pattern: argv
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-bash32-assoc-array
+  target: last_message
+  pattern: (declare -A|associative arra)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-raw-unredacted
+  target: last_message
+  pattern: redact
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: finds-missing-pipe-ok
+  target: last_message
+  pattern: pipe_ok
+  match: contains
+  weight: 1
+- type: regex
+  name: ends-on-findings-tally
+  target: last_message
+  pattern: 'FINDINGS: CRITICAL=\d+ HIGH=\d+ MEDIUM=\d+ LOW=\d+'
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?script-reviewer"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

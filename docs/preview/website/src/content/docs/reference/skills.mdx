@@ -8,9 +8,17 @@ description: Generated from every skills/*/SKILL.md frontmatter block (name, des
 
 Decide where repeated work's knowledge is kept and where it runs, as two separate questions. Use when someone proposes adding a new agent, when asked "should this be a script, an agent or a skill", or when the main thread does the same work inline a second time with no fixed home for it.
 
+## close-epic
+
+Decide what an epic (or the whole backlog) still needs to reach Completed and drive it there — fill ticket fields derivable from the repo and the ticket's own text, move fully filed tickets out of triage, verify awaiting-deployment tickets against reality with read-only checks from their verify blocks, transition what the evidence supports with the evidence in the comment, and close the epic when no child is left. Ends with the epic closed or a residue list naming the single thing each remaining ticket waits on. Use when asked what is left on an epic, why tickets sit in triage, or to get an epic to Completed.
+
+## cost-review
+
+The end-of-wave cost review — record this wave's row in the cost ledger with one `claude-cost.py review` command, read the delta against the previous wave and the earlier spread, judge whether last wave's adopted recommendation moved the number it targeted, and word one recommendation for the next wave. Use at the end of a wave that keeps a cost ledger (docs/cost.md), or when asked whether a wave got cheaper, what it cost, or whether last wave's cost change worked.
+
 ## diagnose-and-pr
 
-Wiring guidance for dispatching a failure signal (an alert, a failed check) to the diagnose-and-pr agent and handling its output. Use when a project wants to turn monitoring findings into draft PRs instead of manual triage, when deciding what counts as in-scope for that agent, or when the owner asks to diagnose/debug a specific failing behaviour and wants the disciplined loop (a red command before any theory), not a one-line question.
+Diagnose one firing failure signal (an alert, a failed check, a monitoring finding) against this repo with the disciplined loop (a red command before any theory), then open a draft PR fixing it on a feature branch. Never pushes to main, never remediates a live host. Use when a sweep, webhook or the owner hands over a concrete failure to debug and fix, or when the owner wants a failing behaviour diagnosed rather than a one-line answer. Pass the signal as the argument - what fired, when, and any first-pass triage.
 
 ## grill
 
@@ -19,6 +27,10 @@ Stress-test a plan, design, or decision by interviewing the owner in rounds unti
 ## handoff-docs
 
 Writing a handoff note for whoever picks this up next — a fresh session, or a different person. Use when the user says "write up where we left off", or when unfinished work is moving to another machine or person.
+
+## land-a-pr
+
+Take one finished branch from local green to merged through a pull request — run the checks CI requires before the first push, push, open the PR, watch its required checks, read the failing job's log on red, fix only what is inside the branch's scope, and merge through pr-land.sh when the repo's recorded landing policy lets an agent merge its own PR. Use whenever a session lands a branch through a PR rather than land-branch.sh's direct merge, a PR's required checks went red, or a green PR is waiting to be merged.
 
 ## resync-branches
 
@@ -31,6 +43,10 @@ The opening move for a fresh session in a project running this plugin's unattend
 ## shell-scripting
 
 Shared-lib conventions and the shipped-bug rules for scripts/ — bash 3.2 limits, subshell die, pipe_ok, secrets in argv, and structural network isolation in selftests. Load before writing or reviewing anything in scripts/.
+
+## spec-review
+
+The rules a finished ticket branch is judged by before it lands — the repo's required checks, issues.py scope, each Solution item done, partial, missing or done differently, behaviour no ticket section asked for, a verify that would pass without the intended effect, and the LAND / LAND AFTER FIXES / DO NOT LAND verdict. Load to review a ticket branch against its own ticket, to land a branch as wave-supervisor, or to check your own branch before reporting it done.
 
 ## tickets-protocol
 

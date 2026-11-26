@@ -1,0 +1,59 @@
+schema_version: '1'
+name: diagnose-and-pr-signal-missing-when
+description: 'diagnose-and-pr, handed a vague signal with no check name, no log and no timestamp, must stop and
+  name what is missing instead of guessing the incident, diagnosing, or planning a branch. Prose case graded
+  on last_message; allowed_tools is Read/Grep/Glob plus the Skill call, so nothing is created.'
+tags:
+- diagnose-and-pr
+- input-contract
+execution:
+  prompt: "Call the night-watchman:diagnose-and-pr skill with the Skill tool (skill night-watchman:diagnose-and-pr), passing the whole task below as its args; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:diagnose-and-pr ---\nSomething in the Jira provider has been going red on and off lately, I think one of the selftests under providers/tracker/jira/. Nobody saved the output. Find out what is broken and open a draft PR with the fix.\n\nBash, Edit and Write are not available in this evaluation and no live host, Jira or GitHub remote is reachable; Read/Grep/Glob are. Answer in prose, no fenced code blocks."
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: names-missing-when
+  target: last_message
+  pattern: (timestamp|when it (fired|failed|ran)|what time|which run|date)
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: names-missing-what-fired
+  target: last_message
+  pattern: (which (selftest|check|test)|check name|the (specific|exact) (check|selftest|test)|failing output|the log|log output)
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: does-not-plan-a-branch
+  target: last_message
+  pattern: (I would|I'll|I will|let me) create a branch
+  match: not_contains
+  weight: 2
+  flags: i
+- type: regex
+  name: no-invented-root-cause
+  target: last_message
+  pattern: root cause (is|was)\b
+  match: not_contains
+  weight: 1
+  flags: i
+- type: tool_used
+  name: calls-skill-under-test
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?diagnose-and-pr"'
+  min: 1
+  weight: 1
+- type: regex
+  name: skill-resolves
+  target: trace
+  pattern: Unknown skill
+  match: not_contains
+  weight: 1

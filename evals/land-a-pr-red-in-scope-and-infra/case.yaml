@@ -1,0 +1,73 @@
+schema_version: '1'
+name: land-a-pr-red-in-scope-and-infra
+description: 'Two required checks are red on a pushed PR: shellcheck fails on a file the branch changed, and selftests
+  failed because the runner was lost. The shepherd must rerun only the infrastructure failure, once, and fix the
+  in-scope one locally, without rerunning the real failure.'
+tags:
+- pr-shepherd
+- land-a-pr
+- red
+execution:
+  prompt: "Launch the night-watchman:pr-shepherd agent with the Agent tool (subagent_type night-watchman:pr-shepherd)\
+    \ and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and\
+    \ add nothing.\n\n--- task for night-watchman:pr-shepherd ---\nThis is a rehearsal over a fixture repo: Bash\
+    \ is not available to you in this run, and every gh and git output below was recorded from a stubbed gh. Do\
+    \ not try to run anything. Say, in order, each exact command you would run next and why, then give your standard\
+    \ report.\n\nBranch wid-42 in worktree /work/widget-wid-42, ticket WID-42, repo acme/widget, default branch\
+    \ main. Merge authority: merge (the repo's CLAUDE.md records that an agent may merge its own PR once required\
+    \ checks are green). The branch's diff against main touches only scripts/rotate.sh and scripts/rotate-selftest.sh.\
+    \ The local gate passed and the branch is already pushed as PR #17.\n\n$ gh pr checks 17 --json name,state,link\n\
+    [{\"name\":\"shellcheck\",\"state\":\"FAILURE\",\"link\":\"https://github.com/acme/widget/actions/runs/9001/job/1\"\
+    },\n {\"name\":\"selftests\",\"state\":\"FAILURE\",\"link\":\"https://github.com/acme/widget/actions/runs/9002/job/1\"\
+    },\n {\"name\":\"docs\",\"state\":\"SUCCESS\",\"link\":\"https://github.com/acme/widget/actions/runs/9003/job/1\"\
+    }]\n\n$ gh run view 9001 --log-failed | tail -150\nshellcheck  Run shellcheck  In scripts/rotate.sh line 14:\n\
+    shellcheck  Run shellcheck      mv $src \"$dest\"\nshellcheck  Run shellcheck         ^--^ SC2086 (info): Double\
+    \ quote to prevent globbing and word splitting.\nshellcheck  Run shellcheck  ##[error]Process completed with\
+    \ exit code 1.\n\n$ gh run view 9002 --log-failed | tail -150\nselftests  Set up job  ##[error]The self-hosted\
+    \ runner: runner-3 lost communication with the server. Verify the machine is running and has a healthy network\
+    \ connection.\n\n$ grep -ril 'lost communication with the server' docs/known-issues/\n(no output)\n"
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: reruns-the-infra-failure-only-failed-jobs
+  target: last_message
+  pattern: gh run rerun\s+(9002\s+--failed|--failed\s+9002)
+  match: contains
+  weight: 3
+- type: regex
+  name: fixes-the-in-scope-shellcheck-finding
+  target: last_message
+  pattern: (?=[\s\S]*rotate\.sh)(?=[\s\S]*SC2086)
+  match: contains
+  weight: 2
+- type: regex
+  name: does-not-rerun-the-real-failure
+  target: last_message
+  pattern: gh run rerun\s+(--failed\s+)?9001
+  match: not_contains
+  weight: 2
+- type: regex
+  name: pushes-the-fix-without-force
+  target: last_message
+  pattern: git (-C \S+ )?push(?![^\n]*(--force|\s-f\b))
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?pr-shepherd"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

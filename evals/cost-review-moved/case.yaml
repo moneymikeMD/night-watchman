@@ -1,0 +1,99 @@
+schema_version: '1'
+name: cost-review-moved
+description: "Last wave adopted one change targeting cost_usd down; cost fell 24.76% against an earlier max adjacent move of 6.35%, so the verdict is moved. Only one orchestrator model is in the ledger."
+tags:
+- cost-review
+execution:
+  prompt: |-
+    Run this plugin's end-of-wave cost review on the brief below, through the plugin's own cost review (the night-watchman:cost-review skill, or the night-watchman:cost-reviewer agent if that is what this plugin ships). Do not do the review yourself. Pass the whole brief through unchanged. When it returns, reply with its report verbatim and add nothing.
+
+    --- brief ---
+    Wave 2026-w48, started 2026-11-16T09:00Z. Ledger: docs/cost-ledger.tsv (fixture copy: evals/cost-review-moved/fixtures/ledger.tsv, the four earlier waves).
+    Adopted from last wave's review: "spec-reviewer runs once per branch, not per commit", targeting cost_usd down.
+    No metrics backend is configured. docs/script-events.jsonl does not exist yet.
+
+    The review command already ran from the repo root (python3 scripts/claude-cost.py review ... --format md) and appended this wave's row; do not run it again. Bash is not available in this evaluation and there is no live host. Its output, exactly as printed:
+
+    # review: wave 2026-w48 appended to docs/cost-ledger.tsv
+    # compare: 2026-w47 -> 2026-w48
+    | metric | previous | current | delta | delta_pct | direction |
+    | --- | --- | --- | --- | --- | --- |
+    | turns | 318 | 296 | -22 | -6.92 | down |
+    | cost_usd | 41.2000 | 31.0000 | -10.2000 | -24.76 | down |
+    | orchestrator_turns | 106 | 98 | -8 | -7.55 | down |
+    | orchestrator_usd | 16.4800 | 12.4000 | -4.0800 | -24.76 | down |
+    | worker_turns | 212 | 198 | -14 | -6.60 | down |
+    | worker_usd | 24.7200 | 18.6000 | -6.1200 | -24.76 | down |
+    # spread: |delta_pct| of each earlier adjacent pair; outside_spread=yes only above the earlier max
+    | metric | earlier_pairs | median_abs_pct | max_abs_pct | current_abs_pct | outside_spread |
+    | --- | --- | --- | --- | --- | --- |
+    | turns | 3 | 4.84 | 6.15 | 6.92 | yes |
+    | cost_usd | 3 | 6.25 | 6.35 | 24.76 | yes |
+    | orchestrator_turns | 3 | 4.95 | 6.48 | 7.55 | yes |
+    | orchestrator_usd | 3 | 6.25 | 6.35 | 24.76 | yes |
+    | worker_turns | 3 | 4.83 | 5.99 | 6.60 | yes |
+    | worker_usd | 3 | 6.25 | 6.35 | 24.76 | yes |
+    # model-compare: wave '2026-w48' ran orchestrator_model 'claude-opus-5-5'; no EARLIER wave in docs/cost-ledger.tsv used a different orchestrator_model — only one model has been measured so far, nothing to compare it against yet
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: pastes-compare-table
+  target: last_message
+  pattern: "cost_usd\\s*\\|\\s*41\\.2000\\s*\\|\\s*31\\.0000"
+  match: contains
+  weight: 1
+- type: regex
+  name: verdict-moved
+  target: last_message
+  pattern: "\\bmoved\\b(?!\\s+the\\s+wrong)"
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: verdict-not-no-effect
+  target: last_message
+  pattern: "verdict\\W{0,8}no effect"
+  match: not_contains
+  weight: 1
+  flags: i
+- type: regex
+  name: cites-earlier-spread
+  target: last_message
+  pattern: "6\\.35"
+  match: contains
+  weight: 1
+- type: regex
+  name: one-model-sentence-verbatim
+  target: last_message
+  pattern: "only one model has been measured so far"
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: says-no-metrics-cross-check
+  target: last_message
+  pattern: "(no metrics|metrics[^\\n]{0,60}(skip|not configured|none|no backend|not run|n/a))"
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ticket-ready-recommendation
+  target: last_message
+  pattern: "(?=[\\s\\S]*\\bProblem\\b)(?=[\\s\\S]*\\bSolution\\b)(?=[\\s\\S]*\\bverify\\b)"
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: runs-cost-review
+  target: trace
+  pattern: "\"(subagent_type|skill)\"\\s*:\\s*\"(night-watchman:)?cost-review(er)?\""
+  match: contains
+  weight: 1

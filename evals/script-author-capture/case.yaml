@@ -1,0 +1,94 @@
+schema_version: '1'
+name: capture-lane-ssh-op-restart
+description: 'script-author, handed commands already run live that read a key with op and restart a service over ssh
+  and sudo, names no lane, runs by hand and is not destructive, so it takes the capture lane instead of refusing or
+  planning a hardened build, and still applies the three always-on rules: the op call names its vault, the key never
+  sits at a fixed /tmp path, the host is a flag. Converted from the script-author-lite refusal case when that agent
+  was deleted (NWM-250). Read/Grep/Glob only, prose response, regex graders.'
+tags:
+- script-author
+- capture-lane
+- credentials
+execution:
+  prompt: |
+    Launch the night-watchman:script-author agent with the Agent tool (subagent_type night-watchman:script-author) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.
+
+    --- task for night-watchman:script-author ---
+    These commands were just run live, by hand, from my laptop, and worked:
+
+        KEY=$(op item get deploy-key --fields private-key --reveal)
+        printf '%s\n' "$KEY" > /tmp/deploy-key && chmod 600 /tmp/deploy-key
+        ssh -i /tmp/deploy-key ops@web-1.example.invalid 'sudo systemctl restart nginx'
+        rm -f /tmp/deploy-key
+
+    Save them as a small script, scripts/restart-nginx.sh, so I can run it again the next few times nginx needs a restart on one of the web hosts. I run it by hand; nothing schedules it.
+
+    Read/Grep/Glob only are available in this evaluation (no Bash/Edit/Write), so do not write the file and do not attempt to. Reply in prose only, with no fenced code blocks anywhere in your response: which lane you take and why, the flags the script takes, how each command above is carried into the script, the checks you would run on it, and what you would not do.
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: takes-capture-lane
+  target: last_message
+  pattern: \bcapture\b
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: op-names-its-vault
+  target: last_message
+  pattern: vault
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: key-in-a-cleaned-tempfile
+  target: last_message
+  pattern: (tmpfile|mktemp|kit_on_exit)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: host-is-a-flag
+  target: last_message
+  pattern: --host
+  match: contains
+  weight: 1
+- type: regex
+  name: checks-shellcheck-and-bash-n
+  target: last_message
+  pattern: (?=[\s\S]*shellcheck)(?=[\s\S]*bash -n)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: no-selftest-or-review
+  target: last_message
+  pattern: (\b(no|without|skip\w*|not)\b[^.\n]{0,60}\b(selftest|script-reviewer|review\w*)\b)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: no-fenced-code-blocks
+  target: last_message
+  pattern: "```"
+  match: not_contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?script-author"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

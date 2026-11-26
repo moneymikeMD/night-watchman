@@ -5,17 +5,86 @@ description: Shared-lib conventions and the shipped-bug rules for scripts/ — b
 
 # Shell scripting
 
-The working subset script-author and script-reviewer both check against.
+The working subset script-author and script-reviewer both check against. The reviewer's checklist is
+[references/review-checklist.md](references/review-checklist.md), so the author reads the same rules.
 
-## The bar for a script
+## Pick the lane first
 
-Before any convention below applies, check whether a script is warranted at
-all. `scripts/` is warranted only if at least one holds: **reusable** (would
-running it again in six months make sense — not "might someone want it"),
-**owner must run it** (sudo, or interactive on a host the agent cannot
-reach), or **touches a credential or writes to a host** (needs the guards
-below even for a one-off). If none holds, the deliverable is a fenced
-command block in the ticket, not a script.
+The owner, 2026-11-25: "What I don't want is me wasting hours of my time watching the agent write a
+bulletproof script that only gets used 2 or 3 times, if that." Most scripts run a handful of times, so
+the cheap lane is the default and hardening is earned.
+
+| Lane | When | Deliverable |
+| --- | --- | --- |
+| **Command block** | The script bar (below) fails | No script: the exact commands in a fenced block in the ticket |
+| **Capture** (default) | The bar holds and no hardened trigger does | One file under about 80 lines; or a bounded edit to an existing script when the diagnosis is supplied |
+| **Hardened** | A hardened trigger holds | A blueprint and ledger, a selftest on recorded fixtures, the project's lint script, a `script-reviewer` round |
+
+**Hardened triggers.** Any one is enough:
+
+1. **Unattended**: it runs with nobody watching (cron, a timer, a hook, CI, an alert path).
+2. **Destructive**: it makes a destructive or hard-to-reverse change on a host or through an API
+   (deletes data, overwrites a config without keeping the previous one, rotates a secret).
+3. **Shared library**: it changes the shared shell library (`scripts/lib/`, `providers/lib/`).
+4. **Earned**: the project's usage log shows it has been run enough to be worth it, or the owner asks.
+
+When a brief names a lane, take it. When it names none, take capture unless a trigger holds, and say in
+the first lines of the reply which trigger holds, or that none does. A script that reads a credential
+or writes to a host takes capture unless it is also unattended or destructive (owner, 2026-11-25): the
+three rules below cover the credential.
+
+### The script bar
+
+`scripts/` is warranted only if at least one holds: **reusable** (would running it again in six months
+make sense — not "might someone want it"), **owner must run it** (sudo, or interactive on a host the
+agent cannot reach), or **touches a credential or writes to a host**. If none holds, the deliverable is
+a fenced command block in the ticket, not a script.
+
+## Three rules in every lane
+
+Each shipped as a bug, and none costs more than a line. A capture brief that pastes commands breaking
+them is transcribed with the rule applied, not copied as run.
+
+1. **No secret in argv.** Not `curl -u`, `-H "Authorization: Bearer $T"`, a key in the URL,
+   `jq --arg` with a credential, or `env VAR=val cmd` (the assignment is env's own argv). Config goes
+   to curl on stdin (`curl --config -`); in jq, `export` then `$ENV.NAME`. A key file lives in a
+   `tmpfile`, removed on exit, never at a fixed `/tmp` path.
+2. **Raw API output goes through the redaction helper.** Any mode that prints an API's JSON unfiltered
+   (`raw`, a full-object dump, `jq .`) pipes it through the project's redactor first.
+3. **Every credential-store call names its scope.** For 1Password, every `op` call names its vault
+   (`--vault`, an `op://<vault>/...` reference, or a helper that defaults to the project's vault).
+   Without it the interactive path passes and the service-account path dies.
+
+## Capture lane
+
+The default: commands already run live ("save that as a script"), or a bounded edit to an existing
+script. Transcription, not design.
+
+**New script from commands already run.** `#!/bin/bash`, `set -euo pipefail`, a header comment with a
+`Usage:` block that `--help` prints, a flag for each value that varied (defaults from the session), the
+commands as run with the three rules applied, dying on an empty or `null` result. Source the shared
+library when the script needs a credential, prints API output or reaches a host. Under about 80 lines.
+No selftest, no fixtures, no reviewer. Check with `shellcheck <file>` and `bash -n <file>`, plus `--help`
+and argument-validation runs with every host variable pointed at `127.0.0.1`. Never run it against a
+host; the main thread runs it live.
+
+**Bounded edit to an existing script.** The brief names the script, the live diagnosis (what fired,
+what was observed) and the exact change. Missing either the diagnosis or the change: hand it back and
+say which. Make that change and nothing else, in the script's existing style. Run `shellcheck`,
+`bash -n` and the script's existing selftest, and hand back the diff and the three results.
+
+## Hardened lane
+
+- **Blueprint before code**: the stages in order, what each reads or writes, its flags and gating.
+- **Spike first.** An API-facing script starts with a recorded live run against a throwaway target,
+  run by the main thread; the fixtures come from that run (below). The author never reaches a host.
+- **A destructive change is staged**: `--dry-run` or a list-first mode, stage → validate → apply with
+  the previous version kept, and a floor a bad input cannot get past.
+- **A selftest on recorded fixtures**, proven red by mutating the script under test, offline by
+  construction (rule 5 below), then the project's lint script.
+- **Ledger**: answer [references/review-checklist.md](references/review-checklist.md) item by item.
+- **Review**: one `script-reviewer` round; a second only when the first reported a CRITICAL or HIGH.
+  Findings reach the author as failing cases, never as fix code.
 
 ## Shape
 
@@ -48,7 +117,7 @@ target, validates inputs and fails loudly, is safe to run twice, and answers
   above it, and any rationale already recorded elsewhere (a decisions log,
   durable project memory) is deleted rather than duplicated in-line.
 
-## The five rules (each shipped as a bug)
+## The shipped-bug rules
 
 1. **`die` inside `$( )` does not stop the script.** Command substitution
    runs in a subshell. Fallible helpers *return* non-zero and print nothing:
@@ -67,13 +136,10 @@ target, validates inputs and fails loudly, is safe to run twice, and answers
    touching anything. Readers consume to EOF — `grep -c PATTERN >/dev/null`,
    `awk` without an early `exit` — unless the writer's exit is irrelevant,
    in which case `|| pipe_ok` says so explicitly.
-3. **Secrets must not enter argv.** Mechanics: config on stdin
-   (`curl_auth_config`/`curl_form_config`-style helpers) and exported
-   `$ENV.NAME` in jq, never a bare CLI flag or an interpolated string.
-4. **A credential-store call needs an explicit scope under a service
-   account.** The interactive path passes; the unattended one dies. Helpers
-   should default to the project's own scope/vault variable rather than
-   omitting it.
+3. **Secrets must not enter argv**, and **4. a credential-store call names
+   its scope**: the first and third always-on rules above. Helpers such as
+   `curl_auth_config`/`curl_form_config` put the config on stdin; helpers
+   should default to the project's own scope/vault variable.
 5. **A test invocation never reaches a live host — and only the target-host
    variable guarantees that.** Any script with an apply/POST/run path is
    tested with every relevant target-host variable exported to an
@@ -106,7 +172,7 @@ Sixth, smaller: render fields through a `blank()`-style helper before
 `// "-"` default in jq does not catch an actual empty string; that is what
 the helper is for.
 
-## Fixtures are recorded, never authored
+## Fixtures are recorded, never authored (hardened lane)
 
 Every wrapper subcommand or API a new script consumes gets its real output
 captured once — a read-only call runs live; a write call comes from a real
@@ -145,7 +211,8 @@ credential behind a real finding.
 
 ## Lint
 
-The project's lint script (shellcheck with `-x -P SCRIPTDIR`; every script
+Capture: `shellcheck` and `bash -n` on the file. Hardened, and any change a
+landing will lint: the project's lint script (shellcheck with `-x -P SCRIPTDIR`; every script
 carries a `# shellcheck source=` comment because the source line is computed
 at runtime). The zsh trap: unquoted `$FILES` does **not** word-split in zsh,
 so a hand-run `shellcheck $FILES` checks one giant filename and reports zero
@@ -155,14 +222,6 @@ need a reason at the site.
 **Cap: two failed lint runs.** If the lint script fails twice in a session,
 script-author stops and reports the failing case verbatim to the orchestrator
 instead of running it a third time.
-
-## Review scope: narrowed default
-
-`script-reviewer` runs by default only for scripts touching credentials,
-hosts, sudo, or any diff to `scripts/lib/*` (this project's shared library —
-whatever this skill's "Shape" section says a script sources for common
-helpers). Every other script ships on the author's lint + selftest alone; the
-reviewer runs on owner/orchestrator request, not automatically.
 
 ## Wizards for `human_steps`
 
@@ -177,6 +236,5 @@ The one rule that matters: `ask_secret` never writes a raw value to disk.
 It pipes the value on stdin to a caller-named sink command (the secrets
 provider's underlying CLI, or `gh secret set`) and records only the
 resulting reference locator via `write_env` — never the secret itself.
-This is a credential path, so `script-reviewer` is mandatory regardless of
-the narrowed-default rule above, and the selftest must prove a planted
-secret never reaches combined stdout+stderr of a full run.
+A wizard is a credential path: its selftest must prove a planted secret
+never reaches combined stdout+stderr of a full run.

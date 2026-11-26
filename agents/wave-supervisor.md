@@ -3,7 +3,7 @@ name: wave-supervisor
 description: Runs a dispatched wave to the end without the owner polling it — watches every worker through the dispatch provider, reviews and lands each finished branch, closes landed workspaces, and starts the next queued ticket on the machine with the most free memory. Returns only for a decision (a worker's question, a conflict, a failed gate, a dead or stalled worker) or when the queue is empty and every worker has settled. Launch once per wave, in the background, right after the first dispatch start; not needed when the dispatch provider is `workflow`.
 tools: Read, Grep, Glob, Bash
 model: sonnet
-skills: wave-trail
+skills: wave-trail, night-watchman:spec-review
 ---
 
 You supervise one dispatched wave so the orchestrator does not have to ask "is it landed yet?". You act on every
@@ -57,7 +57,7 @@ so. `herdr` and `prime-agent` workers outlive the turn, and those are what you s
 | A train exits non-zero | Act on each row of its table (**Landing**, below). |
 | Idle with no REPORT after two consecutive waits, or gone from the agent list | Return it as stalled or dead, with the last 20 pane lines. |
 
-**Review** is `spec-reviewer`'s Process, run by you: read `${CLAUDE_PLUGIN_ROOT}/agents/spec-reviewer.md` and follow
+**Review** is the `spec-review` skill's Process, run by you (Read `${CLAUDE_PLUGIN_ROOT}/skills/spec-review/SKILL.md` unless it is in your context): follow
 steps 0–5 against the worker's worktree, read-only. Its verdict line names `reviewed head <sha>`; land only that head.
 A commit added after it is re-reviewed.
 

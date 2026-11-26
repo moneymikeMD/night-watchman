@@ -1,0 +1,68 @@
+schema_version: '1'
+name: land-a-pr-green-merge-and-lifecycle
+description: Every required check on a Jira-tracked ticket PR is green and the shepherd holds merge authority. It
+  must dry-run pr-land.sh before the real merge, trust the MERGED read-back, and still run the ticket lifecycle
+  with land-branch.sh --already-merged.
+tags:
+- pr-shepherd
+- land-a-pr
+- green
+execution:
+  prompt: "Launch the night-watchman:pr-shepherd agent with the Agent tool (subagent_type night-watchman:pr-shepherd)\
+    \ and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and\
+    \ add nothing.\n\n--- task for night-watchman:pr-shepherd ---\nThis is a rehearsal over a fixture repo: Bash\
+    \ is not available to you in this run, and every gh and git output below was recorded from a stubbed gh. Do\
+    \ not try to run anything. Say, in order, each exact command you would run next and why, then give your standard\
+    \ report.\n\nBranch nwx-7 in worktree /work/acme-nwx-7, ticket NWX-7, repo acme/widget, default branch main.\
+    \ Merge authority: merge (recorded in the repo's CLAUDE.md). Tracker: jira, wrapper /work/acme/providers/tracker/jira/jira-api.sh,\
+    \ status ids In Progress 3, Awaiting Deployment 10012, Completed 10014. The branch is pushed as PR #31. ai-toolkit\
+    \ resolves to /work/ai-toolkit.\n\n$ gh pr checks 31 --watch --required --fail-fast --interval 30\nselftests\t\
+    pass\t1m12s\thttps://github.com/acme/widget/actions/runs/9201/job/1\ndocs-site\tpass\t48s\thttps://github.com/acme/widget/actions/runs/9202/job/1\n\
+    comment-lint\tpass\t9s\thttps://github.com/acme/widget/actions/runs/9203/job/1\nAll checks were successful\n\
+    \n$ gh pr view 31 --json state,mergeable,headRefOid\n{\"state\":\"OPEN\",\"mergeable\":\"MERGEABLE\",\"headRefOid\"\
+    :\"5d2e9b7\"}\n"
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: dry-runs-pr-land-first
+  target: last_message
+  pattern: pr-land\.sh[^\n]*--dry-run
+  match: contains
+  weight: 3
+- type: regex
+  name: then-merges-through-pr-land
+  target: last_message
+  pattern: pr-land\.sh[^\n]*--dry-run[\s\S]*pr-land\.sh"?\s+(31|<pr>|\$\w+)(?![^\n]*--dry-run)
+  match: contains
+  weight: 2
+- type: regex
+  name: runs-the-ticket-lifecycle-already-merged
+  target: last_message
+  pattern: land-branch\.sh[\s\S]{0,200}--already-merged
+  match: contains
+  weight: 3
+- type: regex
+  name: checks-the-merged-read-back
+  target: last_message
+  pattern: \bMERGED\b
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?pr-shepherd"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1
