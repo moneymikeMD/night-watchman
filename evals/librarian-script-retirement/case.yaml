@@ -62,7 +62,7 @@ graders:
 - type: regex
   name: deletes-not-moves-to-retired
   target: last_message
-  pattern: (delet\w*)[^.\n]{0,160}(not|never|rather than|instead of)[^.\n]{0,80}retired/|(not|never|rather than|instead of)[^.\n]{0,80}(mov\w*)[^.\n]{0,80}retired/
+  pattern: (delet\w*)[^.\n]{0,160}(not|never|rather than|instead of)[^.\n]{0,80}retired(/|\s+(folder|director))|(not|never|rather than|instead of)[^.\n]{0,80}(mov\w*)[^.\n]{0,80}retired(/|\s+(folder|director))
   match: contains
   weight: 1
   flags: i
