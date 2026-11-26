@@ -98,7 +98,7 @@ finish without asking questions, and launch them all in **one** message:
 | Research a fact outside the repo (a version, a maturity check, a licence) | `researcher` | mid-tier |
 | New or changed script | `script-author` → `script-reviewer` | mid-tier / top-tier for review judgement |
 | Write up a proven, non-privileged command sequence as a script | `script-author-lite` (refuses and hands back to `script-author` on ssh/op/sudo/live-host) | cheapest available |
-| Ticket moves, decisions, known-issues, wrap-up | `librarian` | cheapest available |
+| Ticket moves, decisions, known-issues, knowledge capture | `librarian` | cheapest available |
 | Take an epic (or the backlog) to Completed: fill derivable fields, verify, transition | `epic-closer` | mid-tier |
 | Domain-specific work (infra, deploy, a particular stack) | whatever domain agents the project itself defines — this plugin ships none; a project wires its own | project-specific |
 
