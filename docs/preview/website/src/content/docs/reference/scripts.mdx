@@ -12,12 +12,13 @@ ai-toolkit-root.sh — print the root of the ai-toolkit checkout this repo
 consumes operator scripts from, so nothing here needs a second copy of one.
 
 ```text
-Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core|--decisions]
+Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core|--decisions|--eval-weekly]
   Prints the directory holding ai-toolkit's scripts/. With a flag, prints
   that script's path inside it instead. Each flag names a script this repo
   donated and now consumes: known-issue.sh (NWM-128), script-analytics.py
   and script-retire.sh (NWM-130), and land-core.sh, the merge-and-push
-  core land-branch.sh wraps (NWM-131), and decisions.sh (NWM-203).
+  core land-branch.sh wraps (NWM-131), decisions.sh (NWM-203), and
+  eval-weekly.sh, which eval-weekly-harness.sh runs (NWM-272).
 ```
 
 ### scripts/bash-family-report.py
@@ -66,6 +67,18 @@ Usage:
   dev-install.sh --status
   dev-install.sh --uninstall [--marketplace-dir DIR] [--name NAME]
   dev-install.sh --help
+```
+
+### scripts/eval-weekly-harness.sh
+
+eval-weekly-harness.sh — run ai-toolkit's eval-weekly.sh against this
+plugin's eval suite, inside the harness directory the baseline was taken
+from (evals/README.md, "Running a case: work-order must load alongside").
+
+```text
+Usage:
+  eval-weekly-harness.sh [eval-weekly.sh options]   # e.g. --max-cost-usd 40
+  eval-weekly-harness.sh --build-only DIR            # build the harness, run nothing
 ```
 
 ### scripts/gen-reference-docs.sh

@@ -25,22 +25,29 @@ agents, so every Agent call fails with `Agent type
 `--plugin-dir` satisfies the dependency. The eval harness only passes a
 second plugin through a case's `plugins:` list, though, and refuses an
 entry that covers the case's own directory. So run the suite from a
-harness directory where both plugins sit beside the cases:
+harness directory where both plugins sit beside the cases.
+
+`scripts/eval-weekly-harness.sh --build-only DIR` builds that directory:
+this checkout's tracked files minus `evals/` under
+`plugins/night-watchman`, the user-scope installs of work-order and (for a
+case tagged `needs-moneymike-skills`) moneymike-skills beside it, every case
+folder under `evals/` with a `plugins:` list appended to each `case.yaml` at
+its own depth, and the baseline. Run one case from it:
 
 ```bash
-H=$(mktemp -d); mkdir -p "$H/plugins/night-watchman" "$H/evals"
-git ls-files -z | grep -zv '^evals/' | xargs -0 cp --parents -t "$H/plugins/night-watchman"
-cp -r "$(claude plugin list --json | jq -r '[.[] | select(.id=="work-order@moneymike-plugins")][0].installPath')" "$H/plugins/work-order"
-for d in evals/*/; do [ -f "$d/case.yaml" ] && cp -r "$d" "$H/evals/"; done
-for f in "$H"/evals/*/case.yaml; do
-  sed -i 's#^tags:#plugins:\n- ../../plugins/night-watchman\n- ../../plugins/work-order\ntags:#' "$f"
-done
+H=$(mktemp -d)/night-watchman
+scripts/eval-weekly-harness.sh --build-only "$H"
 cd "$H" && claude plugin eval . --case <name> --runs 3 --ablation none \
   --no-publish --max-cost-usd 2 --trust-plugin --threshold 0 --keep-temp \
   --output-dir <scratch>/<name> --json <scratch>/<name>/result.json
 ```
 
-`sed -i` there is GNU syntax; on macOS use `sed -i ''`. Without
+Without `--build-only`, the script builds the harness in a temp directory,
+runs ai-toolkit's `scripts/eval-weekly.sh` against it with every argument
+passed through (the whole suite against `results/baseline.tsv`), removes it,
+and exits with eval-weekly's code. That is the weekly run.
+
+Without
 `--no-publish` the report is published to claude.ai. `--ablation none`
 skips the no-plugin arm, which would double the cost and has no agent to
 launch anyway. `--keep-temp` keeps each run's `trace.jsonl` (its path is in
@@ -245,22 +252,14 @@ night-watchman skills in the ten most-invoked across mac, desktop and hetricus (
 `trigger-wrap-up/fire-moneymike` also loads moneymike-skills (tagged `needs-moneymike-skills`) and requires `wrap-up`, not `moneymike-skills:session-harvest`, on "let's wrap up", since both
 descriptions claim that phrase. A failing case is reported in the baseline, never fixed by editing a description to match the prompt.
 
-Every case lists only `Skill`, `Read`, `Grep` and `Glob` in `allowed_tools`, with `max_turns: 3`: the first tool call decides the grade. Run them with the harness above, changing three things: copy
-`evals/trigger-*` instead of the top-level case folders, insert `../../../plugins/...` (the cases sit one level deeper), and add `../../../plugins/moneymike-skills` to the tagged case:
-
-```bash
-cp -r evals/trigger-* "$H/evals/"
-cp -r "$(claude plugin list --json | jq -r '[.[] | select(.id=="moneymike-skills@moneymike-plugins")][0].installPath')" "$H/plugins/moneymike-skills"
-for f in "$H"/evals/trigger-*/*/case.yaml; do
-  extra=""; grep -q '^- needs-moneymike-skills$' "$f" && extra='\n- ../../../plugins/moneymike-skills'
-  sed -i "s#^tags:#plugins:\n- ../../../plugins/night-watchman\n- ../../../plugins/work-order${extra}\ntags:#" "$f"
-done
-```
+Every case lists only `Skill`, `Read`, `Grep` and `Glob` in `allowed_tools`, with `max_turns: 3`: the first tool call decides the grade. The harness above includes them:
+`scripts/eval-weekly-harness.sh` copies the `trigger-*` folders, writes `../../../plugins/...` for cases one level deeper, and adds `../../../plugins/moneymike-skills` to the tagged case.
 
 `--ablation none` matters more here than for the agent cases: under `with-without`, a `tool_used: Skill` grader is a with-only indicator and drops out of the score.
 
 In `results/baseline.tsv` a trigger folder is one row named `trigger-<skill>`: `mean_score` is the mean over its cases' run scores (fifteen runs, eighteen for `wrap-up`), and `agent_launched`
-reads `yes` only when every run of every case in the folder passed, so a `no` names a folder with at least one wrong firing or one missed one.
+reads `yes` only when every run of every case in the folder passed, so a `no` names a folder with at least one wrong firing or one missed one. ai-toolkit's `eval-weekly.sh` compares such a row
+with the mean of the run's `trigger-<skill>-*` cases, so one flaky run in fifteen moves the folder by 0.067, inside its 0.1 tolerance.
 
 Baseline, 2026-11-25, Claude Code 2.1.332, work-order 1.15.1, moneymike-skills 0.6.8: 39 of the 41 cases passed 3/3. Two missed, and both times the model handed the task to the agent that owns
 it instead of loading the skill first:
