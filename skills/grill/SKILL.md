@@ -1,6 +1,6 @@
 ---
 name: grill
-description: Stress-test a plan, design, or decision by interviewing the owner in rounds until nothing is left assumed, then hand the settled decisions to to-issues. Use when the user says "grill me", "grill this plan", asks to pressure-test an idea before work starts, or a to-issues decision ticket needs an owner conversation.
+description: Stress-test a plan, design, or decision by interviewing the owner in rounds until nothing is left assumed, then hand the settled decisions to to-issues. Use when the user says "grill me" or "grill this plan", asks to poke holes in an idea or find its weak spots before committing to it, or a to-issues decision ticket needs an owner conversation.
 ---
 
 # Grill

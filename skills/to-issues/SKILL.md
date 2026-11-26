@@ -1,6 +1,6 @@
 ---
 name: to-issues
-description: Turn a finished planning, grilling, or design conversation into independently-workable tickets as frontmatter Markdown files on disk, so the session can be closed and the work picked up cold by parallel agents in git worktrees. Use this whenever a grilling session ends, whenever the user says "turn this into tickets/issues/a work log", "write this up so I can start a fresh session", "break this into work I can parallelise", or after any long discussion that settled a bunch of decisions and now needs to survive the context window. Also use it when a plan already exists but the tickets are too coupled or too vague for an agent to execute without asking questions.
+description: Turn a finished planning, grilling, or design conversation into independently-workable tickets as frontmatter Markdown files on disk, so the session can be closed and the work picked up cold by parallel agents in git worktrees. Use this whenever a grilling session ends, whenever the user says "turn this into tickets/issues/a work log", "write this up as separate pieces of work", "break this up into work I can parallelise", or after any long discussion that settled a bunch of decisions and now needs to survive the context window. Also use it when a plan already exists but the tickets are too coupled or too vague for an agent to execute without asking questions.
 ---
 
 # to-issues

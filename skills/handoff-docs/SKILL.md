@@ -1,6 +1,6 @@
 ---
 name: handoff-docs
-description: Writing a handoff note for whoever picks this up next — a fresh session, or a different person. Use when the user says "write up where we left off", or when unfinished work is moving to another session, machine or person.
+description: Writing a handoff note for whoever picks this up next — a fresh session, or a different person. Use when the user says "write up where we left off", or when unfinished work is moving to another machine or person.
 ---
 
 # Handoff docs
