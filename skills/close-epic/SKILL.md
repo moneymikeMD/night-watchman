@@ -4,7 +4,7 @@ description: Decide what an epic (or the whole backlog) still needs to reach Com
 argument-hint: "<epic id | backlog> [tracker: file <dir> | jira with status and transition ids]"
 context: fork
 model: sonnet
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/board.sh)
+allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/skills/close-epic/board.sh)
 ---
 
 # Close an epic
@@ -22,19 +22,15 @@ The brief names the scope (one epic id, or `backlog` for every open ticket) and 
 directory, or jira with its status ids (In Progress, Awaiting Deployment, Completed) and the transition ids that reach
 them. When the brief carries the board, lint output or verify observations, use those instead of re-running them.
 
-## Board and lint at load
-
-!`${CLAUDE_SKILL_DIR}/board.sh`
-
-Output above that is an error, or names a different tracker than the brief, is not the set: run the commands yourself
-against what the brief names.
-
 ## Process
 
 `ISSUES_PY="$("${CLAUDE_PLUGIN_ROOT}/scripts/work-order-root.sh" --issues-py)"`,
 `P="${CLAUDE_PLUGIN_ROOT}/providers/lib/provider.sh"`. Add `--source jira` to every `issues.py` call in jira mode.
 
-1. **The set.** The children are the tickets whose `epic` is the input id; read each one (`"$P" run tracker fetch
+1. **The set.** Unless the brief carries them, run `"${CLAUDE_PLUGIN_ROOT}/skills/close-epic/board.sh"` from the project root: board and
+   lint for the tracker `.night-watchman/config.toml` selects. Output that says unavailable, or names a different
+   tracker than the brief, is not the set: run `issues.py board` and `lint` yourself against what the brief names.
+   The children are the tickets whose `epic` is the input id; read each one (`"$P" run tracker fetch
    <id>` in jira mode).
 2. **Per child not Completed or Cancelled**, by stage:
    - **Triage, or failing lint.** Derive what is missing from evidence, never invention: `touches` from paths the

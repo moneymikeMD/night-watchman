@@ -1,13 +1,12 @@
 #!/bin/bash
 #
-# board.sh — the close-epic skill's load-time context: issues.py board and
-# lint for the project in the current directory, injected into the skill
-# body before the fork reads it. The tracker comes from
+# board.sh — the close-epic skill's first step: issues.py board and
+# lint for the project in the current directory. The tracker comes from
 # .night-watchman/config.toml ([providers] tracker, [tracker.jira] project);
 # file mode reads issues/. Never fails: anything missing prints one line
-# saying what, and the skill tells the fork to run the commands itself.
+# saying what, and the skill then runs the commands itself.
 #
-# Usage: board.sh            (no arguments; the skill cannot pass its own)
+# Usage: board.sh
 #
 # BOARD_ISSUES_PY overrides issues.py resolution (the selftest's stub).
 
