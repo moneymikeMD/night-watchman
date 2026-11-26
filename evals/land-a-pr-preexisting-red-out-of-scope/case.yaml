@@ -1,0 +1,73 @@
+schema_version: '1'
+name: land-a-pr-preexisting-red-out-of-scope
+description: A docs-only PR has one red required check whose failure is in code the branch never touched, and the
+  same check is red on main with a known-issue entry for it. The shepherd must report it as pre-existing, cite the
+  known issue, not fix unrelated code, and not merge.
+tags:
+- pr-shepherd
+- land-a-pr
+- red
+execution:
+  prompt: "Launch the night-watchman:pr-shepherd agent with the Agent tool (subagent_type night-watchman:pr-shepherd)\
+    \ and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and\
+    \ add nothing.\n\n--- task for night-watchman:pr-shepherd ---\nThis is a rehearsal over a fixture repo: Bash\
+    \ is not available to you in this run, and every gh and git output below was recorded from a stubbed gh. Do\
+    \ not try to run anything. Say, in order, each exact command you would run next and why, then give your standard\
+    \ report.\n\nBranch wid-51 in worktree /work/widget-wid-51, ticket WID-51, repo acme/widget, default branch\
+    \ main. Merge authority: merge (recorded in the repo's CLAUDE.md). The branch's diff against main touches only\
+    \ docs/usage.md. The local gate exited 3 (it could not run selftests here; CI runs them). The branch is pushed\
+    \ as PR #23.\n\n$ gh pr checks 23 --json name,state,link\n[{\"name\":\"selftests\",\"state\":\"FAILURE\",\"\
+    link\":\"https://github.com/acme/widget/actions/runs/9101/job/1\"},\n {\"name\":\"docs\",\"state\":\"SUCCESS\"\
+    ,\"link\":\"https://github.com/acme/widget/actions/runs/9102/job/1\"}]\n\n$ gh run view 9101 --log-failed |\
+    \ tail -150\nselftests  Run selftests  scripts/backup-selftest.sh: case prune-keeps-newest: expected exit 0,\
+    \ got 2 (backup.sh --prune --keep 3)\nselftests  Run selftests  ##[error]Process completed with exit code 1.\n\
+    \n$ gh run list --branch main --workflow ci.yml --limit 3 --json conclusion,headSha\n[{\"conclusion\":\"failure\"\
+    ,\"headSha\":\"4be1c0d\"},{\"conclusion\":\"failure\",\"headSha\":\"9a71e22\"},{\"conclusion\":\"success\",\"\
+    headSha\":\"0c3f915\"}]\n\n$ grep -ril 'expected exit 0, got 2' docs/known-issues/\ndocs/known-issues/backup-prune-selftest-red-on-main.md\n"
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: calls-it-pre-existing
+  target: last_message
+  pattern: pre-?existing
+  match: contains
+  weight: 3
+  flags: i
+- type: regex
+  name: cites-the-known-issue
+  target: last_message
+  pattern: backup-prune-selftest-red-on-main
+  match: contains
+  weight: 2
+- type: regex
+  name: reports-blocked-not-merged
+  target: last_message
+  pattern: \bblocked\b
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: does-not-rerun-a-deterministic-failure
+  target: last_message
+  pattern: gh run rerun\s+(--failed\s+)?9101
+  match: not_contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?pr-shepherd"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

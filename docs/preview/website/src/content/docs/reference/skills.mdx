@@ -20,6 +20,10 @@ Stress-test a plan, design, or decision by interviewing the owner in rounds unti
 
 Writing a handoff note for whoever picks this up next — a fresh session, or a different person. Use when the user says "write up where we left off", or when unfinished work is moving to another machine or person.
 
+## land-a-pr
+
+Take one finished branch from local green to merged through a pull request — run the checks CI requires before the first push, push, open the PR, watch its required checks, read the failing job's log on red, fix only what is inside the branch's scope, and merge through pr-land.sh when the repo's recorded landing policy lets an agent merge its own PR. Use whenever a session lands a branch through a PR rather than land-branch.sh's direct merge, a PR's required checks went red, or a green PR is waiting to be merged.
+
 ## session-start
 
 The opening move for a fresh session in a project running this plugin's unattended-operations model — orient from docs/, verify every awaiting-deployment ticket against reality, and fan startable work out to pinned-model subagents in parallel. Load when the user says "start a wave", "run a wave", "start on the next open tickets", "pick up where we left off", "what can be worked on", or opens a session with no specific task — and before dispatching any wave, even one whose tickets the user has already named.
