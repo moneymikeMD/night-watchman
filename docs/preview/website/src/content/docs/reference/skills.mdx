@@ -8,6 +8,10 @@ description: Generated from every skills/*/SKILL.md frontmatter block (name, des
 
 Decide where repeated work's knowledge is kept and where it runs, as two separate questions. Use when someone proposes adding a new agent, when asked "should this be a script, an agent or a skill", or when the main thread does the same work inline a second time with no fixed home for it.
 
+## close-epic
+
+Decide what an epic (or the whole backlog) still needs to reach Completed and drive it there — fill ticket fields derivable from the repo and the ticket's own text, move fully filed tickets out of triage, verify awaiting-deployment tickets against reality with read-only checks from their verify blocks, transition what the evidence supports with the evidence in the comment, and close the epic when no child is left. Ends with the epic closed or a residue list naming the single thing each remaining ticket waits on. Use when asked what is left on an epic, why tickets sit in triage, or to get an epic to Completed.
+
 ## diagnose-and-pr
 
 Wiring guidance for dispatching a failure signal (an alert, a failed check) to the diagnose-and-pr agent and handling its output. Use when a project wants to turn monitoring findings into draft PRs instead of manual triage, when deciding what counts as in-scope for that agent, or when the owner asks to diagnose/debug a specific failing behaviour and wants the disciplined loop (a red command before any theory), not a one-line question.
