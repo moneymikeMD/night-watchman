@@ -1,6 +1,6 @@
 ---
 name: handoff-docs
-description: Writing a session wrap-up note for whoever picks this up next — a fresh session, or a different person. Use at session end, when the user says "write up where we left off", or before closing a session that did real work.
+description: Writing a handoff note for whoever picks this up next — a fresh session, or a different person. Use when the user says "write up where we left off", or when unfinished work is moving to another session, machine or person.
 ---
 
 # Handoff docs
@@ -47,7 +47,7 @@ committed, unlike a temp-dir copy.
 
 A handoff doc stays in the repo. The owner-facing brief of a wave goes to
 the external system of record through the `publish` provider — see
-`session-start`'s wrap-up ("Publish the brief"); do not paste a handoff
+`wrap-up`'s `references/wave.md` ("Publish the brief"); do not paste a handoff
 doc there in its place.
 
 ## Before writing one: is a handoff the right move?

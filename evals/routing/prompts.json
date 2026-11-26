@@ -55,6 +55,18 @@
     {
       "prompt": "Nobody is watching this overnight run. I want a record of every pivot so I can audit it in the morning.",
       "skill": "night-watchman/wave-trail"
+    },
+    {
+      "prompt": "Let's wrap up.",
+      "skill": "night-watchman/wrap-up"
+    },
+    {
+      "prompt": "We are done for today.",
+      "skill": "night-watchman/wrap-up"
+    },
+    {
+      "prompt": "End the session; I'm closing this terminal.",
+      "skill": "night-watchman/wrap-up"
     }
   ],
   "negatives": [
@@ -82,6 +94,11 @@
       "prompt": "Start a wave with these tickets and their epics.",
       "skill": "night-watchman/wave-trail",
       "owner": "night-watchman/session-start"
+    },
+    {
+      "prompt": "We are done for tonight. Write up where we left off for whoever picks this up next.",
+      "skill": "night-watchman/wrap-up",
+      "owner": "night-watchman/handoff-docs"
     }
   ]
 }

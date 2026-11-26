@@ -1,6 +1,6 @@
 ---
 name: tickets-protocol
-description: The docs/ routing table and the ticket workflow — status-is-a-directory-move (or a tracker transition, if one is adopted), the frontmatter/field contract, body-vs-progress-note rules, and the UNVERIFIED discipline. Load for session wrap-up, ticket filing, ticket transitions, or any durable-knowledge capture.
+description: The docs/ routing table and the ticket workflow — status-is-a-directory-move (or a tracker transition, if one is adopted), the frontmatter/field contract, body-vs-progress-note rules, and the UNVERIFIED discipline. Load for ticket filing, ticket transitions, or any durable-knowledge capture.
 ---
 
 # Tickets and docs protocol

@@ -34,7 +34,7 @@ Decides what an epic (or the whole backlog) still needs to reach Completed and d
 
 ## librarian
 
-Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, end-of-session knowledge capture, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
+Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, capturing durable knowledge, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
 
 - **Model:** haiku
 - **Tools:** Read, Edit, Write, Grep, Glob, Bash
@@ -48,7 +48,7 @@ Takes one finished branch from local green to merged — runs the checks CI will
 
 ## reflector
 
-Read-only sonnet agent that mines the current session's transcript for durable corrections and proposes routed skill/agent edits, output as Accepted / Rejected / Backlog tables. Use at session wrap-up, or when the user says "reflect". Never edits anything itself — the owner approves row by row. Pairs with cost-reviewer: that agent recommends cost changes, this one recommends behavior changes.
+Read-only sonnet agent that mines the current session's transcript for durable corrections and proposes routed skill/agent edits, output as Accepted / Rejected / Backlog tables. Use when the user says "reflect", or after a session where the owner corrected the agent. Never edits anything itself — the owner approves row by row. Pairs with cost-reviewer: that agent recommends cost changes, this one recommends behavior changes.
 
 - **Model:** sonnet
 - **Tools:** Read, Grep, Glob
