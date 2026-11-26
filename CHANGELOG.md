@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.4.1](https://github.com/moneymikeMD/night-watchman/compare/v2.4.0...v2.4.1) (2026-11-26)
+
+
+### Bug Fixes
+
+* waves.py holds tickets blocked outside the ticket set instead of reporting a cycle (NWM-268) ([#183](https://github.com/moneymikeMD/night-watchman/issues/183)) ([1630e11](https://github.com/moneymikeMD/night-watchman/commit/1630e11c585461dfc1e7258e559a2c5998ea417a))
+
 ## [2.4.0](https://github.com/moneymikeMD/night-watchman/compare/v2.3.0...v2.4.0) (2026-11-22)
 
 
