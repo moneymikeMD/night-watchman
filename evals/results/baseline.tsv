@@ -11,6 +11,9 @@ nwm8-brief-chr-no-rule-strip	1.000	yes	2.1.332	2026-11-25
 nwm8-round1-five-bugs	0.963	yes	2.1.332	2026-11-26
 reviewer-finds-shipped-bug-rules	1.000	yes	2.1.332	2026-11-26
 undeclared-path-and-hollow-verify	1.000	yes	2.1.332	2026-11-25
+resync-branches-clean-merge	1.000	yes	2.1.332	2026-11-25
+resync-branches-lockfile-conflict	1.000	yes	2.1.332	2026-11-25
+resync-branches-real-conflict	1.000	yes	2.1.332	2026-11-25
 unnamed-lane-cron-delete-takes-hardened	1.000	yes	2.1.332	2026-11-26
 spec-review-required-check-fails	1.000	yes	2.1.332	2026-11-25
 spec-review-partial-and-unrequested	1.000	yes	2.1.332	2026-11-25

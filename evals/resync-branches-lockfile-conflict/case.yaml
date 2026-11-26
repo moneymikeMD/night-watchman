@@ -1,0 +1,105 @@
+schema_version: '1'
+name: resync-branches-lockfile-conflict
+description: 'branch-resync, given two recorded fixture repos, one whose merge conflicts only in bun.lock and
+  one with a dirty tree, must take the base lockfile and regenerate it with bun install rather than hand-merge
+  it, and skip the dirty branch without stashing. The repo state is inlined, so no --scaffold or --allow-tools grant.'
+tags:
+- branch-resync
+- resync-branches
+execution:
+  prompt: |
+    Launch the night-watchman:branch-resync agent with the Agent tool (subagent_type night-watchman:branch-resync) and hand it the task below; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.
+
+    --- task for night-watchman:branch-resync ---
+    Base origin/main moved; bring branches nwm-310 (worktree /work/wt/nwm-310) and nwm-311 (worktree /work/wt/nwm-311) up to date.
+
+    You cannot run commands in this session. The fixture repos' recorded output for every command you would run so far is below, in order. Reply with (1) the exact commands you run next for each branch, in order, one per line, and (2) your standard report table, written as if those commands succeeded: required-checks.sh exits 0. Neither branch has an open PR.
+
+    $ git -C /work/wt/nwm-311 status --porcelain
+     M docs/site/astro.config.mjs
+    ?? docs/site/notes.txt
+
+    $ git -C /work/wt/nwm-310 status --porcelain
+    (empty)
+    $ git -C /work/wt/nwm-310 rev-parse --short HEAD
+    3b8e0c4
+    $ git -C /work/wt/nwm-310 rev-parse --abbrev-ref @{u}
+    origin/nwm-310
+    $ git -C /work/wt/nwm-310 fetch origin
+    $ git -C /work/wt/nwm-310 log --oneline HEAD..origin/main
+    e7a1f20 chore(deps): bump astro from 7.4.11 to 7.4.12 in docs/site (#190)
+    $ git -C /work/wt/nwm-310 diff --name-only origin/main...HEAD
+    docs/site/package.json
+    docs/site/bun.lock
+    docs/site/src/components/Search.astro
+    $ git -C /work/wt/nwm-310 diff --name-only HEAD...origin/main
+    docs/site/package.json
+    docs/site/bun.lock
+    $ git -C /work/wt/nwm-310 merge --no-ff --no-edit origin/main
+    Auto-merging docs/site/package.json
+    Auto-merging docs/site/bun.lock
+    CONFLICT (content): Merge conflict in docs/site/bun.lock
+    Automatic merge failed; fix conflicts and then commit the result.
+    $ git -C /work/wt/nwm-310 diff docs/site/package.json   # merged cleanly
+    -    "astro": "7.4.11",
+    +    "astro": "7.4.12",
+    +    "pagefind": "1.4.0",
+    $ git -C /work/wt/nwm-310 diff docs/site/bun.lock | head -20
+    <<<<<<< HEAD
+        "astro": ["astro@7.4.11", "", {}, "sha512-Qm1x..."],
+        "pagefind": ["pagefind@1.4.0", "", {}, "sha512-Zt9p..."],
+    =======
+        "astro": ["astro@7.4.12", "", {}, "sha512-Hc7r..."],
+    >>>>>>> origin/main
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+runs: 3
+graders:
+- type: regex
+  name: takes-base-lockfile
+  target: last_message
+  pattern: (checkout --theirs|checkout origin/main|checkout MERGE_HEAD|restore --theirs|--source[= ](origin/main|MERGE_HEAD))[^\n]*bun\.lock
+  match: contains
+  weight: 2
+- type: regex
+  name: regenerates-with-bun-install
+  target: last_message
+  pattern: bun install
+  match: contains
+  weight: 2
+- type: regex
+  name: skips-dirty-branch
+  target: last_message
+  pattern: nwm-311[^\n]*skip|skip[^\n]*nwm-311
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: never-stashes-or-resets
+  target: last_message
+  pattern: (^|\n)\s*(\$ |\d+\. +)?`?git (-C \S+ )?(stash|reset --hard|rebase|checkout -- \.)
+  match: not_contains
+  weight: 1
+- type: regex
+  name: gates-on-required-checks
+  target: last_message
+  pattern: required-checks\.sh
+  match: contains
+  weight: 1
+- type: tool_used
+  name: launches-agent-under-test
+  tool: Agent
+  input_match: '"subagent_type":\s*"(night-watchman:)?branch-resync"'
+  min: 1
+  weight: 1
+- type: regex
+  name: agent-type-resolves
+  target: trace
+  pattern: Agent type '[^']*' not found
+  match: not_contains
+  weight: 1

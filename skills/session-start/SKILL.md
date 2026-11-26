@@ -236,7 +236,8 @@ from pstack orchestrate playbook, 2026-09-14.
 ### When land-branch stops on a conflict
 
 The worker that wrote the branch resolves it, in its own worktree, while it
-is still live — it holds the intent, not the orchestrator. **A worker that
+is still live — it holds the intent, not the orchestrator — by the
+`resync-branches` skill. **A worker that
 has already exited: launch `branch-resync` on that worktree**, which follows
 the rules below and stops on a conflict whose resolution is a product
 decision. Before touching a hunk, read both
