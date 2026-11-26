@@ -70,6 +70,11 @@ Subcommands:
              table — the caller (cost-reviewer's Model section) must not
              render an empty comparison as if two models had been
              measured.
+    review   the end-of-wave review in one command: append (as `append`,
+             same flags), then print compare against the previous row, the
+             spread of earlier adjacent-wave deltas with whether this
+             wave's delta falls outside it, and model-compare. --dry-run
+             prints the same report with the row held in memory only.
 
 Exit codes: 0 success, 2 a validation failure (bad input; printed to
 stderr, no traceback), 1 an unexpected error.
@@ -275,7 +280,8 @@ def render_md(headers, rows):
 RENDERERS = {"table": render_table, "tsv": render_tsv, "md": render_md}
 
 
-def cmd_append(args):
+def build_append_row(args):
+    """Validate append/review flags against the ledger and return (existing rows, new row)."""
     validate_field(args.wave, "--wave")
     if args.date is not None:
         validate_field(args.date, "--date")
@@ -319,14 +325,23 @@ def cmd_append(args):
         worker_usd=args.worker_cost,
         notes=args.notes or "-",
     )
+    return existing, row
 
+
+def write_append(args, row):
+    jsonl_path = os.path.splitext(args.ledger)[0] + ".jsonl"
+    append_ledger_row(args.ledger, row)
+    append_ledger_jsonl(jsonl_path, row)
+    return jsonl_path
+
+
+def cmd_append(args):
+    _, row = build_append_row(args)
     if args.dry_run:
         print(LEDGER_HEADER_LINE)
         print(render_row(row))
         return
-    jsonl_path = os.path.splitext(args.ledger)[0] + ".jsonl"
-    append_ledger_row(args.ledger, row)
-    append_ledger_jsonl(jsonl_path, row)
+    jsonl_path = write_append(args, row)
     print(
         "# ledger: appended wave %s to %s and %s"
         % (args.wave, args.ledger, jsonl_path)
@@ -340,6 +355,74 @@ def cmd_list(args):
     renderer = RENDERERS[args.format]
     table_rows = [[r[col] for col in LEDGER_COLUMNS] for r in rows]
     print(renderer(list(LEDGER_COLUMNS), table_rows))
+
+
+COMPARE_HEADERS = ["metric", "previous", "current", "delta", "delta_pct", "direction"]
+
+
+def numeric_pair(ledger, prev, cur, col):
+    try:
+        return float(prev[col]), float(cur[col])
+    except ValueError:
+        raise ValidationError(
+            "--ledger %s: wave '%s' or '%s' has a non-numeric '%s' value ('%s' / '%s')"
+            % (ledger, prev["wave"], cur["wave"], col, prev[col], cur[col])
+        )
+
+
+def compare_rows(ledger, prev, cur):
+    """Return (headers, rows) of the delta table between two ledger rows, each numeric
+    column flagged up/down/flat at +/-5%."""
+    table_rows = []
+    for col in LEDGER_NUMERIC_COLUMNS:
+        pv, cv = numeric_pair(ledger, prev, cur, col)
+        delta = cv - pv
+        if pv == 0:
+            delta_pct_str, direction = "n/a", "flat"
+        else:
+            delta_pct = delta / pv * 100.0
+            delta_pct_str = "%.2f" % delta_pct
+            direction = "flat" if abs(delta_pct) < 5.0 else ("up" if delta > 0 else "down")
+
+        if col in LEDGER_INT_COLUMNS:
+            pv_s, cv_s, delta_s = "%d" % pv, "%d" % cv, "%+d" % int(round(delta))
+        else:
+            decimals = LEDGER_DECIMALS.get(col, 2)
+            pv_s = ("%." + str(decimals) + "f") % pv
+            cv_s = ("%." + str(decimals) + "f") % cv
+            delta_s = ("%+." + str(decimals) + "f") % delta
+        table_rows.append([col, pv_s, cv_s, delta_s, delta_pct_str, direction])
+    return list(COMPARE_HEADERS), table_rows
+
+
+SPREAD_HEADERS = ["metric", "earlier_pairs", "median_abs_pct", "max_abs_pct", "current_abs_pct", "outside_spread"]
+
+
+def spread_rows(ledger, rows, idx):
+    """Return (headers, rows) comparing row idx's |delta_pct| against every earlier adjacent pair's,
+    or None when fewer than one earlier pair exists. outside_spread is yes only above the earlier max."""
+    if idx < 2:
+        return None
+    table_rows = []
+    for col in LEDGER_NUMERIC_COLUMNS:
+        earlier = []
+        for i in range(1, idx):
+            pv, cv = numeric_pair(ledger, rows[i - 1], rows[i], col)
+            if pv != 0:
+                earlier.append(abs((cv - pv) / pv * 100.0))
+        pv, cv = numeric_pair(ledger, rows[idx - 1], rows[idx], col)
+        current = None if pv == 0 else abs((cv - pv) / pv * 100.0)
+        if not earlier or current is None:
+            table_rows.append([col, "%d" % len(earlier), "n/a", "n/a",
+                               "n/a" if current is None else "%.2f" % current, "n/a"])
+            continue
+        ordered = sorted(earlier)
+        mid = len(ordered) // 2
+        median = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) / 2.0
+        top = ordered[-1]
+        table_rows.append([col, "%d" % len(earlier), "%.2f" % median, "%.2f" % top,
+                           "%.2f" % current, "yes" if current > top else "no"])
+    return list(SPREAD_HEADERS), table_rows
 
 
 def cmd_compare(args):
@@ -365,34 +448,7 @@ def cmd_compare(args):
         idx = len(rows) - 1
 
     cur, prev = rows[idx], rows[idx - 1]
-    headers = ["metric", "previous", "current", "delta", "delta_pct", "direction"]
-    table_rows = []
-    for col in LEDGER_NUMERIC_COLUMNS:
-        try:
-            pv = float(prev[col])
-            cv = float(cur[col])
-        except ValueError:
-            raise ValidationError(
-                "--ledger %s: wave '%s' or '%s' has a non-numeric '%s' value ('%s' / '%s')"
-                % (args.ledger, prev["wave"], cur["wave"], col, prev[col], cur[col])
-            )
-        delta = cv - pv
-        if pv == 0:
-            delta_pct_str, direction = "n/a", "flat"
-        else:
-            delta_pct = delta / pv * 100.0
-            delta_pct_str = "%.2f" % delta_pct
-            direction = "flat" if abs(delta_pct) < 5.0 else ("up" if delta > 0 else "down")
-
-        if col in LEDGER_INT_COLUMNS:
-            pv_s, cv_s, delta_s = "%d" % pv, "%d" % cv, "%+d" % int(round(delta))
-        else:
-            decimals = LEDGER_DECIMALS.get(col, 2)
-            pv_s = ("%." + str(decimals) + "f") % pv
-            cv_s = ("%." + str(decimals) + "f") % cv
-            delta_s = ("%+." + str(decimals) + "f") % delta
-        table_rows.append([col, pv_s, cv_s, delta_s, delta_pct_str, direction])
-
+    headers, table_rows = compare_rows(args.ledger, prev, cur)
     renderer = RENDERERS[args.format]
     print("# compare: %s -> %s" % (prev["wave"], cur["wave"]))
     print(renderer(headers, table_rows))
@@ -420,14 +476,19 @@ def cmd_model_compare(args):
     else:
         idx = len(rows) - 1
 
+    for line in model_compare_lines(args.ledger, rows, idx, RENDERERS[args.format]):
+        print(line)
+
+
+def model_compare_lines(ledger, rows, idx, renderer):
+    """Return the model-compare report lines for row idx (see cmd_model_compare)."""
     cur = rows[idx]
     cur_model = cur["orchestrator_model"]
     if cur_model in UNRESOLVED_ORCHESTRATOR_MODELS:
-        print(
+        return [
             "# model-compare: wave '%s' has no orchestrator_model recorded — nothing to compare"
             % cur["wave"]
-        )
-        return
+        ]
 
     prev = None
     for r in reversed(rows[:idx]):
@@ -436,13 +497,12 @@ def cmd_model_compare(args):
             break
 
     if prev is None:
-        print(
+        return [
             "# model-compare: wave '%s' ran orchestrator_model '%s'; no EARLIER wave in %s "
             "used a different orchestrator_model — only one model has been measured so far, "
             "nothing to compare it against yet"
-            % (cur["wave"], cur_model, args.ledger)
-        )
-        return
+            % (cur["wave"], cur_model, ledger)
+        ]
 
     headers = ["wave", "orchestrator_model", "orchestrator_effort", "orchestrator_turns", "orchestrator_usd"]
     table_rows = [
@@ -451,25 +511,50 @@ def cmd_model_compare(args):
         [cur["wave"], cur["orchestrator_model"], cur["orchestrator_effort"],
          cur["orchestrator_turns"], cur["orchestrator_usd"]],
     ]
-    renderer = RENDERERS[args.format]
-    print("# model-compare: %s (%s) -> %s (%s)" % (prev["wave"], prev["orchestrator_model"],
-                                                     cur["wave"], cur_model))
-    print(renderer(headers, table_rows))
-    print(
+    return [
+        "# model-compare: %s (%s) -> %s (%s)" % (prev["wave"], prev["orchestrator_model"],
+                                                 cur["wave"], cur_model),
+        renderer(headers, table_rows),
         "# cost-side only — pair with the quality proxies from docs/cost.md's Model section "
-        "before drawing a verdict"
-    )
+        "before drawing a verdict",
+    ]
 
 
-def parse_args(argv):
-    parser = argparse.ArgumentParser(
-        prog="claude-cost.py",
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    sub = parser.add_subparsers(dest="command", required=True)
+def cmd_review(args):
+    """Append this wave's row (unless --dry-run) and print compare, spread and model-compare for it.
+    The report is built before the write, so a ledger that cannot be compared is never appended to."""
+    existing, row = build_append_row(args)
+    rows = existing + [row]
+    idx = len(rows) - 1
+    renderer = RENDERERS[args.format]
+    report = []
+    if idx == 0:
+        report.append("# compare: wave '%s' is the first row in %s — nothing to compare against"
+                      % (args.wave, args.ledger))
+    else:
+        headers, table_rows = compare_rows(args.ledger, rows[idx - 1], row)
+        report.append("# compare: %s -> %s" % (rows[idx - 1]["wave"], row["wave"]))
+        report.append(renderer(headers, table_rows))
+        spread = spread_rows(args.ledger, rows, idx)
+        if spread is None:
+            report.append("# spread: fewer than two earlier waves in %s — no wave-to-wave spread "
+                          "to judge this delta against yet" % args.ledger)
+        else:
+            report.append("# spread: |delta_pct| of each earlier adjacent pair; "
+                          "outside_spread=yes only above the earlier max")
+            report.append(renderer(*spread))
+    report.extend(model_compare_lines(args.ledger, rows, idx, renderer))
 
-    p_append = sub.add_parser("append", help="add one row to the ledger")
+    if args.dry_run:
+        print("# review: dry run — wave %s held in memory, %s not written" % (args.wave, args.ledger))
+    else:
+        jsonl_path = write_append(args, row)
+        print("# review: appended wave %s to %s and %s" % (args.wave, args.ledger, jsonl_path))
+    for line in report:
+        print(line)
+
+
+def add_append_flags(p_append):
     p_append.add_argument("--ledger", required=True, help="TSV ledger path (created if absent)")
     p_append.add_argument("--wave", required=True, help="wave label; must be unique in the ledger")
     p_append.add_argument("--cost", required=True, type=float, help="total cost for the wave")
@@ -493,6 +578,18 @@ def parse_args(argv):
     p_append.add_argument("--notes", default=None, help="free-text note for this row")
     p_append.add_argument("--dry-run", action="store_true", dest="dry_run",
                            help="print the row that would be appended without writing it")
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        prog="claude-cost.py",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_append = sub.add_parser("append", help="add one row to the ledger")
+    add_append_flags(p_append)
     p_append.set_defaults(func=cmd_append)
 
     p_list = sub.add_parser("list", help="print the ledger's rows")
@@ -506,6 +603,12 @@ def parse_args(argv):
     p_compare.add_argument("--wave", default=None, help="'current' row (default: the ledger's last row)")
     p_compare.add_argument("--format", choices=sorted(RENDERERS.keys()), default="table")
     p_compare.set_defaults(func=cmd_compare)
+
+    p_review = sub.add_parser("review", help="append this wave's row, then print compare, "
+                                              "spread and model-compare for it")
+    add_append_flags(p_review)
+    p_review.add_argument("--format", choices=sorted(RENDERERS.keys()), default="md")
+    p_review.set_defaults(func=cmd_review)
 
     p_model_compare = sub.add_parser(
         "model-compare",
