@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here.
 
+## [2.6.0](https://github.com/moneymikeMD/night-watchman/compare/v2.5.0...v2.6.0) (2026-11-26)
+
+
+### Features
+
+* skill-routing gates pull requests, and the most-used skills have trigger evals (NWM-256, NWM-257) ([fc1bfaf](https://github.com/moneymikeMD/night-watchman/commit/fc1bfaf82af1bd96fc07a5a92bc303d1de83d65d))
+
 ## [2.5.0](https://github.com/moneymikeMD/night-watchman/compare/v2.4.1...v2.5.0) (2026-11-26)
 
 
