@@ -1,6 +1,6 @@
 ---
 name: wave-trail
-description: Keep an append-only decision trail for an unattended or dispatch-provider wave (one row per fork, pivot, revert, or verified unit), audit it against the transcript at wrap-up, and have a second-tier reviewer write an Attention section for the human. Use when a wave is dispatched through a dispatch provider, or any run the owner is not watching live.
+description: Keep an append-only decision trail for an unattended or dispatch-provider wave (one row per fork, pivot, revert, or verified unit), audit it against the transcript once the wave is done, and have a second-tier reviewer write an Attention section for the human. Use when a wave is dispatched through a dispatch provider, or any run the owner is not watching live.
 ---
 
 # Wave trail

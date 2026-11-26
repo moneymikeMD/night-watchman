@@ -1,6 +1,6 @@
 ---
 name: librarian
-description: Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, end-of-session knowledge capture, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
+description: Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, capturing durable knowledge, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: haiku
 skills: tickets-protocol

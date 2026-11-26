@@ -54,7 +54,7 @@ prompt must put its own skill first.
 ## Known misses
 
 CI runs this `report-only: "true"`. Two fixture prompts miss (rank-1 rate
-0.846 over 13 positives), and both are descriptions to fix, not prompts to
+0.882 over 17 positives), and both are descriptions to fix, not prompts to
 soften:
 
 - *"Poke holes in this before I commit to it — I want the weak spots found
@@ -63,7 +63,7 @@ soften:
   0.161. `grill`'s description has "pressure-test" and "grill me" and nothing a
   user who does not already know the skill's name would say.
 - *"Write all of this up as separate pieces of work so I can close the session
-  and start fresh tomorrow."* → wants `to-issues`, gets `handoff-docs` at 0.475
+  and start fresh tomorrow."* → wants `to-issues`, gets `handoff-docs` at 0.319
   with `to-issues` at rank 2. "write up" plus "session" is handoff-docs
   vocabulary, and the two skills genuinely compete at the end of a session.
   This one is a real routing hazard, not a fixture artefact.
