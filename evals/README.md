@@ -99,7 +99,9 @@ project with `--dry-run`, recorded, with nothing POSTed. script-reviewer
 refuses a first round on an API-facing script with no recorded live run, so
 a prompt saying it never ran made about half the runs refuse correctly and
 score 0.444 to 0.667 (nine runs, 2026-11-25). Its baseline row was re-taken
-over six runs after that change (NWM-274).
+over six runs after that change (NWM-274). Before NWM-250 the reviewer
+refused such a round outright; it now reports the missing run as a blocking
+first finding and reviews on (`script-reviewer-live-run-gate/`).
 
 Graders are deterministic `regex` checks against the review's final
 response, not `llm` judges: the default (haiku) judge model fails
@@ -162,7 +164,21 @@ Two cases guard the lane rule in `skills/shell-scripting/SKILL.md` (NWM-250). Bo
 The lanes replaced script-author's and script-reviewer's bodies with thin ones over the skill. Each
 case's old-body score was taken first, with the same harness and flags, three runs:
 
-OLD_BODY_TABLE
+| Case | Old body | New body |
+| --- | --- | --- |
+| `nwm8-brief-chr-no-rule-strip` | 1.000 (baseline row) | 1.000 |
+| `capture-lane-ssh-op-restart` | 0.636 | 1.000 |
+| `unnamed-lane-cron-delete-takes-hardened` | 0.500 | 1.000 |
+| `nwm8-round1-five-bugs` | 0.926 (baseline row) | 0.963 |
+| `reviewer-finds-shipped-bug-rules` | 1.000 | 1.000 |
+| `live-run-gate-is-a-blocking-finding` | 0.778 | 1.000 |
+
+The old script-author never named a lane; the old script-reviewer refused the whole round at the
+live-run gate. The first thin reviewer scored 0.296 on `nwm8-round1-five-bugs`: the reviewer cases
+grant only `Agent`, the eval's don't-ask mode applies that list to the subagent too, and its Read of
+`references/review-checklist.md` was refused, so it handed back unreviewed. The body now falls back to
+the preloaded skill and reviews; the reviewer rows above are from that body. `baseline.tsv` holds the
+new-body rows.
 
 ## evals/librarian
 
