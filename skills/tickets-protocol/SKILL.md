@@ -158,9 +158,11 @@ output".
 - **Status is derived from children**: all Done/Cancelled → Done; any child
   In Progress or Done → In Progress; otherwise To Do. Recompute when a child
   moves.
-- **Getting an epic to Done is `epic-closer`'s job**: launch it when the
-  last open child lands, when children sit in triage or awaiting
-  verification, or when the owner asks what is left. It returns the epic
+- **Getting an epic to Done is the `close-epic` skill's job**, a forked
+  skill (`/close-epic <epic>`, or the Skill tool with the epic id and the
+  tracker as its args): run it when the last open child lands, when
+  children sit in triage or awaiting verification, or when the owner asks
+  what is left. It returns the epic
   closed or a residue list, one blocker per ticket.
 - **Every ticket names its epic or its reason for being an orphan.** Orphans
   are fine (a single fix, a rotation); a catch-all "maintenance" epic is not,

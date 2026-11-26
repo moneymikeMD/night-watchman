@@ -63,7 +63,7 @@ drop the stale row.
 ## 2. Verify awaiting-deployment (delegate, read-only)
 
 **An epic with tickets in triage, missing fields, or awaiting verification:
-launch `epic-closer` on it** instead of this step's hand-built brief. It
+run the `close-epic` skill on it** instead of this step's hand-built brief. It
 runs the same read-only verify, transitions what the evidence supports, and
 returns the residue each ticket waits on.
 
@@ -99,7 +99,7 @@ finish without asking questions, and launch them all in **one** message:
 | New or changed script | `script-author` → `script-reviewer` | mid-tier / top-tier for review judgement |
 | Write up a proven, non-privileged command sequence as a script | `script-author-lite` (refuses and hands back to `script-author` on ssh/op/sudo/live-host) | cheapest available |
 | Ticket moves, decisions, known-issues, knowledge capture | `librarian` | cheapest available |
-| Take an epic (or the backlog) to Completed: fill derivable fields, verify, transition | `epic-closer` | mid-tier |
+| Take an epic (or the backlog) to Completed: fill derivable fields, verify, transition | `close-epic` skill (forked, `model: sonnet`) | mid-tier |
 | Domain-specific work (infra, deploy, a particular stack) | whatever domain agents the project itself defines — this plugin ships none; a project wires its own | project-specific |
 
 A ticket whose next step is a decision only the user can make is still
@@ -219,7 +219,7 @@ When the reports come back:
   note on the ticket.
 - Ticket verify fully MET → `librarian` completes it.
 - **The last open child of an epic just landed, or the owner asks what is
-  left on an epic: launch `epic-closer`** on that epic.
+  left on an epic: run the `close-epic` skill** on that epic.
 - PARTIAL → post a dated note saying exactly which human steps remain;
   touch the ticket body only if the acceptance criteria moved; it stays put.
 - New fact about the project → the matching `docs/` topic file, updated in

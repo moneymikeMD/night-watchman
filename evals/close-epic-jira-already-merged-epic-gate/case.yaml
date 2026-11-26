@@ -1,0 +1,91 @@
+schema_version: '1'
+name: close-epic-jira-already-merged-epic-gate
+description: 'Jira mode: one child In Progress whose work is already on main with its branch still present, the rest Completed
+  or Cancelled, and an Epic whose workflow requires a touches field Epics cannot carry. Graders check land-branch --already-merged
+  with the jira flags, no direct API call, and the epic named as residue rather than closed.'
+tags:
+- close-epic
+- epic-closer
+- skill
+execution:
+  prompt: "Call the Skill tool with skill night-watchman:close-epic, passing the whole brief below (everything after the marker\
+    \ line) as its args; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n\
+    --- brief for night-watchman:close-epic ---\nThis is an evaluation dry run. Nothing here is live: the tracker, the repo\
+    \ state and every command output are fixtures given below, and no tool beyond Read/Grep/Glob is available, so you run\
+    \ nothing and write nothing. Treat each command output below as what that command returned when you ran it. Work the brief\
+    \ exactly as you would for real, then return your report in your Report format: the header line, the moved table (each\
+    \ row a move you would make, with its evidence) and the residue lines. Before the report, list the exact commands you\
+    \ would run, in order (tracker verbs, git, issues.py, land-branch.sh), one per line, no fenced code blocks.\n\nScope:\
+    \ epic NWM-900. Tracker: jira, project NWM, through the plugin's tracker provider. Status ids: In Progress 3, Awaiting\
+    \ Deployment 10012, Completed 10014. Transition ids: to In Progress 21, to Awaiting Deployment 31, to Completed 41. The\
+    \ jira-api wrapper for land-branch.sh is providers/tracker/jira/jira-api.sh. Default branch main.\n\n$ python3 issues.py\
+    \ board --source jira --jira-project NWM\nin-progress  (1)\n  NWM-903    Rotate logs weekly           epic NWM-900\ncompleted\
+    \  (2)\n  NWM-901    Log shipper config           epic NWM-900\n  NWM-904    Log dashboard                epic NWM-900\n\
+    cancelled  (1)\n  NWM-902    Syslog relay (false premise) epic NWM-900\n\n$ python3 issues.py lint --source jira --jira-project\
+    \ NWM\n4 tickets, 0 errors, 0 warnings\n\n$ git log origin/main --oneline --grep NWM-903\na1b2c3d NWM-903: merge branch\
+    \ 'nwm-903' into main\n9f8e7d6 feat: weekly log rotation (NWM-903)\n\n$ git branch -a --list '*nwm-903*'\n  nwm-903\n\
+    \  remotes/origin/nwm-903\n\nNWM-900 is an Epic. This project's Completed transition requires the `touches` field, and\
+    \ the Epic issue type has no `touches` field.\n"
+  max_turns: 15
+  timeout_seconds: 420
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: land-branch-already-merged
+  target: last_message
+  pattern: land-branch\.sh[^\n]*nwm-903[^\n]*NWM-903[^\n]*--already-merged
+  match: contains
+  weight: 3
+  flags: i
+- type: regex
+  name: land-branch-jira-flags
+  target: last_message
+  pattern: land-branch\.sh(?=[^\n]*--jira-progress-status\s+3\b)(?=[^\n]*--jira-awaiting-status\s+10012)(?=[^\n]*--jira-done-status\s+10014)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: epic-residue-touches
+  target: last_message
+  pattern: NWM-900 — waiting on[^\n]*(touches|required field|owner decision)
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: lists-children-final-state
+  target: last_message
+  pattern: (?=[\s\S]*NWM-901)(?=[\s\S]*NWM-902[^\n]*[Cc]ancel)(?=[\s\S]*NWM-904)
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: no-direct-api
+  target: last_message
+  pattern: 'rest/api|curl '
+  match: not_contains
+  weight: 2
+  flags: im
+- type: regex
+  name: epic-not-claimed-closed
+  target: last_message
+  pattern: 'epic NWM-900: closed'
+  match: not_contains
+  weight: 2
+  flags: im
+- type: tool_used
+  name: launches-unit-under-test
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?close-epic"'
+  min: 1
+  weight: 1
+- type: regex
+  name: unit-resolves
+  target: trace
+  pattern: Unknown skill
+  match: not_contains
+  weight: 1

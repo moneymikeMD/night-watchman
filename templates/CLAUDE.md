@@ -24,7 +24,7 @@ Each of these replaces a message an owner otherwise types again and again during
 | A wave was dispatched through a provider whose workers outlive the turn (`herdr`, `prime-agent`) | `wave-supervisor`, once, in the background |
 | Main moved while branches are open, or a landing stopped on a conflict and its worker has exited | `branch-resync` |
 | A finished branch lands through a pull request, or a PR's CI is red | `pr-shepherd` |
-| An epic has children in triage or awaiting verification, its last child landed, or someone asks what is left on it | `epic-closer` |
+| An epic has children in triage or awaiting verification, its last child landed, or someone asks what is left on it | the `close-epic` skill (forked) |
 | A finished ticket branch, before it lands | `spec-reviewer` |
 | A named ticket move, decision, known-issue or wrap-up capture | `librarian` |
 
