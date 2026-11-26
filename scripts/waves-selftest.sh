@@ -289,6 +289,78 @@ else
     bad "preflight: two exact claims on one file not a collision (rc=$RC): $OUT"
 fi
 
+# --- 4d. NWM-268: work outside the ticket set holds a ticket out of every
+# wave, the way `issues.py next` reads it, and is not a cycle ---
+
+run env ISSUES_SOURCE=jira python3 "$SUT" waves --fixture "$FIXTURES/jira-cross-project.json"
+if [ "$RC" -eq 0 ] && [ "$OUT" = "$(cat "$FIXTURES/expected-jira-cross-project-waves.txt")" ]; then
+    ok "waves: an open cross-project blocker and blocked_by_external hold tickets out, exit 0"
+else
+    bad "waves: cross-project fixture diverges from expected output (rc=$RC): $OUT"
+fi
+
+run env ISSUES_SOURCE=jira python3 "$SUT" preflight --fixture "$FIXTURES/jira-cross-project.json"
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"2 startable ticket(s)"* ]] && [[ "$OUT" == *"3 ticket(s) held"* ]]; then
+    ok "preflight: held tickets are not startable and do not refuse the plan"
+else
+    bad "preflight: cross-project fixture refused or miscounted (rc=$RC): $OUT"
+fi
+
+EXT="$WORK/external/open"
+mkdir -p "$EXT"
+cat > "$EXT/EX-001-waits.md" <<'EOF'
+---
+id: EX-001
+title: waits on another repo's release
+created: 2026-01-01
+updated: 2026-01-01
+executor: agent
+touches:
+  - reference/a.py
+blocked_by_external:
+  - LAB-856 reaching Completed
+verify: |
+  true
+---
+EOF
+cat > "$EXT/EX-002-free.md" <<'EOF'
+---
+id: EX-002
+title: free to start
+created: 2026-01-01
+updated: 2026-01-01
+executor: agent
+touches:
+  - reference/b.py
+verify: |
+  true
+---
+EOF
+run python3 "$SUT" waves "$WORK/external/"
+wave_part="${OUT%%Blocked outside*}"
+if [ "$RC" -eq 0 ] && [[ "$wave_part" != *"EX-001"* ]] && [[ "$wave_part" == *"EX-002"* ]] \
+    && [[ "$OUT" == *"EX-001  waits on another repo's release  waits on LAB-856 reaching Completed"* ]]; then
+    ok "waves: a non-empty blocked_by_external keeps a file ticket out of Wave 1"
+else
+    bad "waves: blocked_by_external ticket was placed in a wave (rc=$RC): $OUT"
+fi
+
+run python3 "$SUT" waves "$WORK/cycle/"
+if [ "$RC" -eq 1 ] && [[ "$OUT" == *"cycle or unresolvable dependency among: CY-001, CY-002"* ]]; then
+    ok "waves: a true cycle among dispatchable tickets still exits 1"
+else
+    bad "waves: true cycle not reported (rc=$RC): $OUT"
+fi
+
+cp "$EXT/EX-001-waits.md" "$CYC/"
+run python3 "$SUT" waves "$WORK/cycle/"
+if [ "$RC" -eq 1 ] && [[ "$OUT" == *"among: CY-001, CY-002"* ]] && [[ "$OUT" == *"EX-001"* ]]; then
+    ok "waves: a held ticket beside a true cycle is listed, and the cycle still exits 1"
+else
+    bad "waves: held ticket hid or joined the cycle (rc=$RC): $OUT"
+fi
+rm "$CYC/EX-001-waits.md"
+
 # --- 5. independence: strip waves/preflight/_plan_waves/_claims out of a
 # copy of the resolved issues.py and confirm waves.py's own output is
 # unchanged — proves this file does not call back into work-order's planner ---

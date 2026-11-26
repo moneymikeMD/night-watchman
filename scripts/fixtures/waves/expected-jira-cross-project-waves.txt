@@ -1,0 +1,15 @@
+
+Wave 1 — 2 ticket(s), 2 agent-workable in parallel
+    XP-101  startable, no blockers  orphan: no epic link in Jira
+    XP-104  behind a finished blocker in another project  orphan: no epic link in Jira
+
+    worktrees:
+      git worktree add ../wt-xp-101 -b xp-101
+      git worktree add ../wt-xp-104 -b xp-104
+
+Blocked outside this ticket set (not a cycle — resolves once that work is done):
+    XP-102  behind an open blocker in another project  waits on OTHER-5 (Open)
+    XP-103  behind XP-102  waits on work outside this set via XP-102
+    XP-105  waits on blocked_by_external  waits on OTHER-7 reaching Completed
+
+  * needs a human   ~ agent works it, human finishes it
