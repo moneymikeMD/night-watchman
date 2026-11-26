@@ -18,13 +18,6 @@ Runs the end-of-wave cost review from the project's cost ledger (default docs/co
 - **Model:** sonnet
 - **Tools:** Read, Grep, Glob, Bash
 
-## diagnose-and-pr
-
-Reads a firing failure signal (an alert, a failed check, a monitoring finding), diagnoses the root cause against this repo, and opens a draft PR fixing it on a feature branch. Never pushes to main, never remediates a live host directly. Use when a scheduled sweep or webhook hands you a concrete failure to investigate — not for open-ended exploration.
-
-- **Model:** sonnet
-- **Tools:** Read, Grep, Glob, Bash, Edit, Write
-
 ## epic-closer
 
 Decides what an epic (or the whole backlog) still needs to reach Completed and drives it there — fills ticket fields it can derive from the repo and the ticket's own text, moves fully filed tickets out of triage, verifies awaiting-deployment tickets against reality with read-only checks from their verify blocks, transitions what the evidence supports with the evidence in the comment, and closes the epic when no child is left. Ends with the epic closed or a residue list naming the single thing each remaining ticket waits on. Use when asked what is left on an epic, why tickets sit in triage, or to get an epic to Completed.
