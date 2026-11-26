@@ -22,6 +22,9 @@ trigger-tickets-protocol	0.867	no	2.1.332	2026-11-25
 trigger-to-issues	1.000	yes	2.1.332	2026-11-25
 trigger-wave-trail	1.000	yes	2.1.332	2026-11-25
 trigger-wrap-up	1.000	yes	2.1.332	2026-11-25
+land-a-pr-green-merge-and-lifecycle	1.000	yes	2.1.332	2026-11-25
+land-a-pr-preexisting-red-out-of-scope	0.967	yes	2.1.332	2026-11-25
+land-a-pr-red-in-scope-and-infra	0.900	yes	2.1.332	2026-11-25
 cost-review-inside-spread	1.000	yes	2.1.332	2026-11-26
 cost-review-moved	1.000	yes	2.1.332	2026-11-26
 cost-review-no-adoption	1.000	yes	2.1.332	2026-11-26
