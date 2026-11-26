@@ -89,7 +89,7 @@ an error in bash 5). Its steps, in order:
 - **kit.sh cleanup contract** — `scripts/kit-consumer-lint.sh`.
 - **selftests** — discovers every `*selftest*.sh` by `find` and runs it; a new selftest needs no workflow edit.
 - **known-issues index is not drifted** — `known-issue.sh --root lint`, run out of the ai-toolkit checkout. `docs/known-issues.md` is **generated** from `docs/known-issues/*.md` frontmatter by
-  `known-issue.sh reindex` (`add`/`resolve`/`severity` call it too); never hand-edit the index.
+  `known-issue.sh reindex` (`add`/`remove`/`severity` call it too); never hand-edit the index.
 - **generated reference docs are not drifted** — `scripts/gen-reference-docs.sh --check` diffs against `docs/preview/website/src/content/docs/reference/`. Those `.mdx` pages are rendered from
   `agents/*.md`, `skills/*/SKILL.md`, script and hook header comments, `templates/night-watchman.config.toml`, `templates/ethos.md`, `docs/faq.md`, `docs/evidence.md` and `docs/cost.md` — never
   hand-edit a page there; edit the source and run `scripts/gen-reference-docs.sh` (no `--check`) to regenerate.
@@ -145,7 +145,7 @@ providers/lib/provider.sh doctor                     # what does this repo talk 
 scripts/work-order-root.sh --issues-py                # resolve the work-order dependency
 scripts/ai-toolkit-root.sh --known-issue              # resolve the ai-toolkit dependency
 scripts/land-branch-selftest.sh [old-land-branch.sh] [issues.py]
-"$(scripts/ai-toolkit-root.sh --known-issue)" --root . add|reindex|resolve <slug>
+"$(scripts/ai-toolkit-root.sh --known-issue)" --root . add|reindex|remove <slug>
 "$(scripts/ai-toolkit-root.sh --decisions)" --root . add --title T --decision D --why W --cost C
 scripts/kit-consumer-lint.sh                          # kit.sh's cleanup contract
 scripts/gen-reference-docs.sh --check                 # CI's drift check

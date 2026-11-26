@@ -201,7 +201,8 @@ failing has not been tested, only exercised.
 ## Environment limits
 
 Target **bash 3.2** (e.g. stock macOS `/bin/bash`): no associative arrays,
-no `${var^^}`, no `readarray`/`mapfile`.
+no `${var^^}`, no `readarray`/`mapfile`. Under a non-C locale its `[a-z]` also
+matches uppercase, so a validating `case` pattern spells the letters out.
 
 ## Exit codes
 

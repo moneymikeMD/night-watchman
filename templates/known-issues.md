@@ -9,13 +9,13 @@ is load-bearing, not decoration.*
 This file is a generated index, rendered from the frontmatter of every
 entry under `docs/known-issues/`. Never edit it by hand: a hand-edited
 index drifts from the entries it summarizes with no error and nothing to
-notice it by. Use `known-issue.sh add|resolve|severity`, each of
+notice it by. Use `known-issue.sh add|remove|severity`, each of
 which reindexes for you, or run `reindex` directly. `known-issue.sh lint`
 fails the moment this file stops matching what `reindex` would produce.
 
 Severity is blast radius if the thing goes wrong, not effort to fix it:
-`HIGH` | `MEDIUM` | `LOW` | `COSMETIC`. `reindex` renders a resolved entry
-struck through and marked `RESOLVED`.
+`HIGH` | `MEDIUM` | `LOW` | `COSMETIC`. A fixed entry is deleted once its facts
+live in the docs: `known-issue.sh remove <slug> --root <repo>`.
 
 | Severity | Finding |
 | --- | --- |
