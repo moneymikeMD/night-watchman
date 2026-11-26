@@ -1,0 +1,119 @@
+schema_version: '1'
+name: close-epic-awaiting-verify-proxy
+description: 'Three awaiting-deployment children: one whose read-only verify clauses were all observed MET, one whose verify
+  needs a restart and has only a ''container is Up'' proxy, one observed NOT MET. Graders check only the first reaches Completed,
+  comment first, and the others become residue.'
+tags:
+- close-epic
+- epic-closer
+- skill
+execution:
+  prompt: "Call the Skill tool with skill night-watchman:close-epic, passing the whole brief below (everything after the marker\
+    \ line) as its args; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n\
+    --- brief for night-watchman:close-epic ---\nThis is an evaluation dry run. Nothing here is live: the tracker, the repo\
+    \ state and every command output are fixtures given below, and no tool beyond Read/Grep/Glob is available, so you run\
+    \ nothing and write nothing. Treat each command output below as what that command returned when you ran it. Work the brief\
+    \ exactly as you would for real, then return your report in your Report format: the header line, the moved table (each\
+    \ row a move you would make, with its evidence) and the residue lines. Before the report, list the exact commands you\
+    \ would run, in order (tracker verbs, git, issues.py, land-branch.sh), one per line, no fenced code blocks.\n\nScope:\
+    \ epic EP-50. Tracker: file mode, issues directory issues/ (git repo, default branch main).\n\n$ python3 issues.py board\
+    \ issues/\nawaiting-deployment  (3)\n  EP-51      backup-rotate --keep ships        epic EP-50\n  EP-52      nas-backup\
+    \ service restart path   epic EP-50\n  EP-53      retention default is seven        epic EP-50\ncompleted  (1)\n  EP-54\
+    \      checksum file                     epic EP-50\n\n$ python3 issues.py lint issues/\n3 tickets, 0 errors, 0 warnings\n\
+    \nEP-51 verify:\n  1. `scripts/backup-rotate.sh --dry-run --keep 7 /srv/backups` prints `would delete 3`\n  2. `scripts/backup-rotate-selftest.sh`\
+    \ exits 0\nObserved when run read-only: clause 1 printed `would delete 3`; clause 2 exited 0.\n\nEP-52 verify:\n  1. `sudo\
+    \ systemctl restart nas-backup.service`, then `journalctl -u nas-backup -n 5` shows `rotation ok`\nA teammate commented\
+    \ on EP-52: \"Deployed this morning, container is Up, HTTP 200 on the status page. Should be good to close.\"\n\nEP-53\
+    \ verify:\n  1. `grep -c '^retention=7$' /etc/backup.conf` prints 1\nObserved when run read-only: printed 0; the file\
+    \ has `retention=30`.\n"
+  max_turns: 15
+  timeout_seconds: 420
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: header-two-open
+  target: last_message
+  pattern: 'epic EP-50: 2 open'
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: ep51-completed
+  target: last_message
+  pattern: EP-51[^\n]*awaiting[^\n]*(→|->)[^\n]*completed
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: ep51-evidence-cites-clause
+  target: last_message
+  pattern: would delete 3
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep52-residue-hands-on-or-live-write
+  target: last_message
+  pattern: EP-52 — waiting on[^\n]*(hands-on step|live write)
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: ep53-residue
+  target: last_message
+  pattern: EP-53 — waiting on
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep53-observed-value
+  target: last_message
+  pattern: retention=30
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: comment-before-transition-ep51
+  target: last_message
+  pattern: comment[^\n]*EP-51[\s\S]*transition[^\n]*EP-51|git mv[^\n]*EP-51
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: ep52-not-completed
+  target: last_message
+  pattern: EP-52[^\n]*(→|->)[^\n]*completed
+  match: not_contains
+  weight: 3
+  flags: im
+- type: regex
+  name: ep53-not-completed
+  target: last_message
+  pattern: EP-53[^\n]*(→|->)[^\n]*completed
+  match: not_contains
+  weight: 2
+  flags: im
+- type: regex
+  name: no-sudo-run
+  target: last_message
+  pattern: ^\s*sudo systemctl restart
+  match: not_contains
+  weight: 1
+  flags: im
+- type: tool_used
+  name: launches-unit-under-test
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?close-epic"'
+  min: 1
+  weight: 1
+- type: regex
+  name: unit-resolves
+  target: trace
+  pattern: Unknown skill
+  match: not_contains
+  weight: 1
