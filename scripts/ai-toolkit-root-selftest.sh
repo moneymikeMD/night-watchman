@@ -33,6 +33,7 @@ make_ai_toolkit() {
     : > "$1/scripts/script-retire.sh"
     : > "$1/scripts/land-core.sh"
     : > "$1/scripts/decisions.sh"
+    : > "$1/scripts/eval-weekly.sh"
 }
 
 # run_sut [AI_TOOLKIT_ROOT=...] ARGS... — sets RC, OUT and ERR. A leading
@@ -89,6 +90,13 @@ if [ "$RC" -eq 0 ] && [ "$OUT" = "$REAL_AT/scripts/decisions.sh" ]; then
     ok "--decisions appends the script's path"
 else
     bad "--decisions: rc=$RC out='$OUT' err='$ERR'"
+fi
+
+run_sut "AI_TOOLKIT_ROOT=$REAL_AT" --eval-weekly
+if [ "$RC" -eq 0 ] && [ "$OUT" = "$REAL_AT/scripts/eval-weekly.sh" ]; then
+    ok "--eval-weekly appends the script's path"
+else
+    bad "--eval-weekly: rc=$RC out='$OUT' err='$ERR'"
 fi
 
 mkdir -p "$WORK/empty-dir"
@@ -170,7 +178,7 @@ else
 fi
 
 run_sut --help
-if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core|--decisions]"* ]] && [ -z "$ERR" ]; then
+if [ "$RC" -eq 0 ] && [[ "$OUT" == *"Usage: ai-toolkit-root.sh [--known-issue|--script-analytics|--script-retire|--land-core|--decisions|--eval-weekly]"* ]] && [ -z "$ERR" ]; then
     ok "--help prints the header on stdout, exit 0"
 else
     bad "--help: rc=$RC out='$OUT' err='$ERR'"
