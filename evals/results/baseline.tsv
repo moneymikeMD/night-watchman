@@ -1,5 +1,7 @@
 case	mean_score	agent_launched	claude_code_version	date
 backfill-selftest-null-field-regression-plan	1.000	yes	2.1.332	2026-11-25
+diagnose-and-pr-existing-fix-insufficient	1.000	yes	2.1.332	2026-11-25
+diagnose-and-pr-signal-missing-when	1.000	yes	2.1.332	2026-11-25
 chat-pasted-ticket-file-and-refuse	1.000	yes	2.1.332	2026-11-25
 herdr-and-adf-one-source-unfetchable	1.000	yes	2.1.332	2026-11-25
 mixed-findings-with-injection-attempt	0.833	yes	2.1.332	2026-11-25
@@ -7,6 +9,8 @@ nwm8-brief-chr-no-rule-strip	1.000	yes	2.1.332	2026-11-25
 nwm8-round1-five-bugs	0.926	yes	2.1.332	2026-11-25
 ssh-op-sudo-brief-refused	1.000	yes	2.1.332	2026-11-25
 undeclared-path-and-hollow-verify	1.000	yes	2.1.332	2026-11-25
+spec-review-required-check-fails	1.000	yes	2.1.332	2026-11-25
+spec-review-partial-and-unrequested	1.000	yes	2.1.332	2026-11-25
 trigger-grill	1.000	yes	2.1.332	2026-11-25
 trigger-handoff-docs	1.000	yes	2.1.332	2026-11-25
 trigger-session-start	1.000	yes	2.1.332	2026-11-25
@@ -18,3 +22,5 @@ trigger-wrap-up	1.000	yes	2.1.332	2026-11-25
 close-epic-awaiting-verify-proxy	1.000	yes	2.1.332	2026-11-25
 close-epic-jira-already-merged-epic-gate	1.000	yes	2.1.332	2026-11-25
 close-epic-triage-derive-fields	1.000	yes	2.1.332	2026-11-25
+retirement-candidates-dry-run-and-unlisted-refusal	0.806	yes	2.1.332	2026-11-25
+tracker-moves-through-provider-seam	0.758	yes	2.1.332	2026-11-25

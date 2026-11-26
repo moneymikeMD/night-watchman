@@ -1,0 +1,59 @@
+schema_version: '1'
+name: diagnose-and-pr-existing-fix-insufficient
+description: 'diagnose-and-pr, handed a failing check that an open PR already claims to fix, must verify that PR
+  instead of opening a competing one, and must find it insufficient: the PR empties the field to an empty
+  string where the selftest requires an explicit JSON null. Prose-plan case graded on last_message, with the
+  fixture and the PR diff inlined; allowed_tools is Read/Grep/Glob plus the Skill call, so nothing is created.'
+tags:
+- diagnose-and-pr
+- jira
+- existing-fix
+execution:
+  prompt: "Call the night-watchman:diagnose-and-pr skill with the Skill tool (skill night-watchman:diagnose-and-pr), passing the whole task below as its args; do not do the task yourself. When it returns, reply with its report verbatim and add nothing.\n\n--- task for night-watchman:diagnose-and-pr ---\nThe nightly check for this repo failed at 2026-11-24T02:10:07Z. Here is the whole of what fired:\n\n  check: providers/tracker/jira/jira-backfill-selftest.sh\n  exit code: 1\n  log (last 5 lines):\n    assertion 6: field emptied locally must PUT an explicit JSON null, not omit the key\n    expected PUT body for SPK-1 to include \"human_steps\":null\n    got: PUT body for SPK-1 has no \"human_steps\" key at all\n    FAIL: null-field-not-omitted (SPK-1, human_steps)\n    exit 1\n\nThe code path this check ran against (a trimmed snapshot of providers/tracker/jira/jira-backfill.sh's custom-field loop; treat it, not the file on disk, as the code under test):\n\n    *)\n        text=$(lines_field \"$line\" \"$name\")\n        if [ -n \"$text\" ]; then\n            adf=$(adf_from_text \"$text\")\n            part=$(jq -cn --arg id \"$fid\" --argjson v \"$adf\" '{($id): $v}')\n            custom_parts=\"$custom_parts\n$part\"\n        fi\n        ;;\n\nA teammate opened PR #41 (branch fix-backfill-empty-field, not merged, CI not yet run) titled \"backfill: send emptied custom fields\". Its whole diff against that snippet adds, after the `fi` line's `if` block, an else branch:\n\n        else\n            part=$(jq -cn --arg id \"$fid\" '{($id): \"\"}')\n            custom_parts=\"$custom_parts\n$part\"\n\nNo human has claimed the fix beyond opening that PR. Bash, Edit and Write are not available in this evaluation and no live host, Jira or GitHub remote is reachable; use Read/Grep/Glob only to check conventions in providers/tracker/jira/. Do not write code or fenced code blocks; answer in prose.\n\nEnd your response with one line of the form `VERDICT: confirmed`, `VERDICT: insufficient` or `VERDICT: inconclusive`, giving your verdict on whether PR #41 fixes the failing assertion, and say in one sentence what you would do next instead of or as well as opening your own PR."
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: verdict-insufficient
+  target: last_message
+  pattern: 'VERDICT:\s*`?insufficient'
+  match: contains
+  weight: 3
+- type: regex
+  name: names-empty-string-not-null
+  target: last_message
+  pattern: (?=[\s\S]*\bnull\b)(?=[\s\S]*(empty string|""|\\"\\"))
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: names-existing-pr
+  target: last_message
+  pattern: '(#41|PR 41|fix-backfill-empty-field)'
+  match: contains
+  weight: 1
+- type: regex
+  name: no-competing-pr
+  target: last_message
+  pattern: (competing|second|another|duplicate|separate|own) (draft )?(PR|pull request)
+  match: contains
+  weight: 1
+  flags: i
+- type: tool_used
+  name: calls-skill-under-test
+  tool: Skill
+  input_match: '"skill":\s*"(night-watchman:)?diagnose-and-pr"'
+  min: 1
+  weight: 1
+- type: regex
+  name: skill-resolves
+  target: trace
+  pattern: Unknown skill
+  match: not_contains
+  weight: 1

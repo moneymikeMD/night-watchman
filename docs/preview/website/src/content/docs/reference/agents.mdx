@@ -18,13 +18,6 @@ Runs the end-of-wave cost review from the project's cost ledger (default docs/co
 - **Model:** sonnet
 - **Tools:** Read, Grep, Glob, Bash
 
-## diagnose-and-pr
-
-Reads a firing failure signal (an alert, a failed check, a monitoring finding), diagnoses the root cause against this repo, and opens a draft PR fixing it on a feature branch. Never pushes to main, never remediates a live host directly. Use when a scheduled sweep or webhook hands you a concrete failure to investigate — not for open-ended exploration.
-
-- **Model:** sonnet
-- **Tools:** Read, Grep, Glob, Bash, Edit, Write
-
 ## librarian
 
 Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, capturing durable knowledge, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
