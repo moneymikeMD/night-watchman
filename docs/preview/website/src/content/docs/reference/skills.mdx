@@ -8,6 +8,10 @@ description: Generated from every skills/*/SKILL.md frontmatter block (name, des
 
 Decide where repeated work's knowledge is kept and where it runs, as two separate questions. Use when someone proposes adding a new agent, when asked "should this be a script, an agent or a skill", or when the main thread does the same work inline a second time with no fixed home for it.
 
+## cost-review
+
+The end-of-wave cost review — record this wave's row in the cost ledger with one `claude-cost.py review` command, read the delta against the previous wave and the earlier spread, judge whether last wave's adopted recommendation moved the number it targeted, and word one recommendation for the next wave. Use at the end of a wave that keeps a cost ledger (docs/cost.md), or when asked whether a wave got cheaper, what it cost, or whether last wave's cost change worked.
+
 ## diagnose-and-pr
 
 Wiring guidance for dispatching a failure signal (an alert, a failed check) to the diagnose-and-pr agent and handling its output. Use when a project wants to turn monitoring findings into draft PRs instead of manual triage, when deciding what counts as in-scope for that agent, or when the owner asks to diagnose/debug a specific failing behaviour and wants the disciplined loop (a red command before any theory), not a one-line question.

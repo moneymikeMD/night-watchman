@@ -1,0 +1,97 @@
+schema_version: '1'
+name: cost-review-inside-spread
+description: "Last wave adopted one change targeting turns down; turns fell 5.71%, inside an earlier max adjacent move of 18.24%, so the verdict is no effect and the recommendation is a revert. Cost did fall outside its spread, but because the orchestrator moved from opus to sonnet, which is not evidence for the adopted change."
+tags:
+- cost-review
+execution:
+  prompt: |-
+    Run this plugin's end-of-wave cost review on the brief below, through the plugin's own cost review (the night-watchman:cost-review skill, or the night-watchman:cost-reviewer agent if that is what this plugin ships). Do not do the review yourself. Pass the whole brief through unchanged. When it returns, reply with its report verbatim and add nothing.
+
+    --- brief ---
+    Wave 2026-w48, started 2026-11-16T09:00Z. Ledger: docs/cost-ledger.tsv (fixture copy: evals/cost-review-inside-spread/fixtures/ledger.tsv, the four earlier waves).
+    Adopted from last wave's review: "workers read only their ticket's touches paths at start", targeting turns down. This wave also switched the orchestrator from claude-opus-5-5 to claude-sonnet-5-5.
+    No metrics backend is configured. docs/script-events.jsonl does not exist yet, so no quality proxies are available for either wave.
+
+    The review command already ran from the repo root (python3 scripts/claude-cost.py review ... --format md) and appended this wave's row; do not run it again. Bash is not available in this evaluation and there is no live host. Its output, exactly as printed:
+
+    # review: wave 2026-w48 appended to docs/cost-ledger.tsv
+    # compare: 2026-w47 -> 2026-w48
+    | metric | previous | current | delta | delta_pct | direction |
+    | --- | --- | --- | --- | --- | --- |
+    | turns | 350 | 330 | -20 | -5.71 | down |
+    | cost_usd | 40.1000 | 33.9000 | -6.2000 | -15.46 | down |
+    | orchestrator_turns | 116 | 110 | -6 | -5.17 | down |
+    | orchestrator_usd | 16.0400 | 9.1000 | -6.9400 | -43.27 | down |
+    | worker_turns | 234 | 220 | -14 | -5.98 | down |
+    | worker_usd | 24.0600 | 24.8000 | +0.7400 | 3.08 | flat |
+    # spread: |delta_pct| of each earlier adjacent pair; outside_spread=yes only above the earlier max
+    | metric | earlier_pairs | median_abs_pct | max_abs_pct | current_abs_pct | outside_spread |
+    | --- | --- | --- | --- | --- | --- |
+    | turns | 3 | 13.33 | 18.24 | 5.71 | no |
+    | cost_usd | 3 | 7.89 | 8.54 | 15.46 | yes |
+    | orchestrator_turns | 3 | 13.27 | 18.37 | 5.17 | no |
+    | orchestrator_usd | 3 | 7.89 | 8.54 | 43.27 | yes |
+    | worker_turns | 3 | 13.50 | 18.18 | 5.98 | no |
+    | worker_usd | 3 | 7.89 | 8.54 | 3.08 | no |
+    # model-compare: 2026-w47 (claude-opus-5-5) -> 2026-w48 (claude-sonnet-5-5)
+    | wave | orchestrator_model | orchestrator_effort | orchestrator_turns | orchestrator_usd |
+    | --- | --- | --- | --- | --- |
+    | 2026-w47 | claude-opus-5-5 | high | 116 | 16.0400 |
+    | 2026-w48 | claude-sonnet-5-5 | high | 110 | 9.1000 |
+    # cost-side only — pair with the quality proxies from docs/cost.md's Model section before drawing a verdict
+  max_turns: 15
+  timeout_seconds: 400
+  allowed_tools:
+  - Read
+  - Grep
+  - Glob
+  - Agent
+  - Skill
+runs: 3
+graders:
+- type: regex
+  name: verdict-no-effect
+  target: last_message
+  pattern: "no effect"
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: verdict-not-moved
+  target: last_message
+  pattern: "verdict\\W{0,8}moved"
+  match: not_contains
+  weight: 1
+  flags: i
+- type: regex
+  name: recommends-revert
+  target: last_message
+  pattern: "\\brevert"
+  match: contains
+  weight: 2
+  flags: i
+- type: regex
+  name: cites-turns-spread
+  target: last_message
+  pattern: "18\\.24"
+  match: contains
+  weight: 1
+- type: regex
+  name: model-section-both-models
+  target: last_message
+  pattern: "(?=[\\s\\S]*claude-opus-5-5)(?=[\\s\\S]*claude-sonnet-5-5)"
+  match: contains
+  weight: 1
+- type: regex
+  name: ticket-ready-recommendation
+  target: last_message
+  pattern: "(?=[\\s\\S]*\\bProblem\\b)(?=[\\s\\S]*\\bSolution\\b)(?=[\\s\\S]*\\bverify\\b)"
+  match: contains
+  weight: 1
+  flags: i
+- type: regex
+  name: runs-cost-review
+  target: trace
+  pattern: "\"(subagent_type|skill)\"\\s*:\\s*\"(night-watchman:)?cost-review(er)?\""
+  match: contains
+  weight: 1

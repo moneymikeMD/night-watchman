@@ -67,7 +67,7 @@ Subcommands:
              recent EARLIER row whose orchestrator_model differs from it.
              Read-only, never writes. If no earlier row used a different
              orchestrator_model, it says so explicitly and exits 0 with no
-             table — the caller (cost-reviewer's Model section) must not
+             table — the caller (the cost-review skill's Model section) must not
              render an empty comparison as if two models had been
              measured.
     review   the end-of-wave review in one command: append (as `append`,

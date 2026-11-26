@@ -1,6 +1,6 @@
 ---
 name: librarian
-description: Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, capturing durable knowledge, and retiring under-used scripts flagged by cost-reviewer. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
+description: Maintains a project's docs/ (or knowledge-base) directory and its tickets, per the tickets-protocol skill. Use for filing tickets, moving tickets between stages, recording decisions, updating known-issues, capturing durable knowledge, and retiring under-used scripts flagged by the cost-review skill. Runs the issues.py linter before any ticket change; commits docs changes directly, and retirement commits via ai-toolkit's script-retire.sh + land-branch.sh.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: haiku
 skills: tickets-protocol
@@ -83,7 +83,7 @@ Bash is for exactly five things:
    than a live system;
 5. **ai-toolkit's `script-retire.sh` and `scripts/land-branch.sh`**, per the
    "Script retirement" section below — dry-run first, always; `--yes`
-   only for a candidate `cost-reviewer` actually listed.
+   only for a candidate the `cost-review` skill actually listed.
 
 Use `${CLAUDE_PLUGIN_ROOT}` for both, never a bare `providers/...` — you
 are usually invoked with the *project's* directory as the working
@@ -108,7 +108,7 @@ partial state in place, rather than leaving it half-done.
 
 ## Script retirement
 
-At wave wrap-up, once `cost-reviewer` has reported its "Retirement
+At wave wrap-up, once the `cost-review` skill has reported its "Retirement
 candidates" list (rows flagged `retire?` by `script-analytics.py
 report --usage`), retire each one. Both scripts live in ai-toolkit and are
 resolved at run time, never by a path in this repo:
